@@ -9,10 +9,13 @@ app.use(express.json())
 
 // Step 1: Connect WITHOUT database first para makapag-create
 const dbInit = mysql.createConnection({
-  host: 'localhost',
-  user: 'root',
-  password: '',
-  dateStrings: true
+  host: process.env.DB_HOST || 'localhost',
+  user: process.env.DB_USER || 'root',
+  password: process.env.DB_PASSWORD || '',
+  port: process.env.DB_PORT || 3306,
+  dateStrings: true,
+  // Ginagamit natin yung Aiven/TiDB database kung merong nakaset na process.env.DB_NAME, kung wala fallback sa s_cons_db
+  database: process.env.DB_NAME || null 
 })
 
 const DB_NAME = 's_cons_db'
@@ -178,88 +181,96 @@ dbInit.connect(err => {
     process.exit(1)
   }
 
-  // Create database if not exists
-  dbInit.query(`CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\``, (err) => {
-    if (err) { console.error('Failed to create database:', err.message); process.exit(1) }
-    console.log(`Database "${DB_NAME}" ready.`)
-
-    dbInit.query(`USE \`${DB_NAME}\``, (err) => {
-      if (err) { console.error(err.message); process.exit(1) }
-
-      // Create all tables one by one
-      const statements = CREATE_TABLES.split(';').map(s => s.trim()).filter(s => s.length > 0)
-      let done = 0
-      statements.forEach(sql => {
-        dbInit.query(sql, (err) => {
-          if (err) console.error('Table error:', err.message)
-          done++
-          if (done === statements.length) {
-            // Ensure assets.borrow_at column exists (legacy migration)
-            dbInit.query("SHOW COLUMNS FROM assets LIKE 'borrow_at'", (err, cols) => {
-              if (!err && cols.length === 0) {
-                dbInit.query("ALTER TABLE assets ADD COLUMN borrow_at DATETIME", () => { })
+  const initTables = () => {
+    // Create all tables one by one
+    const statements = CREATE_TABLES.split(';').map(s => s.trim()).filter(s => s.length > 0)
+    let done = 0
+    statements.forEach(sql => {
+      dbInit.query(sql, (err) => {
+        if (err) console.error('Table error:', err.message)
+        done++
+        if (done === statements.length) {
+          // Ensure assets.borrow_at column exists (legacy migration)
+          dbInit.query("SHOW COLUMNS FROM assets LIKE 'borrow_at'", (err, cols) => {
+            if (!err && cols.length === 0) {
+              dbInit.query("ALTER TABLE assets ADD COLUMN borrow_at DATETIME", () => { })
+            }
+          })
+          dbInit.query("SHOW COLUMNS FROM expenses LIKE 'image'", (err, cols) => {
+            if (!err && cols.length === 0) {
+              dbInit.query('ALTER TABLE expenses ADD COLUMN image LONGTEXT', () => { })
+            }
+          })
+          // Migrate new admin columns for existing databases
+          const adminNewCols = [
+            { col: 'phone', def: 'VARCHAR(20)' },
+            { col: 'assigned_project_site', def: 'VARCHAR(255)' },
+            { col: 'terminal_id', def: 'VARCHAR(50)' },
+            { col: 'push_notifications_enabled', def: 'BOOLEAN DEFAULT true' },
+            { col: 'biometric_login_enabled', def: 'BOOLEAN DEFAULT false' },
+            { col: 'status', def: "VARCHAR(50) DEFAULT 'Active'" },
+            { col: 'updated_at', def: 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP' },
+            { col: 'first_name', def: 'VARCHAR(100)' },
+            { col: 'middle_name', def: 'VARCHAR(100)' },
+            { col: 'last_name', def: 'VARCHAR(100)' },
+            { col: 'home_address', def: 'TEXT' },
+            { col: 'address_obj', def: 'LONGTEXT' },
+            { col: 'role', def: "VARCHAR(100) DEFAULT 'Administrator'" },
+            { col: 'emp_id', def: "VARCHAR(50) DEFAULT 'SCON-ADMIN-001'" },
+            { col: 'dept', def: "VARCHAR(100) DEFAULT 'Management'" }
+          ]
+          adminNewCols.forEach(({ col, def }) => {
+            dbInit.query(`SHOW COLUMNS FROM admins LIKE '${col}'`, (err, c) => {
+              if (!err && c.length === 0) {
+                dbInit.query(`ALTER TABLE admins ADD COLUMN ${col} ${def}`, () => { })
               }
             })
-            dbInit.query("SHOW COLUMNS FROM expenses LIKE 'image'", (err, cols) => {
-              if (!err && cols.length === 0) {
-                dbInit.query('ALTER TABLE expenses ADD COLUMN image LONGTEXT', () => { })
+          })
+          ;['start_time', 'end_time'].forEach(col => {
+            dbInit.query(`SHOW COLUMNS FROM schedules LIKE '${col}'`, (err, c) => {
+              if (!err && c.length > 0) {
+                dbInit.query(`ALTER TABLE schedules DROP COLUMN ${col}`, () => { })
               }
             })
-            // Migrate new admin columns for existing databases
-            const adminNewCols = [
-              { col: 'phone', def: 'VARCHAR(20)' },
-              { col: 'assigned_project_site', def: 'VARCHAR(255)' },
-              { col: 'terminal_id', def: 'VARCHAR(50)' },
-              { col: 'push_notifications_enabled', def: 'BOOLEAN DEFAULT true' },
-              { col: 'biometric_login_enabled', def: 'BOOLEAN DEFAULT false' },
-              { col: 'status', def: "VARCHAR(50) DEFAULT 'Active'" },
-              { col: 'updated_at', def: 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP' },
-              { col: 'first_name', def: 'VARCHAR(100)' },
-              { col: 'middle_name', def: 'VARCHAR(100)' },
-              { col: 'last_name', def: 'VARCHAR(100)' },
-              { col: 'home_address', def: 'TEXT' },
-              { col: 'address_obj', def: 'LONGTEXT' },
-              { col: 'role', def: "VARCHAR(100) DEFAULT 'Administrator'" },
-              { col: 'emp_id', def: "VARCHAR(50) DEFAULT 'SCON-ADMIN-001'" },
-              { col: 'dept', def: "VARCHAR(100) DEFAULT 'Management'" }
-            ]
-            adminNewCols.forEach(({ col, def }) => {
-              dbInit.query(`SHOW COLUMNS FROM admins LIKE '${col}'`, (err, c) => {
-                if (!err && c.length === 0) {
-                  dbInit.query(`ALTER TABLE admins ADD COLUMN ${col} ${def}`, () => { })
+          })
+
+          console.log('All tables ready.')
+
+          // Seed default admin if none exists
+          dbInit.query('SELECT COUNT(*) AS cnt FROM admins', async (err, rows) => {
+            if (!err && rows[0].cnt === 0) {
+              const defaultHash = await bcrypt.hash('admin123', 10)
+              dbInit.query(
+                "INSERT INTO admins (username, email, password, first_name, last_name, role) VALUES (?, ?, ?, ?, ?, ?)",
+                ['admin', 'admin@scons.com', defaultHash, 'System', 'Administrator', 'Administrator'],
+                (err) => {
+                  if (err) console.error('Failed to seed default admin:', err.message)
+                  else console.log('Default admin created: username=admin, password=admin123')
                 }
-              })
-            })
-            ;['start_time', 'end_time'].forEach(col => {
-              dbInit.query(`SHOW COLUMNS FROM schedules LIKE '${col}'`, (err, c) => {
-                if (!err && c.length > 0) {
-                  dbInit.query(`ALTER TABLE schedules DROP COLUMN ${col}`, () => { })
-                }
-              })
-            })
-
-            console.log('All tables ready.')
-
-            // Seed default admin if none exists
-            dbInit.query('SELECT COUNT(*) AS cnt FROM admins', async (err, rows) => {
-              if (!err && rows[0].cnt === 0) {
-                const defaultHash = await bcrypt.hash('admin123', 10)
-                dbInit.query(
-                  "INSERT INTO admins (username, email, password, first_name, last_name, role) VALUES (?, ?, ?, ?, ?, ?)",
-                  ['admin', 'admin@scons.com', defaultHash, 'System', 'Administrator', 'Administrator'],
-                  (err) => {
-                    if (err) console.error('Failed to seed default admin:', err.message)
-                    else console.log('Default admin created: username=admin, password=admin123')
-                  }
-                )
-              }
-              ensureScheduleLinkColumns(dbInit, () => startServer(dbInit))
-            })
-          }
-        })
+              )
+            }
+            ensureScheduleLinkColumns(dbInit, () => startServer(dbInit))
+          })
+        }
       })
     })
-  })
+  }
+
+  // Kung may DB_NAME galing Render/Aiven, direct na sa tables
+  if (process.env.DB_NAME) {
+    console.log(`Using Cloud Database: ${process.env.DB_NAME}`)
+    initTables()
+  } else {
+    // Local fallback: Create database kung wala pa
+    dbInit.query(`CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\``, (err) => {
+      if (err) { console.error('Failed to create database:', err.message); process.exit(1) }
+      dbInit.query(`USE \`${DB_NAME}\``, (err) => {
+        if (err) { console.error(err.message); process.exit(1) }
+        console.log(`Database "${DB_NAME}" ready.`)
+        initTables()
+      })
+    })
+  }
 })
 
 function ensureScheduleLinkColumns(db, done) {
