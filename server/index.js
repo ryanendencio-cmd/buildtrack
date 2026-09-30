@@ -8,15 +8,20 @@ app.use(cors())
 app.use(express.json())
 
 // Step 1: Connect WITHOUT database first para makapag-create
-const dbInit = mysql.createConnection({
+const dbConfig = {
   host: process.env.DB_HOST || 'localhost',
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || '',
   port: process.env.DB_PORT || 3306,
   dateStrings: true,
-  // Ginagamit natin yung Aiven/TiDB database kung merong nakaset na process.env.DB_NAME, kung wala fallback sa s_cons_db
   database: process.env.DB_NAME || null 
-})
+}
+
+if (process.env.DB_HOST) {
+  dbConfig.ssl = { minVersion: 'TLSv1.2', rejectUnauthorized: true }
+}
+
+const dbInit = mysql.createConnection(dbConfig)
 
 const DB_NAME = 's_cons_db'
 
