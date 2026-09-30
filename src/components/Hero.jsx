@@ -1,64 +1,51 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
+import { api } from '../api'
 
 export default function Hero() {
   const barHeights = [30, 50, 70, 90, 60, 80]
   const activeIndexes = [2, 3, 4, 5]
 
+  const [budget, setBudget] = useState({ totalBudget: 0, totalSpent: 0, remaining: 0 });
+  const [kpi, setKpi] = useState({ totalExpenses: 0 });
+
+  useEffect(() => {
+    api.get('/expenses/budget-summary')
+      .then(data => setBudget(data))
+      .catch(err => console.error("Error fetching budget:", err));
+
+    api.get('/expenses/summary')
+      .then(data => setKpi({ totalExpenses: data.total || 0 }))
+      .catch(err => console.error("Error fetching summary:", err));
+  }, []);
+
   return (
     <section className="hero-wrapper">
+      {/* Background image with overlay */}
+      <div className="hero-bg">
+        <img src="/hero-bg.jpg" alt="" className="hero-bg-img" />
+        <div className="hero-bg-overlay"></div>
+      </div>
+
       {/* Main hero content */}
       <div className="hero">
         <div className="hero-left">
-          <p className="hero-label">— Construction Management System</p>
-          <h1>
-            <span className="hero-white">Manage your projects.<br />Track every expense.<br /></span>
-            <span className="hero-yellow">Build with<br />confidence.</span>
-          </h1>
-          <p className="hero-desc">
-            BuildTrack is a construction management system that helps businesses organize
-            expenses, workers, receipts, equipment, and materials — all in one place.
+          <p className="hero-label">
+            SOTALBO CONSTRUCTION PROVIDES PREMIER CONSTRUCTION<br />
+            AND INFRASTRUCTURE SOLUTIONS FOR MODERN ENTERPRISES<br />
+            AND BIG VISIONS.
           </p>
-          <div className="hero-btns">
-            <button className="btn-primary">Get Started</button>
-            <button className="btn-secondary">Learn More</button>
-          </div>
+          <h3 className="hero-big-text">
+            BUILT<br />TOGETHER
+          </h3>
         </div>
 
-        <div className="hero-card">
-          <div className="card-badge">✓ On budget</div>
-          <div className="card-title">BUILDTRACK · SITE B1</div>
-          <div className="card-budget">
-            Total Project Budget
-            <strong>₱500,000</strong>
-          </div>
-          <div className="card-stats">
-            <div className="card-stat exp">
-              <div className="stat-label">EXPENSES</div>
-              <div className="stat-val">₱285,400</div>
-            </div>
-            <div className="card-stat rem">
-              <div className="stat-label">REMAINING</div>
-              <div className="stat-val">₱214,600</div>
-            </div>
-          </div>
-          <div className="card-bars">
-            {barHeights.map((h, i) => (
-              <div
-                key={i}
-                className={`bar${activeIndexes.includes(i) ? ' active' : ''}`}
-                style={{ height: `${h}%` }}
-              />
-            ))}
-          </div>
-          <div className="card-sync">Synced 2 min ago</div>
-        </div>
       </div>
 
-      {/* Stats row — inside the red wrapper so gradient blends */}
+      {/* Stats row */}
       <div className="stats-row">
         <div className="stat-item">
-          <div className="num">₱285,400</div>
-          <div className="label">Tracked this month</div>
+          <div className="num">₱{Number(kpi.totalExpenses).toLocaleString()}</div>
+          <div className="label">Total Expenses Tracked</div>
         </div>
         <div className="stat-item">
           <div className="num">6</div>

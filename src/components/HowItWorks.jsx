@@ -25,22 +25,35 @@ const steps = [
 
 export default function HowItWorks() {
   return (
-    <section className="section cream2" id="how">
-      <p className="section-label">— How It Works</p>
-      <h2 className="section-title red underlined">
-        From site activity to clear<br />admin decisions.
-      </h2>
-      <p className="section-desc">
-        Staff can record information on-site while the admin gets a clearer view of project operations.
-      </p>
-      <div className="steps-grid">
-        {steps.map((step) => (
-          <div key={step.num}>
-            <div className="step-num">{step.num}</div>
-            <div className="step-title">{step.title}</div>
-            <div className="step-desc">{step.desc}</div>
-          </div>
-        ))}
+    <section className="process-section" id="project">
+      <span id="projects" style={{ position: 'absolute', top: '-80px', visibility: 'hidden' }} />
+      <span id="how" style={{ position: 'absolute', top: '-80px', visibility: 'hidden' }} />
+      <div className="process-left">
+        <p className="process-label">Our Process</p>
+        <h2 className="process-heading">
+          EXPLORE THE STRATEGIC WAY OUR PROCESS IS DONE.
+        </h2>
+        <div className="process-img-wrap">
+          <img src="/hero-bg.jpg" alt="Team planning a construction project" className="process-img" />
+        </div>
+      </div>
+
+      <div className="process-right">
+        <p className="process-intro">
+          Staff can record information on-site while the admin gets a clearer view
+          of project operations — ensuring transparency and accountability at every stage.
+        </p>
+        <div className="process-steps">
+          {steps.map((step) => (
+            <div key={step.num} className="process-step">
+              <div className="process-step-left">
+                <span className="process-step-num">Step {step.num}</span>
+                <h3 className="process-step-title">{step.title}</h3>
+              </div>
+              <p className="process-step-desc">{step.desc}</p>
+            </div>
+          ))}
+        </div>
       </div>
     </section>
   )

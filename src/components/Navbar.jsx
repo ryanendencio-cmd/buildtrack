@@ -1,11 +1,18 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 export default function Navbar() {
   const navigate = useNavigate()
+  const [scrolled, setScrolled] = useState(false)
+
+  useEffect(() => {
+    const handleScroll = () => setScrolled(window.scrollY > 40)
+    window.addEventListener('scroll', handleScroll)
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [])
 
   return (
-    <nav className="nav">
+    <nav className={`nav ${scrolled ? 'nav-scrolled' : ''}`}>
       <div className="nav-logo">
         <img
           src="/logo.png"
@@ -14,12 +21,18 @@ export default function Navbar() {
         />
       </div>
 
-      <div className="nav-links">
-        <a href="#features">Features</a>
-        <a href="#how">How It Works</a>
-        <a href="#about">About</a>
+      <div className="nav-pill">
+        <a href="#" className="nav-pill-link active">Home</a>
+        <a href="#about" className="nav-pill-link">About us</a>
+        <a href="#services" className="nav-pill-link">Services</a>
+        <a href="#project" className="nav-pill-link">Projects</a>
       </div>
-      <button className="btn-login" onClick={() => navigate('/login')}>Log In</button>
+
+      <div className="nav-right">
+        <button className="btn-login" onClick={() => navigate('/login')}>
+          Log In
+        </button>
+      </div>
     </nav>
   )
 }
