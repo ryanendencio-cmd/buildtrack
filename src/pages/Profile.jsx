@@ -48,7 +48,8 @@ export default function Profile() {
     // ── FETCH PROFILE MULA SA DATABASE ──
     useEffect(() => {
         const adminId = localStorage.getItem('adminId') || 1;
-        fetch(`http://localhost:5000/api/admin/profile/${adminId}`)
+        const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
+        fetch(`${BASE_URL}/admin/profile/${adminId}`)
             .then(res => res.json())
             .then(data => {
                 if (data && !data.error) {
@@ -146,7 +147,8 @@ export default function Profile() {
         const adminId = localStorage.getItem('adminId') || 1;
 
         try {
-            const res = await fetch('http://localhost:5000/api/admin/profile/save', {
+            const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
+            const res = await fetch(`${BASE_URL}/admin/profile/save`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -208,7 +210,8 @@ export default function Profile() {
         setSaving(true);
 
         try {
-            const res = await fetch(`http://localhost:5000/api/admin/${adminId}/password`, {
+            const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
+            const res = await fetch(`${BASE_URL}/admin/${adminId}/password`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
