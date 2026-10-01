@@ -2,7 +2,7 @@ const express = require('express')
 const mysql = require('mysql2')
 const cors = require('cors')
 const bcrypt = require('bcrypt')
-const nodemailer = require('nodemailer')
+const { Resend } = require('resend')
 const jwt = require('jsonwebtoken')
 
 const app = express()
@@ -1049,12 +1049,11 @@ function startServer(db) {
   })
 
   // ── ADMIN FORGOT PASSWORD ──
-  app.post('/api/admin/forgot-password', (req, res) => {
-    const { username } = req.body // this is email or username
-    db.query('SELECT * FROM admins WHERE email = ? OR username = ?', [username, username], (err, results) => {
+  app.post('/api/admin/forgot-password', async (req, res) => {
+    const { username } = req.body
+    db.query('SELECT * FROM admins WHERE email = ? OR username = ?', [username, username], async (err, results) => {
       if (err) return res.status(500).json({ error: err.message })
       if (results.length === 0) {
-        // Prevent email enumeration
         return res.json({ success: true, message: 'Password reset link sent.' })
       }
 
@@ -1064,44 +1063,38 @@ function startServer(db) {
       }
 
       const token = jwt.sign({ id: admin.id, type: 'admin' }, process.env.JWT_SECRET || 'scon_super_secret_key_2026', { expiresIn: '15m' })
-
-      // Gagamitin natin yung base URL ng frontend para sa link
-      // Tandaan: Papalitan ito ng actual frontend URL kapag nasa Vercel
       const frontendURL = process.env.FRONTEND_URL || 'https://buildtrack-sotalbo-system.vercel.app'
       const resetLink = `${frontendURL}/reset-password/${token}`
 
-      const transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-          user: process.env.EMAIL_USER,
-          pass: process.env.EMAIL_PASS
-        }
-      })
-
-      const mailOptions = {
-        from: `"BuildTrack System" <${process.env.EMAIL_USER}>`,
-        to: admin.email,
-        subject: 'Sotalbo Construction: Password Reset Request',
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
-            <h2 style="color: #8B1A10; margin-bottom: 20px;">Password Reset</h2>
-            <p>You requested a password reset for your BuildTrack Administrator account.</p>
-            <p>Click the button below to set a new password. This link is valid for <strong>15 minutes</strong>.</p>
-            <div style="text-align: center; margin: 30px 0;">
-              <a href="${resetLink}" style="padding: 12px 24px; background-color: #8B1A10; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Reset Password</a>
+      try {
+        const resend = new Resend(process.env.RESEND_API_KEY)
+        const { error: emailError } = await resend.emails.send({
+          from: 'BuildTrack System <onboarding@resend.dev>',
+          to: admin.email,
+          subject: 'Sotalbo Construction: Password Reset Request',
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+              <h2 style="color: #8B1A10; margin-bottom: 20px;">Password Reset</h2>
+              <p>You requested a password reset for your BuildTrack Administrator account.</p>
+              <p>Click the button below to set a new password. This link is valid for <strong>15 minutes</strong>.</p>
+              <div style="text-align: center; margin: 30px 0;">
+                <a href="${resetLink}" style="padding: 12px 24px; background-color: #8B1A10; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Reset Password</a>
+              </div>
+              <p style="font-size: 12px; color: #777;">If you did not request this, you can safely ignore this email. Your password will remain unchanged.</p>
             </div>
-            <p style="font-size: 12px; color: #777;">If you did not request this, you can safely ignore this email. Your password will remain unchanged.</p>
-          </div>
-        `
-      }
+          `
+        })
 
-      transporter.sendMail(mailOptions, (error, info) => {
-        if (error) {
-          console.error('Error sending email:', error)
-          return res.status(500).json({ error: 'Failed to send email. Please check server email credentials.' })
+        if (emailError) {
+          console.error('Resend error:', emailError)
+          return res.status(500).json({ error: 'Failed to send email: ' + emailError.message })
         }
+
         res.json({ success: true, message: 'Password reset link sent.' })
-      })
+      } catch (e) {
+        console.error('Email send error:', e)
+        res.status(500).json({ error: 'Failed to send email.' })
+      }
     })
   })
 
