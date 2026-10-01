@@ -18,7 +18,7 @@ const dbConfig = {
 }
 
 if (process.env.DB_HOST) {
-  dbConfig.ssl = { minVersion: 'TLSv1.2', rejectUnauthorized: true }
+  dbConfig.ssl = { minVersion: 'TLSv1.2', rejectUnauthorized: false }
 }
 
 const dbInit = mysql.createConnection(dbConfig)
