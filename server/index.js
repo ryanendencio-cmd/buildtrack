@@ -17,10 +17,6 @@ const dbConfig = {
   database: process.env.DB_NAME || null 
 }
 
-if (process.env.DB_HOST) {
-  dbConfig.ssl = { minVersion: 'TLSv1.2', rejectUnauthorized: false }
-}
-
 const dbInit = mysql.createConnection(dbConfig)
 
 const DB_NAME = 's_cons_db'
