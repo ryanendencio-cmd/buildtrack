@@ -163,9 +163,10 @@ const CREATE_TABLES = `
     username VARCHAR(100) NOT NULL UNIQUE,
     email VARCHAR(255) UNIQUE,
     password VARCHAR(255) NOT NULL,
-    first_name VARCHAR(100),
-    middle_name VARCHAR(100),
-    last_name VARCHAR(100),
+    full_name VARCHAR(30),
+    first_name VARCHAR(30),
+    middle_name VARCHAR(5),
+    last_name VARCHAR(30),
     phone VARCHAR(20),
     home_address TEXT,
     address_obj LONGTEXT,
@@ -217,6 +218,7 @@ dbInit.connect(err => {
             { col: 'biometric_login_enabled', def: 'BOOLEAN DEFAULT false' },
             { col: 'status', def: "VARCHAR(50) DEFAULT 'Active'" },
             { col: 'updated_at', def: 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP' },
+            { col: 'full_name', def: 'VARCHAR(255)' },
             { col: 'first_name', def: 'VARCHAR(100)' },
             { col: 'middle_name', def: 'VARCHAR(100)' },
             { col: 'last_name', def: 'VARCHAR(100)' },
@@ -233,13 +235,13 @@ dbInit.connect(err => {
               }
             })
           })
-          ;['start_time', 'end_time'].forEach(col => {
-            dbInit.query(`SHOW COLUMNS FROM schedules LIKE '${col}'`, (err, c) => {
-              if (!err && c.length > 0) {
-                dbInit.query(`ALTER TABLE schedules DROP COLUMN ${col}`, () => { })
-              }
+            ;['start_time', 'end_time'].forEach(col => {
+              dbInit.query(`SHOW COLUMNS FROM schedules LIKE '${col}'`, (err, c) => {
+                if (!err && c.length > 0) {
+                  dbInit.query(`ALTER TABLE schedules DROP COLUMN ${col}`, () => { })
+                }
+              })
             })
-          })
 
           console.log('All tables ready.')
 
@@ -1055,19 +1057,19 @@ function startServer(db) {
         // Prevent email enumeration
         return res.json({ success: true, message: 'Password reset link sent.' })
       }
-      
+
       const admin = results[0]
       if (!admin.email) {
         return res.status(400).json({ error: 'No email associated with this account.' })
       }
 
       const token = jwt.sign({ id: admin.id, type: 'admin' }, process.env.JWT_SECRET || 'scon_super_secret_key_2026', { expiresIn: '15m' })
-      
+
       // Gagamitin natin yung base URL ng frontend para sa link
       // Tandaan: Papalitan ito ng actual frontend URL kapag nasa Vercel
       const frontendURL = process.env.FRONTEND_URL || 'https://buildtrack-sotalbo-system.vercel.app'
       const resetLink = `${frontendURL}/reset-password/${token}`
-      
+
       const transporter = nodemailer.createTransport({
         service: 'gmail',
         auth: {
@@ -1075,7 +1077,7 @@ function startServer(db) {
           pass: process.env.EMAIL_PASS
         }
       })
-      
+
       const mailOptions = {
         from: `"BuildTrack System" <${process.env.EMAIL_USER}>`,
         to: admin.email,
@@ -1092,7 +1094,7 @@ function startServer(db) {
           </div>
         `
       }
-      
+
       transporter.sendMail(mailOptions, (error, info) => {
         if (error) {
           console.error('Error sending email:', error)
@@ -1109,7 +1111,7 @@ function startServer(db) {
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET || 'scon_super_secret_key_2026')
       if (decoded.type !== 'admin') return res.status(400).json({ error: 'Invalid token type' })
-      
+
       const hashed = await bcrypt.hash(newPassword, 10)
       db.query('UPDATE admins SET password = ? WHERE id = ?', [hashed, decoded.id], (err) => {
         if (err) return res.status(500).json({ error: err.message })
