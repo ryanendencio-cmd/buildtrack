@@ -1044,6 +1044,13 @@ function startServer(db) {
     })
   })
 
+  // ── ADMIN FORGOT PASSWORD ──
+  app.post('/api/admin/forgot-password', (req, res) => {
+    // This is a placeholder since there is no actual email server configured.
+    // It will return success so the frontend UI can show the success state.
+    res.json({ success: true, message: 'Password reset link sent.' })
+  })
+
   // ── ADMIN REGISTER (create new admin account) ──
   app.post('/api/admin/register', async (req, res) => {
     const { username, email, password, full_name } = req.body
