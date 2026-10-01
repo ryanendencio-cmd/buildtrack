@@ -17,6 +17,10 @@ const dbConfig = {
   database: process.env.DB_NAME || null 
 }
 
+if (process.env.DB_HOST) {
+  dbConfig.ssl = { minVersion: 'TLSv1.2', rejectUnauthorized: true }
+}
+
 const dbInit = mysql.createConnection(dbConfig)
 
 const DB_NAME = 's_cons_db'
@@ -1288,6 +1292,5 @@ function startServer(db) {
     )
   })
 
-  const port = process.env.PORT || 5000;
-  app.listen(port, () => console.log("Server running on port " + port))
+  app.listen(5000, () => console.log('Server running on http://localhost:5000'))
 }
