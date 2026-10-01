@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 
 /* ─── Styles & animations ─── */
 const STYLES = `
@@ -201,6 +201,7 @@ export default function NewPassword() {
   const [success,         setSuccess]         = useState(false)
   const [mounted,         setMounted]         = useState(false)
   const navigate = useNavigate()
+  const { token } = useParams()
 
   useEffect(() => { setMounted(true) }, [])
 
@@ -230,7 +231,7 @@ export default function NewPassword() {
       const res  = await fetch(`${BASE_URL}/admin/reset-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ token, newPassword: password }),
       })
       const data = await res.json()
       if (!res.ok) {

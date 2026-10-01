@@ -43,7 +43,7 @@ export default function App() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<Login />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/new-password" element={<NewPassword />} />
+        <Route path="/reset-password/:token" element={<NewPassword />} />
         <Route path="/success" element={<SuccessReset />} />
 
         {/* Admin Routes */}

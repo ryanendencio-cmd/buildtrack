@@ -2,6 +2,8 @@ const express = require('express')
 const mysql = require('mysql2')
 const cors = require('cors')
 const bcrypt = require('bcrypt')
+const nodemailer = require('nodemailer')
+const jwt = require('jsonwebtoken')
 
 const app = express()
 app.use(cors())
@@ -1046,9 +1048,76 @@ function startServer(db) {
 
   // ── ADMIN FORGOT PASSWORD ──
   app.post('/api/admin/forgot-password', (req, res) => {
-    // This is a placeholder since there is no actual email server configured.
-    // It will return success so the frontend UI can show the success state.
-    res.json({ success: true, message: 'Password reset link sent.' })
+    const { username } = req.body // this is email or username
+    db.query('SELECT * FROM admins WHERE email = ? OR username = ?', [username, username], (err, results) => {
+      if (err) return res.status(500).json({ error: err.message })
+      if (results.length === 0) {
+        // Prevent email enumeration
+        return res.json({ success: true, message: 'Password reset link sent.' })
+      }
+      
+      const admin = results[0]
+      if (!admin.email) {
+        return res.status(400).json({ error: 'No email associated with this account.' })
+      }
+
+      const token = jwt.sign({ id: admin.id, type: 'admin' }, process.env.JWT_SECRET || 'scon_super_secret_key_2026', { expiresIn: '15m' })
+      
+      // Gagamitin natin yung base URL ng frontend para sa link
+      // Tandaan: Papalitan ito ng actual frontend URL kapag nasa Vercel
+      const frontendURL = process.env.FRONTEND_URL || 'https://buildtrack-sotalbo-system.vercel.app'
+      const resetLink = `${frontendURL}/reset-password/${token}`
+      
+      const transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: process.env.EMAIL_USER,
+          pass: process.env.EMAIL_PASS
+        }
+      })
+      
+      const mailOptions = {
+        from: `"BuildTrack System" <${process.env.EMAIL_USER}>`,
+        to: admin.email,
+        subject: 'Sotalbo Construction: Password Reset Request',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+            <h2 style="color: #8B1A10; margin-bottom: 20px;">Password Reset</h2>
+            <p>You requested a password reset for your BuildTrack Administrator account.</p>
+            <p>Click the button below to set a new password. This link is valid for <strong>15 minutes</strong>.</p>
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${resetLink}" style="padding: 12px 24px; background-color: #8B1A10; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Reset Password</a>
+            </div>
+            <p style="font-size: 12px; color: #777;">If you did not request this, you can safely ignore this email. Your password will remain unchanged.</p>
+          </div>
+        `
+      }
+      
+      transporter.sendMail(mailOptions, (error, info) => {
+        if (error) {
+          console.error('Error sending email:', error)
+          return res.status(500).json({ error: 'Failed to send email. Please check server email credentials.' })
+        }
+        res.json({ success: true, message: 'Password reset link sent.' })
+      })
+    })
+  })
+
+  // ── ADMIN RESET PASSWORD (NEW ROUTE) ──
+  app.post('/api/admin/reset-password', async (req, res) => {
+    const { token, newPassword } = req.body
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'scon_super_secret_key_2026')
+      if (decoded.type !== 'admin') return res.status(400).json({ error: 'Invalid token type' })
+      
+      const hashed = await bcrypt.hash(newPassword, 10)
+      db.query('UPDATE admins SET password = ? WHERE id = ?', [hashed, decoded.id], (err) => {
+        if (err) return res.status(500).json({ error: err.message })
+        res.json({ success: true, message: 'Password has been reset successfully.' })
+      })
+    } catch (e) {
+      res.status(400).json({ error: 'Token expired or invalid.' })
+    }
   })
 
   // ── ADMIN REGISTER (create new admin account) ──
