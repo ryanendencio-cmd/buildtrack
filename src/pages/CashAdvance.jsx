@@ -27,27 +27,39 @@ export default function CashAdvance() {
 
     useEffect(() => {
         api.get('/projects').then(data => {
-            setMockProjects(data.map(p => ({ id: String(p.id), name: p.name })));
+            if (Array.isArray(data)) {
+                setMockProjects(data.map(p => ({ id: String(p.id), name: p.name })));
+            }
         }).catch(console.error);
 
         api.get('/workers').then(data => {
-            setWorkersList(data || []);
+            if (Array.isArray(data)) {
+                setWorkersList(data);
+            }
         }).catch(console.error);
     }, []);
 
-    const currentProjectId = id || (mockProjects[0]?.id ?? "1");
+    const currentProjectId = id || "ALL";
 
     useEffect(() => {
-        if (!currentProjectId) return;
-        api.get(`/cash-advances/${currentProjectId}`).then(data => setCashAdvances(data)).catch(console.error);
+        api.get(`/cash-advances/${currentProjectId}`)
+            .then(data => setCashAdvances(Array.isArray(data) ? data : []))
+            .catch(err => {
+                console.error(err);
+                setCashAdvances([]);
+            });
 
         queueMicrotask(() => {
             setFilterDate('');
-            setFormData(prev => ({ ...prev, projectId: currentProjectId }));
+            setFormData(prev => ({ ...prev, projectId: currentProjectId === 'ALL' ? (mockProjects[0]?.id || '') : currentProjectId }));
         });
     }, [currentProjectId, mockProjects]);
 
-    const handleProjectChange = (e) => navigate(`/cash-advance/${e.target.value}`);
+    const handleApproveStatus = (advId, newStatus) => {
+        api.put(`/cash-advances/${advId}/approve`, { status: newStatus }).then(() => {
+            setCashAdvances(prev => Array.isArray(prev) ? prev.map(a => a.id === advId ? { ...a, status: newStatus } : a) : []);
+        }).catch(console.error);
+    };
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -65,6 +77,11 @@ export default function CashAdvance() {
             }
         }
         setFormData(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleProjectChange = (e) => {
+        const val = e.target.value;
+        navigate(val === 'ALL' ? '/cash-advance' : `/cash-advance/${val}`);
     };
 
     const handleInitialSubmit = (e) => {
@@ -144,8 +161,9 @@ export default function CashAdvance() {
         return norm;
     };
 
-    const displayedAdvances = cashAdvances.filter(adv => !filterDate || normalizeDate(adv.date) === filterDate);
-    const tableTotal = displayedAdvances.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const validAdvances = Array.isArray(cashAdvances) ? cashAdvances : [];
+    const displayedAdvances = validAdvances.filter(adv => !filterDate || normalizeDate(adv?.date) === filterDate);
+    const tableTotal = displayedAdvances.reduce((sum, item) => sum + Number(item?.amount || 0), 0);
 
     const selectStyles = { backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3e%3cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3e%3c/svg%3e")`, backgroundPosition: 'right 0.5rem center', backgroundRepeat: 'no-repeat', backgroundSize: '0.8rem 0.8rem' };
 
@@ -161,6 +179,7 @@ export default function CashAdvance() {
                 <div className="w-full md:max-w-sm">
                     <label className="block text-[8px] font-bold text-gray-400 tracking-wider uppercase mb-1">PROJECT</label>
                     <select value={currentProjectId} onChange={handleProjectChange} className="w-full bg-white border border-gray-100 shadow-sm rounded-lg pl-2.5 pr-6 py-1.5 text-[10px] font-extrabold text-gray-800 outline-none appearance-none" style={selectStyles}>
+                        <option value="ALL">All Projects / Mobile Requests</option>
                         {mockProjects.map(p => (
                             <option key={p.id} value={p.id}>{p.name}</option>
                         ))}
@@ -211,15 +230,16 @@ export default function CashAdvance() {
                             <tr>
                                 <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[15%] uppercase tracking-wider">DATE</th>
                                 <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[20%] uppercase tracking-wider">WORKER NAME</th>
-                                <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[30%] uppercase tracking-wider">REASON</th>
+                                <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[25%] uppercase tracking-wider">REASON</th>
                                 <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[15%] uppercase tracking-wider">STATUS</th>
-                                <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 text-right pr-2 w-[20%] uppercase tracking-wider">AMOUNT</th>
+                                <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 text-right pr-2 w-[15%] uppercase tracking-wider">AMOUNT</th>
+                                <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 text-center w-[10%] uppercase tracking-wider">ACTION</th>
                             </tr>
                         </thead>
                         <tbody>
                             {displayedAdvances.length === 0 ? (
                                 <tr>
-                                    <td colSpan="5" className="text-center py-6 text-[10px] text-gray-400 italic">
+                                    <td colSpan="6" className="text-center py-6 text-[10px] text-gray-400 italic">
                                         No cash advances recorded for this project.
                                     </td>
                                 </tr>
@@ -230,11 +250,21 @@ export default function CashAdvance() {
                                         <td className="py-2.5 text-[10px] font-bold text-gray-900 border-b border-gray-50">{adv.workerName}</td>
                                         <td className="py-2.5 text-[10px] font-medium text-gray-600 border-b border-gray-50">{adv.reason || '-'}</td>
                                         <td className="py-2.5 border-b border-gray-50">
-                                            <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${adv.status === 'Approved' ? 'bg-[#e6f4ea] text-[#2e7d32]' : 'bg-[#fff8e1] text-[#f57f17]'}`}>
-                                                {adv.status}
+                                            <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${adv.status === 'Approved' ? 'bg-[#e6f4ea] text-[#2e7d32]' : adv.status === 'Rejected' ? 'bg-red-100 text-red-700' : 'bg-[#fff8e1] text-[#f57f17]'}`}>
+                                                {adv.status || 'Pending'}
                                             </span>
                                         </td>
                                         <td className="py-2.5 text-[10px] font-extrabold text-[#A63228] border-b border-gray-50 text-right pr-2">₱{Number(adv.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                        <td className="py-2.5 border-b border-gray-50 text-center">
+                                            {adv.status === 'Pending' ? (
+                                                <div className="flex items-center justify-center gap-1">
+                                                    <button onClick={() => handleApproveStatus(adv.id, 'Approved')} className="bg-[#e6f4ea] border border-[#2e7d32] text-[#2e7d32] px-1.5 py-0.5 rounded text-[8px] font-bold hover:bg-green-100">Approve</button>
+                                                    <button onClick={() => handleApproveStatus(adv.id, 'Rejected')} className="bg-white border border-[#A63228] text-[#A63228] px-1.5 py-0.5 rounded text-[8px] font-bold hover:bg-red-50">Reject</button>
+                                                </div>
+                                            ) : (
+                                                <span className="text-[8px] text-gray-400">—</span>
+                                            )}
+                                        </td>
                                     </tr>
                                 ))
                             )}
@@ -307,11 +337,14 @@ export default function CashAdvance() {
                                                 className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-xs font-medium text-gray-900 focus:outline-none focus:border-[#A63228] focus:ring-1 focus:ring-[#A63228]"
                                             >
                                                 <option value="">-- Select Worker --</option>
-                                                {workersList.map((w, idx) => (
-                                                    <option key={w.id || idx} value={w.name}>
-                                                        {w.name} {w.role ? `(${w.role})` : ''}
-                                                    </option>
-                                                ))}
+                                                {workersList.map((w, idx) => {
+                                                    const wName = w.full_name || [w.first_name, w.last_name].filter(Boolean).join(' ') || w.name || 'Worker';
+                                                    return (
+                                                        <option key={w.id || idx} value={wName}>
+                                                            {wName} {w.role ? `(${w.role})` : ''}
+                                                        </option>
+                                                    );
+                                                })}
                                                 <option value="__CUSTOM__">+ Enter custom name...</option>
                                             </select>
                                         ) : (

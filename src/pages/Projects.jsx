@@ -5,11 +5,19 @@ import { api } from '../api'
 import PhilippineAddressSelector from '../components/PhilippineAddressSelector'
 import AddBudgetModal from '../components/AddBudgetModal'
 
+const isOngoingStatus = (statusStr) => {
+    const s = (statusStr || '').toUpperCase();
+    return s === 'ONGOING' || s === 'ACTIVE' || s === '';
+};
+
 export default function Projects() {
     const [projects, setProjects] = useState([]);
 
     useEffect(() => {
-        api.get('/projects').then(data => setProjects(data)).catch(console.error);
+        api.get('/projects').then(data => setProjects(Array.isArray(data) ? data : [])).catch(err => {
+            console.error(err);
+            setProjects([]);
+        });
     }, []);
 
     const [searchTerm, setSearchTerm] = useState('');
@@ -79,7 +87,14 @@ export default function Projects() {
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
+    const activeOngoingProject = projects.find(p => isOngoingStatus(p.status));
+
     const openAddModal = () => {
+        if (activeOngoingProject) {
+            alert(`Hindi pa maaaring magdagdag ng bagong proyekto.\n\nKasalukuyang may active project pa: "${activeOngoingProject.name}".\n\nIsang proyekto lamang ang pinapayagang tanggapin sa bawat pagkakataon. Kailangan munang tapusin at i-mark bilang "COMPLETED" ang kasalukuyang proyekto bago makapag-umpisa ng bago.`);
+            return;
+        }
+
         setFormData({
             id: null,
             title: '',
@@ -209,11 +224,6 @@ export default function Projects() {
         }).catch(console.error);
     };
 
-    const isOngoingStatus = (statusStr) => {
-        const s = (statusStr || '').toUpperCase();
-        return s === 'ONGOING' || s === 'ACTIVE' || s === '';
-    };
-
     const filteredProjects = projects.filter(p => {
         const matchSearch = (p.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
             (p.location || '').toLowerCase().includes(searchTerm.toLowerCase());
@@ -259,6 +269,42 @@ export default function Projects() {
                     <span>+</span> Add Project
                 </button>
             </div>
+
+            {/* ── ACTIVE PROJECT POLICY BANNER ── */}
+            {activeOngoingProject ? (
+                <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between gap-2 shadow-xs">
+                    <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-700 shrink-0">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                        </div>
+                        <div>
+                            <p className="text-[11px] font-extrabold text-amber-900">
+                                🔒 May Kasalukuyang Aktibong Proyekto: <span className="underline">{activeOngoingProject.name}</span>
+                            </p>
+                            <p className="text-[9px] text-amber-700 font-medium mt-0.5">
+                                Patakaran: 1 aktibong proyekto lamang sa bawat oras. Tapusin muna (i-mark bilang Completed) bago makapag-umpisa ng bagong proyekto.
+                            </p>
+                        </div>
+                    </div>
+                    <span className="text-[9px] font-extrabold px-2.5 py-1 bg-amber-200/60 text-amber-900 rounded-lg shrink-0">
+                        1/1 Active Limit Reached
+                    </span>
+                </div>
+            ) : (
+                <div className="mb-3 p-3 bg-green-50 border border-green-200 rounded-xl flex items-center gap-2.5 shadow-xs">
+                    <div className="w-8 h-8 rounded-lg bg-green-500/10 flex items-center justify-center text-green-700 shrink-0">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                    </div>
+                    <div>
+                        <p className="text-[11px] font-extrabold text-green-900">
+                            ✅ Handa Para sa Panibagong Proyekto
+                        </p>
+                        <p className="text-[9px] text-green-700 font-medium mt-0.5">
+                            Walang ongoing project sa kasalukuyan. Maaari nang magdagdag ng bagong proyekto.
+                        </p>
+                    </div>
+                </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mb-3">
                 <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-center text-center">

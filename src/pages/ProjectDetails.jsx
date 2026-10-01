@@ -23,19 +23,20 @@ export default function ProjectDetails() {
         if (!id) return
         queueMicrotask(() => setLoading(true))
         Promise.all([
-            api.get(`/projects`),
-            api.get(`/expenses/${id}`),
-            api.get(`/attendance/${id}`),
-            api.get(`/materials/${id}`),
-            api.get(`/assets/${id}`),
+            api.get(`/projects`).catch(() => []),
+            api.get(`/expenses/${id}`).catch(() => []),
+            api.get(`/attendance/${id}`).catch(() => []),
+            api.get(`/materials/${id}`).catch(() => []),
+            api.get(`/assets/${id}`).catch(() => []),
             api.get(`/projects/${id}/budget-additions`).catch(() => [])
-        ]).then(([projects, exp, att, mat, ast, added]) => {
-            const found = projects.find(p => String(p.id) === String(id))
+        ]).then(([projs, exp, att, mat, ast, added]) => {
+            const projectList = Array.isArray(projs) ? projs : []
+            const found = projectList.find(p => String(p.id) === String(id))
             setProject(found || null)
-            setExpenses(exp)
-            setAttendance(att)
-            setMaterials(mat)
-            setAssets(ast)
+            setExpenses(Array.isArray(exp) ? exp : [])
+            setAttendance(Array.isArray(att) ? att : [])
+            setMaterials(Array.isArray(mat) ? mat : [])
+            setAssets(Array.isArray(ast) ? ast : [])
             setAdditions(Array.isArray(added) ? added : [])
         }).catch(console.error)
         .finally(() => setLoading(false))
@@ -87,7 +88,7 @@ export default function ProjectDetails() {
         return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
     }
 
-    const isOngoing = project.status === 'Active' || project.status === 'ONGOING'
+    const isOngoing = (project.status || '').toUpperCase() !== 'COMPLETED'
 
     return (
         <AdminLayout>

@@ -1,5 +1,12 @@
 import React from 'react'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+
+function PrivateRoute({ children }) {
+  const token = localStorage.getItem('adminToken')
+  const session = localStorage.getItem('adminSession')
+  if (!token || !session) return <Navigate to="/login" replace />
+  return children
+}
 import Navbar from './components/Navbar'
 import Hero from './components/Hero'
 import Problem from './components/Problem'
@@ -46,32 +53,32 @@ export default function App() {
         <Route path="/reset-password/:token" element={<NewPassword />} />
         <Route path="/success" element={<SuccessReset />} />
 
-        {/* Admin Routes */}
-        <Route path="/dashboard" element={<Dashboard />} />
+        {/* Admin Routes — protected */}
+        <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
 
-        <Route path="/projects" element={<Projects />} />
-        <Route path="/project-details/:id" element={<ProjectDetails />} />
+        <Route path="/projects" element={<PrivateRoute><Projects /></PrivateRoute>} />
+        <Route path="/project-details/:id" element={<PrivateRoute><ProjectDetails /></PrivateRoute>} />
 
-        <Route path="/expenses" element={<Expenses />} />
-        <Route path="/expenses/:id" element={<Expenses />} />
+        <Route path="/expenses" element={<PrivateRoute><Expenses /></PrivateRoute>} />
+        <Route path="/expenses/:id" element={<PrivateRoute><Expenses /></PrivateRoute>} />
 
-        <Route path="/attendance" element={<Attendance />} />
-        <Route path="/attendance/:id" element={<Attendance />} />
+        <Route path="/attendance" element={<PrivateRoute><Attendance /></PrivateRoute>} />
+        <Route path="/attendance/:id" element={<PrivateRoute><Attendance /></PrivateRoute>} />
 
-        <Route path="/assets" element={<Assets />} />
-        <Route path="/assets/:id" element={<Assets />} />
+        <Route path="/assets" element={<PrivateRoute><Assets /></PrivateRoute>} />
+        <Route path="/assets/:id" element={<PrivateRoute><Assets /></PrivateRoute>} />
 
-        <Route path="/materials" element={<Materials />} />
-        <Route path="/materials/:id" element={<Materials />} />
-        <Route path="/material-log/:id" element={<MaterialLog />} />
+        <Route path="/materials" element={<PrivateRoute><Materials /></PrivateRoute>} />
+        <Route path="/materials/:id" element={<PrivateRoute><Materials /></PrivateRoute>} />
+        <Route path="/material-log/:id" element={<PrivateRoute><MaterialLog /></PrivateRoute>} />
 
-        <Route path="/workers" element={<Workers />} />
-        <Route path="/cash-advance" element={<CashAdvance />} />
-        <Route path="/cash-advance/:id" element={<CashAdvance />} />
-        <Route path="/schedules" element={<Schedules />} />
-        <Route path="/reports" element={<Reports />} />
-        <Route path="/profile" element={<Profile />} />
-        <Route path="/notifications" element={<Notifications />} />
+        <Route path="/workers" element={<PrivateRoute><Workers /></PrivateRoute>} />
+        <Route path="/cash-advance" element={<PrivateRoute><CashAdvance /></PrivateRoute>} />
+        <Route path="/cash-advance/:id" element={<PrivateRoute><CashAdvance /></PrivateRoute>} />
+        <Route path="/schedules" element={<PrivateRoute><Schedules /></PrivateRoute>} />
+        <Route path="/reports" element={<PrivateRoute><Reports /></PrivateRoute>} />
+        <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
+        <Route path="/notifications" element={<PrivateRoute><Notifications /></PrivateRoute>} />
       </Routes>
     </BrowserRouter>
   )

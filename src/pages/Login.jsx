@@ -179,6 +179,7 @@ export default function Login() {
       } else {
         localStorage.setItem('adminId', data.admin.id)
         localStorage.setItem('adminSession', JSON.stringify(data.admin))
+        localStorage.setItem('adminToken', data.token)
         navigate('/dashboard')
       }
     } catch {

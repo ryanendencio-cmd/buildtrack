@@ -2,16 +2,17 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import PhilippineAddressSelector from '../components/PhilippineAddressSelector'
+import { api } from '../api'
 
 export default function Profile() {
     const navigate = useNavigate();
     const defaultProfile = {
-        firstName: 'Aldrich',
+        firstName: '',
         middleName: '',
         lastName: '',
-        email: 'aldrichsotalboconstruction@gmail.com',
+        email: '',
         role: 'Administrator',
-        phone: '0912 345 6789',
+        phone: '',
         homeAddress: '',
         addressObj: {},
         empId: 'SCON-ADMIN-001',
@@ -19,13 +20,15 @@ export default function Profile() {
     };
 
     const formatName = (profile) => [profile.firstName, profile.middleName, profile.lastName]
-        .filter(Boolean).join(' ') || profile.name || 'Administrator';
+        .filter(Boolean).join(' ') || profile.name || profile.fullName || 'Administrator';
 
     const handleLogout = () => {
         if (window.confirm('Are you sure you want to log out?')) {
             localStorage.removeItem('user');
             localStorage.removeItem('adminId');
             localStorage.removeItem('adminSession');
+            localStorage.removeItem('adminToken');
+            localStorage.removeItem('adminProfile');
             sessionStorage.clear();
             navigate('/login');
         }
@@ -46,24 +49,24 @@ export default function Profile() {
     const [errorMsg, setErrorMsg] = useState('');
 
     // ── FETCH PROFILE MULA SA DATABASE ──
-    useEffect(() => {
+    const loadProfileFromDB = () => {
         const adminId = localStorage.getItem('adminId') || 1;
-        const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
-        fetch(`${BASE_URL}/admin/profile/${adminId}`)
-            .then(res => res.json())
+        api.get(`/admin/profile/${adminId}`)
             .then(data => {
                 if (data && !data.error) {
                     const loadedProfile = {
+                        id: data.id,
                         firstName: data.firstName || '',
                         middleName: data.middleName || '',
                         lastName: data.lastName || '',
-                        email: data.email || defaultProfile.email,
-                        role: data.role || defaultProfile.role,
-                        phone: data.phone || defaultProfile.phone,
+                        fullName: data.fullName || '',
+                        email: data.email || '',
+                        role: data.role || 'Administrator',
+                        phone: data.phone || '',
                         homeAddress: data.homeAddress || '',
                         addressObj: data.addressObj && typeof data.addressObj === 'object' ? data.addressObj : {},
-                        empId: data.empId || defaultProfile.empId,
-                        dept: data.dept || defaultProfile.dept
+                        empId: data.empId || 'SCON-ADMIN-001',
+                        dept: data.dept || 'Management'
                     };
                     loadedProfile.name = formatName(loadedProfile);
                     setProfileData(loadedProfile);
@@ -74,6 +77,10 @@ export default function Profile() {
             .catch(err => {
                 console.warn('Could not load profile from database:', err);
             });
+    };
+
+    useEffect(() => {
+        loadProfileFromDB();
     }, []);
 
     // ── MODAL STATES ──
@@ -109,7 +116,13 @@ export default function Profile() {
     };
 
     const openEditProfile = () => {
-        setFormData({ ...profileData, name: formatName(profileData) });
+        const addrObj = profileData.addressObj || {};
+        setFormData({
+            ...profileData,
+            name: formatName(profileData),
+            street: addrObj.street || '',
+            addressObj: addrObj
+        });
         setErrorMsg('');
         setModalState('EDIT_PROFILE');
     };
@@ -132,6 +145,21 @@ export default function Profile() {
         setSaving(true);
         setErrorMsg('');
 
+        const addrObj = {
+            ...(formData.addressObj || {}),
+            street: (formData.street || '').trim()
+        };
+
+        const locParts = [
+            formData.street ? formData.street.trim() : '',
+            addrObj.barangayName ? `Brgy. ${addrObj.barangayName}` : '',
+            addrObj.cityName,
+            addrObj.provinceName && addrObj.provinceName !== 'NCR' && addrObj.provinceName !== addrObj.cityName ? addrObj.provinceName : '',
+            addrObj.regionName
+        ].filter(Boolean);
+
+        const computedHomeAddress = locParts.length > 0 ? locParts.join(', ') : (formData.homeAddress || '');
+
         const updatedProfile = {
             ...profileData,
             firstName: capitalizeWords((formData.firstName || '').trim()),
@@ -139,39 +167,27 @@ export default function Profile() {
             lastName: capitalizeWords((formData.lastName || '').trim()),
             email: (formData.email || '').trim(),
             phone: (formData.phone || '').trim(),
-            homeAddress: (formData.homeAddress || '').trim(),
-            addressObj: formData.addressObj || {}
+            homeAddress: computedHomeAddress,
+            addressObj: addrObj
         };
         updatedProfile.name = formatName(updatedProfile);
 
-        const adminId = localStorage.getItem('adminId') || 1;
+        const adminId = localStorage.getItem('adminId') || profileData.id || 1;
 
         try {
-            const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
-            const res = await fetch(`${BASE_URL}/admin/profile/save`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    adminId,
-                    firstName: updatedProfile.firstName,
-                    middleName: updatedProfile.middleName,
-                    lastName: updatedProfile.lastName,
-                    email: updatedProfile.email,
-                    phone: updatedProfile.phone,
-                    homeAddress: updatedProfile.homeAddress,
-                    addressObj: updatedProfile.addressObj,
-                    role: updatedProfile.role,
-                    empId: updatedProfile.empId,
-                    dept: updatedProfile.dept
-                })
+            const result = await api.post('/admin/profile/save', {
+                adminId,
+                firstName: updatedProfile.firstName,
+                middleName: updatedProfile.middleName,
+                lastName: updatedProfile.lastName,
+                email: updatedProfile.email,
+                phone: updatedProfile.phone,
+                homeAddress: updatedProfile.homeAddress,
+                addressObj: updatedProfile.addressObj,
+                role: updatedProfile.role,
+                empId: updatedProfile.empId,
+                dept: updatedProfile.dept
             });
-
-            const result = await res.json();
-            if (!res.ok) {
-                setErrorMsg(result.error || 'Failed to save admin profile to database.');
-                setSaving(false);
-                return;
-            }
 
             setProfileData(updatedProfile);
             localStorage.setItem('adminProfile', JSON.stringify(updatedProfile));
@@ -180,12 +196,7 @@ export default function Profile() {
             setModalState('SUCCESS');
         } catch (err) {
             console.error('Error saving profile to database:', err);
-            // Fallback save to localStorage
-            setProfileData(updatedProfile);
-            localStorage.setItem('adminProfile', JSON.stringify(updatedProfile));
-            window.dispatchEvent(new Event('admin-profile-updated'));
-            setSuccessMsg('Profile updated locally, but server was unreachable.');
-            setModalState('SUCCESS');
+            setErrorMsg(err.message || 'Failed to save admin profile to database.');
         } finally {
             setSaving(false);
         }
@@ -206,32 +217,20 @@ export default function Profile() {
             return;
         }
 
-        const adminId = localStorage.getItem('adminId') || 1;
+        const adminId = localStorage.getItem('adminId') || profileData.id || 1;
         setSaving(true);
 
         try {
-            const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
-            const res = await fetch(`${BASE_URL}/admin/${adminId}/password`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    currentPassword: formData.current,
-                    newPassword: formData.newPass
-                })
+            await api.put(`/admin/${adminId}/password`, {
+                currentPassword: formData.current,
+                newPassword: formData.newPass
             });
-
-            const result = await res.json();
-            if (!res.ok) {
-                setErrorMsg(result.error || 'Failed to update password.');
-                setSaving(false);
-                return;
-            }
 
             setSuccessMsg('Account password has been changed securely in the database.');
             setModalState('SUCCESS');
         } catch (err) {
             console.error('Password change error:', err);
-            setErrorMsg('Server connection failed. Could not update password in database.');
+            setErrorMsg(err.message || 'Server connection failed. Could not update password in database.');
         } finally {
             setSaving(false);
         }
@@ -415,16 +414,35 @@ export default function Profile() {
                             <div>
                                 <label className="block text-xs font-extrabold text-gray-700 mb-1.5 uppercase tracking-wider">Home Address</label>
                                 <div className="w-full bg-[#f4f1ee] rounded-lg p-4 focus-within:border-[#A63228] border border-transparent transition-colors">
+                                    <div className="mb-3">
+                                        <label className="block text-[10px] font-bold text-gray-600 mb-1 uppercase">House No. / Building / Street / Subdivision</label>
+                                        <input
+                                            type="text"
+                                            name="street"
+                                            value={formData.street || ''}
+                                            onChange={handleInputChange}
+                                            placeholder="e.g. Unit 4B, 123 Rizal Ave, Villa Verde"
+                                            className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-xs font-medium text-gray-900 focus:border-[#A63228] outline-none"
+                                        />
+                                    </div>
+
                                     <PhilippineAddressSelector 
                                         value={formData.addressObj || {}} 
                                         onChange={(newObj) => {
-                                            const fullAddress = [newObj.barangayName, newObj.cityName, newObj.provinceName, newObj.regionName].filter(Boolean).join(', ');
+                                            const locParts = [
+                                                formData.street ? formData.street.trim() : '',
+                                                newObj.barangayName ? `Brgy. ${newObj.barangayName}` : '',
+                                                newObj.cityName,
+                                                newObj.provinceName && newObj.provinceName !== 'NCR' && newObj.provinceName !== newObj.cityName ? newObj.provinceName : '',
+                                                newObj.regionName
+                                            ].filter(Boolean);
+                                            const fullAddress = locParts.join(', ');
                                             setFormData(prev => ({ ...prev, addressObj: newObj, homeAddress: fullAddress }));
                                         }} 
                                     />
                                     {formData.homeAddress && (
                                         <div className="mt-3 pt-3 border-t border-gray-200">
-                                            <span className="text-[9px] font-bold text-gray-500 uppercase">Complete Address</span>
+                                            <span className="text-[9px] font-bold text-gray-500 uppercase">Complete Address Preview</span>
                                             <p className="text-xs font-bold text-gray-900 mt-1 leading-relaxed">{formData.homeAddress}</p>
                                         </div>
                                     )}

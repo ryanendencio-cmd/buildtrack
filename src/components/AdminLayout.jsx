@@ -7,13 +7,15 @@ export default function AdminLayout({ children }) {
   const [showLogoutModal, setShowLogoutModal] = React.useState(false);
   const [adminProfile, setAdminProfile] = React.useState(() => {
     try {
+      const saved = JSON.parse(localStorage.getItem('adminProfile') || '{}');
+      const session = JSON.parse(localStorage.getItem('adminSession') || '{}');
       return {
-        name: 'Engr. Aldrich',
-        role: 'Administrator',
-        ...JSON.parse(localStorage.getItem('adminProfile') || '{}')
+        name: saved.fullName || saved.name || session.fullName || 'Administrator',
+        role: saved.role || session.role || 'Administrator',
+        ...saved
       };
     } catch {
-      return { name: 'Engr. Aldrich', role: 'Administrator' };
+      return { name: 'Administrator', role: 'Administrator' };
     }
   });
   const location = useLocation();
@@ -44,6 +46,10 @@ export default function AdminLayout({ children }) {
 
   const confirmLogout = () => {
     localStorage.removeItem('user');
+    localStorage.removeItem('adminId');
+    localStorage.removeItem('adminSession');
+    localStorage.removeItem('adminToken');
+    localStorage.removeItem('adminProfile');
     sessionStorage.clear();
     navigate('/login');
   };

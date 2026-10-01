@@ -30,8 +30,8 @@ const DB_NAME = 's_cons_db'
 const CREATE_TABLES = `
   CREATE TABLE IF NOT EXISTS projects (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    location VARCHAR(255),
+    name VARCHAR(50) NOT NULL,
+    location VARCHAR(100),
     budget DECIMAL(15,2) DEFAULT 0,
     progress INT DEFAULT 0,
     start_date DATE,
@@ -93,6 +93,18 @@ const CREATE_TABLES = `
     worker_id INT,
     worker_name VARCHAR(255),
     date DATE,
+    role VARCHAR(100),
+    morning_in VARCHAR(50),
+    morning_out VARCHAR(50),
+    afternoon_in VARCHAR(50),
+    afternoon_out VARCHAR(50),
+    morning_status VARCHAR(50),
+    afternoon_status VARCHAR(50),
+    time_in VARCHAR(50),
+    time_out VARCHAR(50),
+    rate DECIMAL(10,2) DEFAULT 0,
+    earned_amount DECIMAL(10,2) DEFAULT 0,
+    advance DECIMAL(10,2) DEFAULT 0,
     status VARCHAR(50) DEFAULT 'Present',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   );
@@ -122,6 +134,7 @@ const CREATE_TABLES = `
   CREATE TABLE IF NOT EXISTS cash_advances (
     id INT AUTO_INCREMENT PRIMARY KEY,
     project_id INT,
+    worker_id INT,
     workerName VARCHAR(255) NOT NULL,
     amount DECIMAL(15,2),
     date DATE,
@@ -163,10 +176,10 @@ const CREATE_TABLES = `
     username VARCHAR(100) NOT NULL UNIQUE,
     email VARCHAR(255) UNIQUE,
     password VARCHAR(255) NOT NULL,
-    full_name VARCHAR(30),
-    first_name VARCHAR(30),
-    middle_name VARCHAR(5),
-    last_name VARCHAR(30),
+    full_name VARCHAR(255),
+    first_name VARCHAR(100),
+    middle_name VARCHAR(100),
+    last_name VARCHAR(100),
     phone VARCHAR(20),
     home_address TEXT,
     address_obj LONGTEXT,
@@ -209,8 +222,31 @@ dbInit.connect(err => {
               dbInit.query('ALTER TABLE expenses ADD COLUMN image LONGTEXT', () => { })
             }
           })
+          // Migrate attendance columns
+          const attendanceNewCols = [
+            { col: 'role', def: 'VARCHAR(100)' },
+            { col: 'morning_in', def: 'VARCHAR(50)' },
+            { col: 'morning_out', def: 'VARCHAR(50)' },
+            { col: 'afternoon_in', def: 'VARCHAR(50)' },
+            { col: 'afternoon_out', def: 'VARCHAR(50)' },
+            { col: 'morning_status', def: 'VARCHAR(50)' },
+            { col: 'afternoon_status', def: 'VARCHAR(50)' },
+            { col: 'time_in', def: 'VARCHAR(50)' },
+            { col: 'time_out', def: 'VARCHAR(50)' },
+            { col: 'rate', def: 'DECIMAL(10,2) DEFAULT 0' },
+            { col: 'earned_amount', def: 'DECIMAL(10,2) DEFAULT 0' },
+            { col: 'advance', def: 'DECIMAL(10,2) DEFAULT 0' }
+          ]
+          attendanceNewCols.forEach(({ col, def }) => {
+            dbInit.query(`SHOW COLUMNS FROM attendance LIKE '${col}'`, (err, c) => {
+              if (!err && c.length === 0) {
+                dbInit.query(`ALTER TABLE attendance ADD COLUMN ${col} ${def}`, () => { })
+              }
+            })
+          })
           // Migrate new admin columns for existing databases
           const adminNewCols = [
+            { col: 'full_name', def: 'VARCHAR(255)' },
             { col: 'phone', def: 'VARCHAR(20)' },
             { col: 'assigned_project_site', def: 'VARCHAR(255)' },
             { col: 'terminal_id', def: 'VARCHAR(50)' },
@@ -353,36 +389,77 @@ function startServer(db) {
     })
   })
 
+  // Rule: Only 1 active project at a time. A new project cannot be created unless existing ones are COMPLETED.
   app.post('/api/projects', (req, res) => {
     const { name, location, budget, progress, start_date, end_date, status } = req.body
+    const targetStatus = status || 'Active'
     const MAX_AMOUNT = 999999999999
+
     if (budget !== undefined && Number(budget) > MAX_AMOUNT) {
       return res.status(400).json({ error: 'Budget allocated cannot exceed ₱999,999,999,999.' })
     }
-    db.query(
-      'INSERT INTO projects (name, location, budget, progress, start_date, end_date, status) VALUES (?,?,?,?,?,?,?)',
-      [name, location, budget, progress || 0, start_date, end_date, status || 'Active'],
-      (err, result) => {
+
+    if (String(targetStatus).toUpperCase() !== 'COMPLETED') {
+      db.query("SELECT id, name, status FROM projects WHERE UPPER(status) NOT IN ('COMPLETED')", (err, activeProjects) => {
         if (err) return res.status(500).json({ error: err.message })
-        res.json({ id: result.insertId, ...req.body })
-      }
-    )
+        if (activeProjects && activeProjects.length > 0) {
+          const activeProj = activeProjects[0]
+          return res.status(400).json({
+            error: `Hindi pa maaaring mag-umpisa ng bagong proyekto dahil may kasalukuyang active project pa ("${activeProj.name}"). Kailangan munang ma-mark bilang COMPLETED ang kasalukuyang proyekto.`
+          })
+        }
+
+        insertProject()
+      })
+    } else {
+      insertProject()
+    }
+
+    function insertProject() {
+      db.query(
+        'INSERT INTO projects (name, location, budget, progress, start_date, end_date, status) VALUES (?,?,?,?,?,?,?)',
+        [name, location, budget, progress || 0, start_date, end_date, targetStatus],
+        (err, result) => {
+          if (err) return res.status(500).json({ error: err.message })
+          res.json({ id: result.insertId, ...req.body, status: targetStatus })
+        }
+      )
+    }
   })
 
   app.put('/api/projects/:id', (req, res) => {
     const { name, location, budget, progress, start_date, end_date, status } = req.body
     const MAX_AMOUNT = 999999999999
+
     if (budget !== undefined && Number(budget) > MAX_AMOUNT) {
       return res.status(400).json({ error: 'Budget allocated cannot exceed ₱999,999,999,999.' })
     }
-    db.query(
-      'UPDATE projects SET name=?, location=?, budget=?, progress=?, start_date=?, end_date=?, status=? WHERE id=?',
-      [name, location, budget, progress, start_date, end_date, status, req.params.id],
-      (err) => {
+
+    if (status && String(status).toUpperCase() !== 'COMPLETED') {
+      db.query("SELECT id, name FROM projects WHERE id != ? AND UPPER(status) NOT IN ('COMPLETED')", [req.params.id], (err, otherActive) => {
         if (err) return res.status(500).json({ error: err.message })
-        res.json({ success: true })
-      }
-    )
+        if (otherActive && otherActive.length > 0) {
+          return res.status(400).json({
+            error: `Hindi maaaring maging active ang proyektong ito dahil may isa pang ongoing project ("${otherActive[0].name}"). Isa lamang ang pinapayagang active project sa bawat oras.`
+          })
+        }
+
+        updateProject()
+      })
+    } else {
+      updateProject()
+    }
+
+    function updateProject() {
+      db.query(
+        'UPDATE projects SET name=?, location=?, budget=?, progress=?, start_date=?, end_date=?, status=? WHERE id=?',
+        [name, location, budget, progress, start_date, end_date, status, req.params.id],
+        (err) => {
+          if (err) return res.status(500).json({ error: err.message })
+          res.json({ success: true })
+        }
+      )
+    }
   })
 
   app.delete('/api/projects/:id', (req, res) => {
@@ -575,9 +652,19 @@ function startServer(db) {
     db.query(sql, params, (err, rows) => {
       if (err) return res.status(500).json({ error: err.message })
       const present = rows.filter(r => r.status === 'Present').length
+      const late = rows.filter(r => r.status === 'Late' || r.status === 'Double Late').length
+      const halfday = rows.filter(r => String(r.status).includes('Halfday')).length
       const absent = rows.filter(r => r.status === 'Absent').length
-      const totalWage = rows.filter(r => r.status === 'Present').reduce((s, r) => s + Number(r.daily_rate || 0), 0)
-      res.json({ present, absent, totalWage, rows })
+      const totalWage = rows.reduce((s, r) => {
+        if (r.earned_amount !== null && r.earned_amount !== undefined) return s + Number(r.earned_amount)
+        const base = Number(r.daily_rate || r.rate || 0)
+        if (r.status === 'Present') return s + base
+        if (r.status === 'Late') return s + Math.max(0, base - 100)
+        if (r.status === 'Double Late') return s + Math.max(0, base - 200)
+        if (String(r.status).includes('Halfday')) return s + Math.round((base / 2) * 100) / 100
+        return s
+      }, 0)
+      res.json({ present, late, halfday, absent, totalWage, rows })
     })
   })
 
@@ -687,13 +774,13 @@ function startServer(db) {
   // ── WORKERS SUMMARY (for Dashboard) — MUST be before /api/workers plain GET ──
   app.get('/api/workers/summary', (req, res) => {
     const today = new Date().toISOString().split('T')[0]
-    db.query('SELECT SUM(daily_rate) as total FROM workers WHERE status="Active"', (err, totals) => {
+    db.query('SELECT COUNT(*) as totalCount, SUM(daily_rate) as total FROM workers WHERE status="Approved"', (err, totals) => {
       if (err) return res.status(500).json({ error: err.message })
       db.query('SELECT status, COUNT(*) as count FROM attendance WHERE date=? GROUP BY status', [today], (err, att) => {
         if (err) return res.status(500).json({ error: err.message })
         const present = att.find(r => r.status === 'Present')?.count || 0
         const absent = att.find(r => r.status === 'Absent')?.count || 0
-        db.query('SELECT role, COUNT(*) as count FROM workers WHERE status="Active" GROUP BY role', (err, roles) => {
+        db.query('SELECT role, COUNT(*) as count FROM workers WHERE status="Approved" GROUP BY role', (err, roles) => {
           if (err) return res.status(500).json({ error: err.message })
           db.query(
             'SELECT SUM(w.daily_rate) as payroll FROM workers w INNER JOIN attendance a ON w.id=a.worker_id WHERE a.date=? AND a.status="Present"',
@@ -701,8 +788,8 @@ function startServer(db) {
             (err, pay) => {
               if (err) return res.status(500).json({ error: err.message })
               res.json({
-                totalManpower: totals[0].total || 0,
-                present,
+                totalManpower: totals[0].totalCount || 0,
+                presentToday: present,
                 absent,
                 roles,
                 todayPayroll: pay[0].payroll || 0
@@ -716,31 +803,33 @@ function startServer(db) {
 
   // ── WORKERS ──
   app.get('/api/workers', (req, res) => {
-    db.query('SELECT * FROM workers', (err, results) => {
+    db.query('SELECT * FROM workers ORDER BY created_at DESC', (err, results) => {
       if (err) return res.status(500).json({ error: err.message })
       res.json(results)
     })
   })
 
-  app.post('/api/workers', (req, res) => {
+  app.post('/api/workers', async (req, res) => {
     const { first_name, middle_name, last_name, full_name, birthday, age, phone, address, role, position, daily_rate, password, approval_status, status, project_id } = req.body
     const computedFullName = full_name || [first_name, middle_name, last_name].filter(Boolean).join(' ')
+    const hashedPassword = password ? await bcrypt.hash(password, 10) : await bcrypt.hash('worker123', 10)
     db.query(
       'INSERT INTO workers (first_name, middle_name, last_name, full_name, birthday, age, phone, address, role, position, daily_rate, password, approval_status, status, project_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-      [first_name, middle_name || null, last_name, computedFullName, birthday || null, age || null, phone || null, address || null, role, position || null, daily_rate || 0, password || null, approval_status || 'Pending', status || 'Active', project_id || null],
+      [first_name, middle_name || null, last_name, computedFullName, birthday || null, age || null, phone || null, address || null, role || 'Worker', position || null, daily_rate || 600, hashedPassword, approval_status || 'Approved', status || 'Active', project_id || null],
       (err, result) => {
         if (err) return res.status(500).json({ error: err.message })
-        res.json({ id: result.insertId, ...req.body, full_name: computedFullName })
+        res.json({ id: result.insertId, ...req.body, full_name: computedFullName, approval_status: approval_status || 'Approved' })
       }
     )
   })
 
-  app.put('/api/workers/:id', (req, res) => {
+  app.put('/api/workers/:id', async (req, res) => {
     const { first_name, middle_name, last_name, full_name, birthday, age, phone, address, role, position, daily_rate, password, approval_status, status, project_id } = req.body
     const computedFullName = full_name || [first_name, middle_name, last_name].filter(Boolean).join(' ')
+    const hashedPassword = password ? await bcrypt.hash(password, 10) : null
     db.query(
       'UPDATE workers SET first_name=?, middle_name=?, last_name=?, full_name=?, birthday=?, age=?, phone=?, address=?, role=?, position=?, daily_rate=?, password=COALESCE(NULLIF(?,\'\'), password), approval_status=?, status=?, project_id=? WHERE id=?',
-      [first_name, middle_name || null, last_name, computedFullName, birthday || null, age || null, phone || null, address || null, role, position || null, daily_rate || 0, password || null, approval_status || 'Pending', status || 'Active', project_id || null, req.params.id],
+      [first_name, middle_name || null, last_name, computedFullName, birthday || null, age || null, phone || null, address || null, role, position || null, daily_rate || 600, hashedPassword, approval_status || 'Approved', status || 'Active', project_id || null, req.params.id],
       (err) => {
         if (err) return res.status(500).json({ error: err.message })
         res.json({ success: true })
@@ -755,24 +844,263 @@ function startServer(db) {
     })
   })
 
+  // ── 2-SESSION ATTENDANCE LOGIC & POLICY RULES ──
+  // Morning: Time in <= 8:10 AM (Present), 8:11 - 10:00 AM (Late, -100), Timeout 12:00 PM
+  // Afternoon: Time in <= 1:10 PM (Present), 1:11 - 3:00 PM (Late, -100), Timeout 5:00 PM
+  // Both On-Time: Present (100% full wage)
+  // One Late + One On-time: Late (Base - 100)
+  // Both Late: Double Late (Base - 200)
+  // Halfday: Only Morning (50% wage, or 50% - 100 if late) or Only Afternoon (50% wage, or 50% - 100 if late)
+  // Absent: No valid logs in both morning & afternoon (0 wage)
+
+  function parseTimeToMinutes(timeStr) {
+    if (!timeStr || timeStr === '—' || timeStr === '--:--') return null
+    const match = String(timeStr).trim().match(/^(\d{1,2}):(\d{2})(?:\s*([AP]M))?$/i)
+    if (!match) return null
+
+    let hours = parseInt(match[1], 10)
+    const minutes = parseInt(match[2], 10)
+    const meridian = match[3]?.toUpperCase()
+
+    if (meridian === 'PM' && hours < 12) hours += 12
+    if (meridian === 'AM' && hours === 12) hours = 0
+
+    return hours * 60 + minutes
+  }
+
+  function evaluateTwoSessions(morningIn, afternoonIn, baseRate) {
+    const rate = Number(baseRate) || 0
+    const mMinutes = parseTimeToMinutes(morningIn)
+    const aMinutes = parseTimeToMinutes(afternoonIn)
+
+    // Evaluate Morning Session
+    let mStatus = 'Absent' // 'Present' | 'Late' | 'Absent'
+    if (mMinutes !== null) {
+      if (mMinutes <= 8 * 60 + 10) {
+        mStatus = 'Present'
+      } else if (mMinutes <= 10 * 60) {
+        mStatus = 'Late'
+      } else {
+        mStatus = 'Absent'
+      }
+    }
+
+    // Evaluate Afternoon Session
+    let aStatus = 'Absent' // 'Present' | 'Late' | 'Absent'
+    if (aMinutes !== null) {
+      if (aMinutes <= 13 * 60 + 10) {
+        aStatus = 'Present'
+      } else if (aMinutes <= 15 * 60) {
+        aStatus = 'Late'
+      } else {
+        aStatus = 'Absent'
+      }
+    }
+
+    // Combine Sessions
+    const hasMorning = (mStatus !== 'Absent')
+    const hasAfternoon = (aStatus !== 'Absent')
+
+    if (hasMorning && hasAfternoon) {
+      if (mStatus === 'Present' && aStatus === 'Present') {
+        return {
+          status: 'Present',
+          morningStatus: 'Present',
+          afternoonStatus: 'Present',
+          earnedAmount: rate
+        }
+      } else if (mStatus === 'Late' && aStatus === 'Late') {
+        return {
+          status: 'Double Late',
+          morningStatus: 'Late',
+          afternoonStatus: 'Late',
+          earnedAmount: Math.max(0, rate - 200)
+        }
+      } else {
+        return {
+          status: 'Late',
+          morningStatus: mStatus,
+          afternoonStatus: aStatus,
+          earnedAmount: Math.max(0, rate - 100)
+        }
+      }
+    } else if (hasMorning) {
+      const halfRate = Math.round((rate / 2) * 100) / 100
+      const earned = mStatus === 'Late' ? Math.max(0, halfRate - 100) : halfRate
+      return {
+        status: mStatus === 'Late' ? 'Halfday (Late)' : 'Halfday',
+        morningStatus: mStatus,
+        afternoonStatus: 'Absent',
+        earnedAmount: earned
+      }
+    } else if (hasAfternoon) {
+      const halfRate = Math.round((rate / 2) * 100) / 100
+      const earned = aStatus === 'Late' ? Math.max(0, halfRate - 100) : halfRate
+      return {
+        status: aStatus === 'Late' ? 'Halfday (Late)' : 'Halfday',
+        morningStatus: 'Absent',
+        afternoonStatus: aStatus,
+        earnedAmount: earned
+      }
+    }
+
+    return {
+      status: 'Absent',
+      morningStatus: 'Absent',
+      afternoonStatus: 'Absent',
+      earnedAmount: 0
+    }
+  }
+
   // ── ATTENDANCE ──
   app.get('/api/attendance/:project_id', (req, res) => {
-    db.query('SELECT * FROM attendance WHERE project_id=? ORDER BY date DESC', [req.params.project_id], (err, results) => {
+    const { project_id } = req.params
+    const sql = (!project_id || project_id === 'ALL')
+      ? 'SELECT * FROM attendance ORDER BY date DESC, created_at DESC'
+      : 'SELECT * FROM attendance WHERE project_id=? ORDER BY date DESC, created_at DESC'
+    const params = (!project_id || project_id === 'ALL') ? [] : [project_id]
+
+    db.query(sql, params, (err, results) => {
       if (err) return res.status(500).json({ error: err.message })
-      res.json(results)
+      res.json(results.map(r => ({
+        id: r.id,
+        project_id: r.project_id,
+        worker_id: r.worker_id,
+        worker_name: r.worker_name,
+        name: r.worker_name,
+        date: r.date,
+        role: r.role,
+        morningIn: r.morning_in || r.time_in || '—',
+        morningOut: r.morning_out || '—',
+        afternoonIn: r.afternoon_in || '—',
+        afternoonOut: r.afternoon_out || r.time_out || '—',
+        morningStatus: r.morning_status,
+        afternoonStatus: r.afternoon_status,
+        timeIn: r.morning_in || r.afternoon_in || r.time_in || '—',
+        timeOut: r.afternoon_out || r.morning_out || r.time_out || '—',
+        rate: Number(r.rate) || 0,
+        earned_amount: Number(r.earned_amount) || 0,
+        advance: Number(r.advance) || 0,
+        status: r.status
+      })))
     })
   })
 
   app.post('/api/attendance', (req, res) => {
-    const { project_id, worker_id, worker_name, date, status } = req.body
+    const {
+      project_id, worker_id, worker_name, name, date, role,
+      morningIn, morningOut, afternoonIn, afternoonOut,
+      timeIn, timeOut, rate, advance
+    } = req.body
+
+    const finalName = worker_name || name || 'Worker'
+    const finalDate = date || new Date().toISOString().slice(0, 10)
+    const baseRate = Number(rate) || 0
+
+    // Auto-classify single timeIn into morning or afternoon if not explicitly separated
+    let mIn = morningIn || null
+    let mOut = morningOut || null
+    let aIn = afternoonIn || null
+    let aOut = afternoonOut || null
+
+    if (!mIn && !aIn && timeIn) {
+      const minutes = parseTimeToMinutes(timeIn)
+      if (minutes !== null && minutes <= 11 * 60) {
+        mIn = timeIn
+      } else if (minutes !== null) {
+        aIn = timeIn
+      }
+    }
+
+    const evaluated = evaluateTwoSessions(mIn, aIn, baseRate)
+    const status = req.body.status && req.body.status !== 'Present' ? req.body.status : evaluated.status
+    const earnedAmount = (status === 'Absent') ? 0 : evaluated.earnedAmount
+
     db.query(
-      'INSERT INTO attendance (project_id, worker_id, worker_name, date, status) VALUES (?,?,?,?,?)',
-      [project_id, worker_id, worker_name, date, status || 'Present'],
+      `INSERT INTO attendance (
+        project_id, worker_id, worker_name, date, role,
+        morning_in, morning_out, afternoon_in, afternoon_out,
+        morning_status, afternoon_status,
+        time_in, time_out, rate, earned_amount, advance, status
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [
+        project_id || null, worker_id || null, finalName, finalDate, role || 'Laborer',
+        mIn || '—', mOut || '—', aIn || '—', aOut || '—',
+        evaluated.morningStatus, evaluated.afternoonStatus,
+        mIn || aIn || '—', aOut || mOut || '—',
+        baseRate, earnedAmount, advance || 0, status
+      ],
       (err, result) => {
         if (err) return res.status(500).json({ error: err.message })
-        res.json({ id: result.insertId, ...req.body })
+        res.json({
+          id: result.insertId,
+          project_id,
+          worker_id,
+          worker_name: finalName,
+          name: finalName,
+          date: finalDate,
+          role: role || 'Laborer',
+          morningIn: mIn || '—',
+          morningOut: mOut || '—',
+          afternoonIn: aIn || '—',
+          afternoonOut: aOut || '—',
+          timeIn: mIn || aIn || '—',
+          timeOut: aOut || mOut || '—',
+          rate: baseRate,
+          earned_amount: earnedAmount,
+          advance: advance || 0,
+          status
+        })
       }
     )
+  })
+
+  // Update attendance (for Morning Out, Afternoon In, Afternoon Out)
+  app.put('/api/attendance/:id', (req, res) => {
+    const {
+      morningIn, morningOut, afternoonIn, afternoonOut,
+      timeIn, timeOut, status, rate
+    } = req.body
+
+    // First fetch existing record to recalculate combined status and wage
+    db.query('SELECT * FROM attendance WHERE id = ?', [req.params.id], (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message })
+      if (!rows || rows.length === 0) return res.status(404).json({ error: 'Record not found' })
+
+      const existing = rows[0]
+      const mIn = morningIn !== undefined ? morningIn : existing.morning_in
+      const mOut = morningOut !== undefined ? morningOut : existing.morning_out
+      const aIn = afternoonIn !== undefined ? afternoonIn : existing.afternoon_in
+      const aOut = afternoonOut !== undefined ? afternoonOut : existing.afternoon_out
+      const baseRate = rate !== undefined ? Number(rate) : Number(existing.rate || 0)
+
+      const evaluated = evaluateTwoSessions(mIn, aIn, baseRate)
+      const finalStatus = status || evaluated.status
+      const finalEarned = (finalStatus === 'Absent') ? 0 : evaluated.earnedAmount
+
+      db.query(
+        `UPDATE attendance SET 
+          morning_in = ?, morning_out = ?, afternoon_in = ?, afternoon_out = ?,
+          morning_status = ?, afternoon_status = ?,
+          time_in = ?, time_out = ?,
+          earned_amount = ?, status = ?
+         WHERE id = ?`,
+        [
+          mIn || '—', mOut || '—', aIn || '—', aOut || '—',
+          evaluated.morningStatus, evaluated.afternoonStatus,
+          mIn || aIn || '—', aOut || mOut || '—',
+          finalEarned, finalStatus, req.params.id
+        ],
+        (err2) => {
+          if (err2) return res.status(500).json({ error: err2.message })
+          res.json({
+            success: true,
+            status: finalStatus,
+            earned_amount: finalEarned
+          })
+        }
+      )
+    })
   })
 
   // Assets summary for Dashboard — MUST be before /:project_id
@@ -886,8 +1214,8 @@ function startServer(db) {
     })
   })
 
-  // Update attendance (for RFID time-out update)
-  app.put('/api/attendance/:id', (req, res) => {
+  // Update attendance status only (e.g. RFID status updates)
+  app.put('/api/attendance/:id/status', (req, res) => {
     const { status } = req.body
     db.query(
       'UPDATE attendance SET status=? WHERE id=?',
@@ -900,21 +1228,90 @@ function startServer(db) {
   })
 
   // ── CASH ADVANCES ──
-  app.get('/api/cash-advances/:project_id', (req, res) => {
-    db.query('SELECT * FROM cash_advances WHERE project_id=? ORDER BY date DESC', [req.params.project_id], (err, results) => {
+  // Must be before /:project_id to avoid route conflict
+  app.get('/api/cash-advances/pending', (req, res) => {
+    db.query(
+      `SELECT ca.*, w.full_name as workerFullName, w.role as workerRole, w.position as workerPosition
+       FROM cash_advances ca
+       LEFT JOIN workers w ON ca.worker_id = w.id
+       WHERE ca.status = 'Pending'
+       ORDER BY ca.created_at DESC`,
+      (err, results) => {
+        if (err) return res.status(500).json({ error: err.message })
+        res.json(results.map(r => ({
+          id: r.id,
+          name: r.workerFullName || r.workerName,
+          amount: `₱${Number(r.amount).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`,
+          rawAmount: r.amount,
+          role: r.workerRole || 'Worker',
+          reason: r.reason,
+          date: r.date,
+          status: r.status,
+          worker_id: r.worker_id,
+          project_id: r.project_id
+        })))
+      }
+    )
+  })
+
+  app.put('/api/cash-advances/:id/approve', (req, res) => {
+    const { status } = req.body // 'Approved' or 'Rejected'
+    if (!['Approved', 'Rejected'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid status.' })
+    }
+    db.query('UPDATE cash_advances SET status = ? WHERE id = ?', [status, req.params.id], (err) => {
       if (err) return res.status(500).json({ error: err.message })
-      res.json(results)
+      res.json({ success: true, status })
     })
   })
 
-  app.post('/api/cash-advances', (req, res) => {
-    const { project_id, workerName, amount, date, reason, status } = req.body
-    db.query(
-      'INSERT INTO cash_advances (project_id, workerName, amount, date, reason, status) VALUES (?,?,?,?,?,?)',
-      [project_id, workerName, amount, date, reason, status || 'Pending'],
-      (err, result) => {
+  app.get('/api/cash-advances/:project_id', (req, res) => {
+    const { project_id } = req.params
+    if (!project_id || project_id === 'ALL' || project_id === 'undefined') {
+      db.query('SELECT * FROM cash_advances ORDER BY date DESC, created_at DESC', (err, results) => {
         if (err) return res.status(500).json({ error: err.message })
-        res.json({ id: result.insertId, ...req.body })
+        res.json(results)
+      })
+    } else {
+      db.query('SELECT * FROM cash_advances WHERE project_id=? OR project_id IS NULL ORDER BY date DESC, created_at DESC', [project_id], (err, results) => {
+        if (err) return res.status(500).json({ error: err.message })
+        res.json(results)
+      })
+    }
+  })
+
+  app.post('/api/cash-advances', (req, res) => {
+    const { project_id, workerName, workerId, amount, date, reason, status } = req.body
+    const cleanDate = date ? String(date).slice(0, 10) : new Date().toISOString().slice(0, 10)
+    
+    // Resolve workerName from workerId if sent from mobile app
+    const resolveAndInsert = (name) => {
+      db.query(
+        'INSERT INTO cash_advances (project_id, worker_id, workerName, amount, date, reason, status) VALUES (?,?,?,?,?,?,?)',
+        [project_id || null, workerId || null, name, amount, cleanDate, reason, status || 'Pending'],
+        (err, result) => {
+          if (err) return res.status(500).json({ error: err.message })
+          res.json({ id: result.insertId, ...req.body, workerName: name, date: cleanDate })
+        }
+      )
+    }
+
+    if (workerId && !workerName) {
+      db.query('SELECT full_name FROM workers WHERE id = ?', [workerId], (err, rows) => {
+        resolveAndInsert(rows?.[0]?.full_name || 'Unknown')
+      })
+    } else {
+      resolveAndInsert(workerName || 'Unknown')
+    }
+  })
+
+  app.get('/api/workers/:id/cash-advances', (req, res) => {
+    db.query(
+      'SELECT * FROM cash_advances WHERE worker_id = ? ORDER BY created_at DESC',
+      [req.params.id],
+      (err, results) => {
+        if (err) return res.status(500).json({ error: err.message })
+        res.json(results)
       }
     )
   })
@@ -1028,8 +1425,11 @@ function startServer(db) {
       const match = await bcrypt.compare(password, admin.password)
       if (!match) return res.status(401).json({ error: 'Invalid username or password.' })
 
+      const token = jwt.sign({ id: admin.id, type: 'admin' }, process.env.JWT_SECRET || 'scon_super_secret_key_2026', { expiresIn: '8h' })
+
       res.json({
         success: true,
+        token,
         admin: {
           id: admin.id,
           username: admin.username,
@@ -1201,78 +1601,97 @@ function startServer(db) {
       status
     } = req.body
 
-    const targetAdminId = adminId || 1
-
     try {
       const fullName = [firstName, middleName, lastName].filter(Boolean).join(' ').trim()
       const addressObjStr = typeof addressObj === 'object' ? JSON.stringify(addressObj) : (addressObj || null)
 
-      db.query(
-        `UPDATE admins SET 
-          full_name = ?,
-          first_name = ?,
-          middle_name = ?,
-          last_name = ?,
-          email = ?, 
-          phone = ?, 
-          home_address = ?,
-          address_obj = ?,
-          role = COALESCE(?, role),
-          emp_id = COALESCE(?, emp_id),
-          dept = COALESCE(?, dept),
-          assigned_project_site = COALESCE(?, assigned_project_site), 
-          terminal_id = COALESCE(?, terminal_id), 
-          push_notifications_enabled = COALESCE(?, push_notifications_enabled), 
-          biometric_login_enabled = COALESCE(?, biometric_login_enabled), 
-          status = COALESCE(?, status),
-          updated_at = NOW()
-         WHERE id = ?`,
-        [
-          fullName,
-          firstName || null,
-          middleName || null,
-          lastName || null,
-          email || null,
-          phone || null,
-          homeAddress || null,
-          addressObjStr,
-          role || null,
-          empId || null,
-          dept || null,
-          assignedProjectSite || null,
-          terminalId || null,
-          pushNotificationsEnabled !== undefined ? (pushNotificationsEnabled ? 1 : 0) : null,
-          biometricLoginEnabled !== undefined ? (biometricLoginEnabled ? 1 : 0) : null,
-          status || null,
-          targetAdminId
-        ],
-        (err) => {
-          if (err) return res.status(500).json({ error: err.message })
-          res.json({
-            success: true,
-            message: 'Admin profile saved successfully',
-            data: {
-              id: targetAdminId,
+      // Find real admin id first
+      db.query('SELECT id FROM admins WHERE id = ?', [adminId || 1], (idErr, idRows) => {
+        if (idErr) return res.status(500).json({ error: idErr.message })
+
+        let finalAdminId = idRows && idRows.length > 0 ? idRows[0].id : null
+
+        const performUpdate = (targetId) => {
+          db.query(
+            `UPDATE admins SET 
+              full_name = ?,
+              first_name = ?,
+              middle_name = ?,
+              last_name = ?,
+              email = COALESCE(?, email), 
+              phone = ?, 
+              home_address = ?,
+              address_obj = ?,
+              role = COALESCE(?, role),
+              emp_id = COALESCE(?, emp_id),
+              dept = COALESCE(?, dept),
+              assigned_project_site = COALESCE(?, assigned_project_site), 
+              terminal_id = COALESCE(?, terminal_id), 
+              push_notifications_enabled = COALESCE(?, push_notifications_enabled), 
+              biometric_login_enabled = COALESCE(?, biometric_login_enabled), 
+              status = COALESCE(?, status),
+              updated_at = NOW()
+             WHERE id = ?`,
+            [
               fullName,
-              firstName,
-              middleName,
-              lastName,
-              email,
-              phone,
-              homeAddress,
-              addressObj: addressObj || {},
-              role: role || 'Administrator',
-              empId: empId || 'SCON-ADMIN-001',
-              dept: dept || 'Management',
-              assignedProjectSite,
-              terminalId,
-              pushNotificationsEnabled,
-              biometricLoginEnabled,
-              status
+              firstName || null,
+              middleName || null,
+              lastName || null,
+              email || null,
+              phone || null,
+              homeAddress || null,
+              addressObjStr,
+              role || null,
+              empId || null,
+              dept || null,
+              assignedProjectSite || null,
+              terminalId || null,
+              pushNotificationsEnabled !== undefined ? (pushNotificationsEnabled ? 1 : 0) : null,
+              biometricLoginEnabled !== undefined ? (biometricLoginEnabled ? 1 : 0) : null,
+              status || null,
+              targetId
+            ],
+            (updateErr) => {
+              if (updateErr) return res.status(500).json({ error: updateErr.message })
+              res.json({
+                success: true,
+                message: 'Admin profile saved successfully',
+                data: {
+                  id: targetId,
+                  fullName,
+                  firstName,
+                  middleName,
+                  lastName,
+                  email,
+                  phone,
+                  homeAddress,
+                  addressObj: addressObj || {},
+                  role: role || 'Administrator',
+                  empId: empId || 'SCON-ADMIN-001',
+                  dept: dept || 'Management',
+                  assignedProjectSite,
+                  terminalId,
+                  pushNotificationsEnabled,
+                  biometricLoginEnabled,
+                  status
+                }
+              })
             }
+          )
+        }
+
+        if (finalAdminId) {
+          performUpdate(finalAdminId)
+        } else {
+          // Fallback to first available admin row
+          db.query('SELECT id FROM admins ORDER BY id ASC LIMIT 1', (firstErr, firstRows) => {
+            if (firstErr || !firstRows || firstRows.length === 0) {
+              return res.status(404).json({ error: 'No admin account found in database to update.' })
+            }
+            performUpdate(firstRows[0].id)
           })
         }
-      )
+      })
     } catch (e) {
       res.status(500).json({ error: e.message })
     }

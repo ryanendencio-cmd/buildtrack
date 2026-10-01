@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import AdminLayout from '../components/AdminLayout'
+import PhilippineAddressSelector from '../components/PhilippineAddressSelector'
 import { api } from '../api'
 
 export default function Workers() {
@@ -19,9 +20,16 @@ export default function Workers() {
         firstName: '',
         middleName: '',
         lastName: '',
+        birthday: '',
+        age: '',
+        phone: '',
+        street: '',
+        addressObj: {},
+        address: '',
         role: 'Worker',
         position: '',
-        phone: '',
+        daily_rate: 600,
+        password: '',
         status: 'Active'
     });
     const [successMsg, setSuccessMsg] = useState('');
@@ -41,6 +49,24 @@ export default function Workers() {
             [name]: value,
             ...(name === 'role' && value !== 'Staff' ? { position: '' } : {})
         }));
+    };
+
+    const handleBirthdayChange = (e) => {
+        const bday = e.target.value;
+        if (!bday) {
+            setFormData(prev => ({ ...prev, birthday: '', age: '' }));
+            return;
+        }
+
+        const bdate = new Date(bday);
+        const today = new Date();
+        let age = today.getFullYear() - bdate.getFullYear();
+        const m = today.getMonth() - bdate.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < bdate.getDate())) {
+            age--;
+        }
+
+        setFormData(prev => ({ ...prev, birthday: bday, age: Math.max(0, age) }));
     };
 
     const handleNameChange = (e) => {
@@ -92,21 +118,38 @@ export default function Workers() {
             .filter(Boolean)
             .join(' ');
 
+        const addrObj = formData.addressObj || {};
+        const locParts = [
+            formData.street ? formData.street.trim() : '',
+            addrObj.barangayName ? `Brgy. ${addrObj.barangayName}` : '',
+            addrObj.cityName,
+            addrObj.provinceName && addrObj.provinceName !== 'NCR' && addrObj.provinceName !== addrObj.cityName ? addrObj.provinceName : '',
+            addrObj.regionName
+        ].filter(Boolean);
+
+        const computedAddress = locParts.length > 0 ? locParts.join(', ') : (formData.address || '');
+
         const payload = {
             first_name: formattedFirstName,
             middle_name: formattedMiddleName,
             last_name: formattedLastName,
             full_name,
+            birthday: formData.birthday || null,
+            age: Number(formData.age) || null,
             phone: formData.phone,
+            address: computedAddress,
             role: formData.role,
             position: formData.position,
+            daily_rate: Number(formData.daily_rate) || 600,
+            password: formData.password || null,
             status: formData.status,
+            approval_status: 'Approved'
         };
 
         if (modalState === 'ADD') {
             api.post('/workers', payload).then(newWorker => {
-                setWorkers(prev => [{ ...newWorker, full_name }, ...prev]);
-                setSuccessMsg('New worker successfully added to the system.');
+                setWorkers(prev => [{ ...newWorker, ...payload, id: newWorker.id || prev.length + 1 }, ...prev]);
+                setSuccessMsg('New worker successfully registered and approved into the system.');
                 setModalState('SUCCESS');
             }).catch(console.error);
         } else if (modalState === 'EDIT') {
@@ -124,9 +167,16 @@ export default function Workers() {
             firstName: '',
             middleName: '',
             lastName: '',
+            birthday: '',
+            age: '',
+            phone: '',
+            street: '',
+            addressObj: {},
+            address: '',
             role: 'Worker',
             position: '',
-            phone: '',
+            daily_rate: 600,
+            password: '',
             status: 'Active'
         });
         setModalState('ADD');
@@ -139,9 +189,16 @@ export default function Workers() {
             firstName: worker.first_name || parsed.firstName,
             middleName: worker.middle_name || parsed.middleName,
             lastName: worker.last_name || parsed.lastName,
+            birthday: worker.birthday ? String(worker.birthday).slice(0, 10) : '',
+            age: worker.age || '',
+            phone: worker.phone || '',
+            street: '',
+            addressObj: {},
+            address: worker.address || '',
             role: worker.role || 'Worker',
             position: worker.position || '',
-            phone: worker.phone || '',
+            daily_rate: worker.daily_rate || 600,
+            password: '',
             status: worker.status || 'Active'
         });
         setModalState('EDIT');
@@ -161,13 +218,25 @@ export default function Workers() {
         }).catch(console.error);
     };
 
+    const [approvalRoles, setApprovalRoles] = useState({}) // { [workerId]: { role, position } }
+
     // ── ACCOUNT APPROVAL ──
     const handleApproval = (worker, decision) => {
-        api.put(`/workers/${worker.id}/approve`, { status: decision }).then(() => {
-            setWorkers(prev => prev.map(w => w.id === worker.id ? { ...w, approval_status: decision } : w));
-            setSuccessMsg(`${worker.full_name}'s account has been ${decision.toLowerCase()}.`);
-            setModalState('SUCCESS');
-        }).catch(console.error);
+        const roleOverride = approvalRoles[worker.id] || {}
+        const role = roleOverride.role || worker.role || 'Worker'
+        const position = role === 'Staff' ? (roleOverride.position || worker.position || '') : ''
+
+        const doApprove = () => api.put(`/workers/${worker.id}/approve`, { status: decision }).then(() => {
+            setWorkers(prev => prev.map(w => w.id === worker.id ? { ...w, approval_status: decision, role, position } : w))
+            setSuccessMsg(`${worker.full_name}'s account has been ${decision.toLowerCase()}.`)
+            setModalState('SUCCESS')
+        }).catch(console.error)
+
+        if (decision === 'Approved' && (role !== worker.role || position !== (worker.position || ''))) {
+            api.put(`/workers/${worker.id}`, { ...worker, role, position }).then(doApprove).catch(console.error)
+        } else {
+            doApprove()
+        }
     };
 
     const pendingWorkers = workers.filter(w => (w.approval_status || 'Pending') === 'Pending');
@@ -379,19 +448,42 @@ export default function Workers() {
                                         </span>
                                     </td>
                                     <td className="py-1.5 border-b border-gray-50 pr-4">
-                                        <div className="flex items-center justify-center gap-1.5">
-                                            <button
-                                                onClick={() => handleApproval(worker, 'Approved')}
-                                                className="bg-[#e6f4ea] border border-[#2e7d32] text-[#2e7d32] px-2 py-1 rounded-sm text-[8px] font-bold hover:bg-green-100 transition-colors"
-                                            >
-                                                Approve
-                                            </button>
-                                            <button
-                                                onClick={() => handleApproval(worker, 'Rejected')}
-                                                className="bg-white border border-[#A63228] text-[#A63228] px-2 py-1 rounded-sm text-[8px] font-bold hover:bg-red-50 transition-colors"
-                                            >
-                                                Reject
-                                            </button>
+                                        <div className="flex flex-col items-center gap-1.5">
+                                            <div className="flex items-center gap-1">
+                                                <select
+                                                    value={approvalRoles[worker.id]?.role || 'Worker'}
+                                                    onChange={e => setApprovalRoles(prev => ({ ...prev, [worker.id]: { role: e.target.value, position: '' } }))}
+                                                    className="bg-gray-50 border border-gray-200 rounded text-[8px] font-semibold px-1.5 py-1 outline-none focus:border-[#A63228]"
+                                                >
+                                                    <option value="Worker">Worker</option>
+                                                    <option value="Staff">Staff</option>
+                                                </select>
+                                                {(approvalRoles[worker.id]?.role || 'Worker') === 'Staff' && (
+                                                    <select
+                                                        value={approvalRoles[worker.id]?.position || ''}
+                                                        onChange={e => setApprovalRoles(prev => ({ ...prev, [worker.id]: { ...prev[worker.id], position: e.target.value } }))}
+                                                        className="bg-gray-50 border border-gray-200 rounded text-[8px] font-semibold px-1.5 py-1 outline-none focus:border-[#A63228]"
+                                                    >
+                                                        <option value="" disabled>Position</option>
+                                                        <option value="Attendance Monitoring">Attendance</option>
+                                                        <option value="Tools Monitoring">Tools</option>
+                                                    </select>
+                                                )}
+                                            </div>
+                                            <div className="flex items-center gap-1.5">
+                                                <button
+                                                    onClick={() => handleApproval(worker, 'Approved')}
+                                                    className="bg-[#e6f4ea] border border-[#2e7d32] text-[#2e7d32] px-2 py-1 rounded-sm text-[8px] font-bold hover:bg-green-100 transition-colors"
+                                                >
+                                                    Approve
+                                                </button>
+                                                <button
+                                                    onClick={() => handleApproval(worker, 'Rejected')}
+                                                    className="bg-white border border-[#A63228] text-[#A63228] px-2 py-1 rounded-sm text-[8px] font-bold hover:bg-red-50 transition-colors"
+                                                >
+                                                    Reject
+                                                </button>
+                                            </div>
                                         </div>
                                     </td>
                                 </tr>
@@ -459,14 +551,79 @@ export default function Workers() {
                                             />
                                         </div>
                                     </div>
-                                    <div>
-                                        <label className="block text-[8px] font-bold text-gray-700 mb-0.5 uppercase">Phone No. <span className="text-[#A63228]">*</span></label>
-                                        <input type="text" name="phone" value={formData.phone} onChange={handlePhoneChange} maxLength="11" required className="w-full bg-[#f4f1ee] border border-transparent rounded-md px-2 py-1.5 text-[9px] font-medium focus:border-[#A63228] outline-none" placeholder="09XX XXX XXXX" />
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 mb-1.5">
+                                        <div>
+                                            <label className="block text-[8px] font-bold text-gray-700 mb-0.5 uppercase">Birthday <span className="text-[#A63228]">*</span></label>
+                                            <input
+                                                type="date"
+                                                name="birthday"
+                                                value={formData.birthday || ''}
+                                                onChange={handleBirthdayChange}
+                                                required
+                                                className="w-full bg-[#f4f1ee] border border-transparent rounded-md px-2 py-1 text-[9px] font-medium focus:border-[#A63228] outline-none"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[8px] font-bold text-gray-700 mb-0.5 uppercase">Age</label>
+                                            <input
+                                                type="number"
+                                                name="age"
+                                                value={formData.age || ''}
+                                                readOnly
+                                                className="w-full bg-gray-100 border border-transparent rounded-md px-2 py-1 text-[9px] font-bold text-gray-600 outline-none"
+                                                placeholder="Auto"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[8px] font-bold text-gray-700 mb-0.5 uppercase">Phone No. <span className="text-[#A63228]">*</span></label>
+                                            <input
+                                                type="text"
+                                                name="phone"
+                                                value={formData.phone}
+                                                onChange={handlePhoneChange}
+                                                maxLength="11"
+                                                required
+                                                className="w-full bg-[#f4f1ee] border border-transparent rounded-md px-2 py-1 text-[9px] font-medium focus:border-[#A63228] outline-none"
+                                                placeholder="09XX XXX XXXX"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-1.5 p-2 bg-gray-50 rounded-lg border border-gray-100">
+                                        <label className="block text-[8px] font-extrabold text-gray-700 mb-1 uppercase">Home Address Details</label>
+                                        <input
+                                            type="text"
+                                            name="street"
+                                            value={formData.street || ''}
+                                            onChange={handleInputChange}
+                                            placeholder="House No. / Building / Street / Subdivision"
+                                            className="w-full bg-white border border-gray-200 rounded-md px-2 py-1 text-[8.5px] font-medium text-gray-900 focus:border-[#A63228] outline-none mb-1.5"
+                                        />
+                                        <PhilippineAddressSelector
+                                            value={formData.addressObj || {}}
+                                            onChange={(newObj) => {
+                                                const locParts = [
+                                                    formData.street ? formData.street.trim() : '',
+                                                    newObj.barangayName ? `Brgy. ${newObj.barangayName}` : '',
+                                                    newObj.cityName,
+                                                    newObj.provinceName && newObj.provinceName !== 'NCR' && newObj.provinceName !== newObj.cityName ? newObj.provinceName : '',
+                                                    newObj.regionName
+                                                ].filter(Boolean);
+                                                const fullAddress = locParts.join(', ');
+                                                setFormData(prev => ({ ...prev, addressObj: newObj, address: fullAddress }));
+                                            }}
+                                        />
+                                        {formData.address && (
+                                            <p className="text-[8px] text-gray-500 font-bold mt-1 truncate">
+                                                📍 {formData.address}
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
 
                                 <div>
-                                    <h4 className="text-[7px] font-extrabold text-gray-400 uppercase tracking-widest mb-1 border-b border-gray-100 pb-0.5 mt-1">Work Details</h4>
+                                    <h4 className="text-[7px] font-extrabold text-gray-400 uppercase tracking-widest mb-1 border-b border-gray-100 pb-0.5 mt-1">App Access & Compensation</h4>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 mb-1.5">
                                         <div>
                                             <label className="block text-[8px] font-bold text-gray-700 mb-0.5 uppercase">Role</label>
@@ -481,16 +638,42 @@ export default function Workers() {
                                                 <select name="position" value={formData.position} onChange={handleInputChange} required className="w-full bg-[#f4f1ee] border border-transparent rounded-md pl-2 pr-6 py-1.5 text-[9px] font-medium focus:border-[#A63228] outline-none appearance-none" style={selectStyles}>
                                                     <option value="" disabled>Select a position</option>
                                                     <option value="Attendance Monitoring">Attendance Monitoring</option>
-                                                    <option value="Inventory Manager">Inventory Manager</option>
+                                                    <option value="Tools Monitoring">Tools Monitoring</option>
                                                 </select>
                                             </div>
                                         )}
+                                        <div>
+                                            <label className="block text-[8px] font-bold text-gray-700 mb-0.5 uppercase">Daily Salary Rate (₱) <span className="text-[#A63228]">*</span></label>
+                                            <input
+                                                type="number"
+                                                name="daily_rate"
+                                                value={formData.daily_rate || ''}
+                                                onChange={handleInputChange}
+                                                required
+                                                min="0"
+                                                className="w-full bg-[#f4f1ee] border border-transparent rounded-md px-2 py-1.5 text-[9px] font-bold text-[#A63228] focus:border-[#A63228] outline-none"
+                                                placeholder="600"
+                                            />
+                                        </div>
                                         <div>
                                             <label className="block text-[8px] font-bold text-gray-700 mb-0.5 uppercase">Account Status</label>
                                             <select name="status" value={formData.status} onChange={handleInputChange} className="w-full bg-[#f4f1ee] border border-transparent rounded-md pl-2 pr-6 py-1.5 text-[9px] font-medium focus:border-[#A63228] outline-none appearance-none" style={selectStyles}>
                                                 <option value="Active">Active (Can Login)</option>
                                                 <option value="Inactive">Inactive (Resigned/Blocked)</option>
                                             </select>
+                                        </div>
+                                        <div className="sm:col-span-2">
+                                            <label className="block text-[8px] font-bold text-gray-700 mb-0.5 uppercase">
+                                                {modalState === 'ADD' ? 'Initial Mobile Login Password' : 'Change Password (Optional)'}
+                                            </label>
+                                            <input
+                                                type="password"
+                                                name="password"
+                                                value={formData.password || ''}
+                                                onChange={handleInputChange}
+                                                placeholder={modalState === 'ADD' ? 'Create password for mobile app' : 'Leave blank to keep existing password'}
+                                                className="w-full bg-[#f4f1ee] border border-transparent rounded-md px-2 py-1.5 text-[9px] font-medium focus:border-[#A63228] outline-none"
+                                            />
                                         </div>
                                     </div>
                                 </div>

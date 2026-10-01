@@ -38,6 +38,56 @@ export default function Dashboard() {
   const MAX_AMOUNT = 999999999999;
   const [amountError, setAmountError] = useState('');
 
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour >= 5 && hour < 12) return 'Good morning';
+    if (hour >= 12 && hour < 18) return 'Good afternoon';
+    return 'Good evening';
+  };
+
+  const cleanName = (raw) => {
+    if (!raw) return 'Administrator';
+    const trimmed = String(raw).trim();
+    return trimmed.startsWith('Engr.') ? trimmed : `Engr. ${trimmed}`;
+  };
+
+  const [adminName, setAdminName] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('adminProfile') || '{}');
+      const session = JSON.parse(localStorage.getItem('adminSession') || '{}');
+      const name = saved.fullName || saved.name || session.fullName || (saved.firstName ? `${saved.firstName} ${saved.lastName || ''}`.trim() : null) || session.username;
+      return name ? cleanName(name) : 'Administrator';
+    } catch {
+      return 'Administrator';
+    }
+  });
+
+  useEffect(() => {
+    const updateAdminName = () => {
+      try {
+        const saved = JSON.parse(localStorage.getItem('adminProfile') || '{}');
+        const session = JSON.parse(localStorage.getItem('adminSession') || '{}');
+        const name = saved.fullName || saved.name || session.fullName || (saved.firstName ? `${saved.firstName} ${saved.lastName || ''}`.trim() : null) || session.username;
+        if (name) setAdminName(cleanName(name));
+      } catch {}
+    };
+
+    // 1. Fetch fresh admin profile directly from database on dashboard mount
+    const adminId = localStorage.getItem('adminId') || 1;
+    api.get(`/admin/profile/${adminId}`)
+      .then(data => {
+        if (data && !data.error) {
+          const fetchedName = data.fullName || [data.firstName, data.lastName].filter(Boolean).join(' ') || data.username || 'Administrator';
+          setAdminName(cleanName(fetchedName));
+          localStorage.setItem('adminProfile', JSON.stringify({ ...data, fullName: fetchedName }));
+        }
+      })
+      .catch(console.warn);
+
+    window.addEventListener('admin-profile-updated', updateAdminName);
+    return () => window.removeEventListener('admin-profile-updated', updateAdminName);
+  }, []);
+
   useEffect(() => {
     const date = new Date('2026-09-05');
     const iso = date.toISOString().split('T')[0];
@@ -60,7 +110,7 @@ export default function Dashboard() {
     }).catch(() => {});
     api.get('/workers/summary').then(data => {
       setKpi(prev => ({ ...prev, totalManpower: data.totalManpower || 0 }));
-      setWorkforce({ present: data.present, absent: data.absent, roles: data.roles || [], todayPayroll: data.todayPayroll || 0 });
+      setWorkforce({ present: data.presentToday, absent: data.absent, roles: data.roles || [], todayPayroll: data.todayPayroll || 0 });
     }).catch(() => {});
     api.get('/assets/summary').then(data => {
       setEquipment({ available: data.available, inUse: data.inUse, maintenance: data.maintenance });
@@ -320,7 +370,7 @@ export default function Dashboard() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-4 gap-2">
         <div>
           <span className="text-[9px] font-bold text-[#A63228] tracking-widest uppercase">DASHBOARD</span>
-          <h1 className="text-lg md:text-xl font-extrabold text-gray-900 mt-0.5">Good morning, Engr. Aldrich.</h1>
+          <h1 className="text-lg md:text-xl font-extrabold text-gray-900 mt-0.5">{getGreeting()}, {adminName}.</h1>
           <p className="text-[11px] text-gray-500 mt-0.5">Here's an overview of your projects and expenses.</p>
         </div>
         <div className="flex gap-2">
