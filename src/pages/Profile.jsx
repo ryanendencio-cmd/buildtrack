@@ -34,7 +34,7 @@ export default function Profile() {
         }
     };
 
-    // ── STATE PARA SA PROFILE DATA ──
+    // ── STATE FOR PROFILE DATA ──
     const [profileData, setProfileData] = useState(() => {
         try {
             const savedProfile = JSON.parse(localStorage.getItem('adminProfile') || '{}');
@@ -48,7 +48,7 @@ export default function Profile() {
     const [saving, setSaving] = useState(false);
     const [errorMsg, setErrorMsg] = useState('');
 
-    // ── FETCH PROFILE MULA SA DATABASE ──
+    // ── FETCH PROFILE FROM DATABASE ──
     const loadProfileFromDB = () => {
         const adminId = localStorage.getItem('adminId') || 1;
         api.get(`/admin/profile/${adminId}`)
@@ -139,7 +139,7 @@ export default function Profile() {
         setModalState('TWO_FACTOR');
     };
 
-    // ── SAVE PROFILE SA DATABASE ──
+    // ── SAVE PROFILE TO DATABASE ──
     const handleSaveProfile = async (e) => {
         e.preventDefault();
         setSaving(true);
@@ -202,7 +202,7 @@ export default function Profile() {
         }
     };
 
-    // ── UPDATE PASSWORD SA DATABASE ──
+    // ── UPDATE PASSWORD IN DATABASE ──
     const handleChangePassword = async (e) => {
         e.preventDefault();
         setErrorMsg('');

@@ -9,7 +9,7 @@ export default function Materials() {
 
     const [selectedDate, setSelectedDate] = useState('2026-09-05');
 
-    // ── KUKUNIN ANG PROJECTS MULA SA LOCALSTORAGE ──
+    // ── FETCH PROJECTS FROM DATABASE ──
     const [dropdownProjects, setDropdownProjects] = useState([]);
 
     useEffect(() => {

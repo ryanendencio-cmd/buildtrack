@@ -685,7 +685,7 @@ export default function Dashboard() {
 
       {/* ═════════ MODALS ═════════ */}
 
-      {/* ADD EXPENSE (MANUAL) - PINALAKI NA ANG MODAL, INALIS ANG CASH PAID/CHANGE */}
+      {/* ADD EXPENSE (MANUAL) - MODAL ENLARGED, CASH PAID/CHANGE REMOVED */}
       {modalState === 'ADD' && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 transition-all">
           <div className="bg-white rounded-2xl w-full max-w-[500px] shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">

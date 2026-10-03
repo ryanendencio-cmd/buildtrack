@@ -1,341 +1,23 @@
 const express = require('express')
-const mysql = require('mysql2')
 const cors = require('cors')
 const bcrypt = require('bcrypt')
 const nodemailer = require('nodemailer')
 const jwt = require('jsonwebtoken')
+const { initializeApp, cert } = require('firebase-admin/app')
+const { getFirestore, FieldValue } = require('firebase-admin/firestore')
+
+const serviceAccount = require('./firebase-service-account.json')
+
+initializeApp({
+  credential: cert(serviceAccount)
+})
+
+const db = getFirestore()
 
 const app = express()
 app.use(cors())
-app.use(express.json())
-
-// Step 1: Connect WITHOUT database first para makapag-create
-const dbConfig = {
-  host: process.env.DB_HOST || 'localhost',
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || '',
-  port: Number(process.env.DB_PORT) || 3306,
-  dateStrings: true,
-  database: process.env.DB_NAME || null
-}
-
-if (process.env.DB_HOST) {
-  dbConfig.ssl = { rejectUnauthorized: false }
-}
-
-const dbInit = mysql.createConnection(dbConfig)
-
-const DB_NAME = 's_cons_db'
-
-const CREATE_TABLES = `
-  CREATE TABLE IF NOT EXISTS projects (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(50) NOT NULL,
-    location VARCHAR(100),
-    budget DECIMAL(15,2) DEFAULT 0,
-    progress INT DEFAULT 0,
-    start_date DATE,
-    end_date DATE,
-    status VARCHAR(50) DEFAULT 'Active',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  );
-
-  CREATE TABLE IF NOT EXISTS budget_additions (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    project_id INT NOT NULL,
-    amount DECIMAL(15,2) NOT NULL,
-    note VARCHAR(255),
-    date DATE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
-  );
-
-  CREATE TABLE IF NOT EXISTS expenses (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    project_id INT,
-    project VARCHAR(255),
-    category VARCHAR(100),
-    amount DECIMAL(15,2),
-    receipt_no VARCHAR(100),
-    date DATE,
-    time TIME,
-    items JSON,
-    cash_tendered DECIMAL(15,2),
-    \`change\` DECIMAL(15,2),
-    image LONGTEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL
-  );
-
-  CREATE TABLE IF NOT EXISTS workers (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    first_name VARCHAR(100) NOT NULL,
-    middle_name VARCHAR(100),
-    last_name VARCHAR(100) NOT NULL,
-    full_name VARCHAR(255),
-    birthday DATE,
-    age INT,
-    phone VARCHAR(20),
-    address TEXT,
-    role VARCHAR(100),
-    position VARCHAR(100),
-    daily_rate DECIMAL(10,2) DEFAULT 0,
-    password VARCHAR(255),
-    approval_status VARCHAR(50) DEFAULT 'Pending',
-    status VARCHAR(50) DEFAULT 'Active',
-    project_id INT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  );
-
-  CREATE TABLE IF NOT EXISTS attendance (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    project_id INT,
-    worker_id INT,
-    worker_name VARCHAR(255),
-    date DATE,
-    role VARCHAR(100),
-    morning_in VARCHAR(50),
-    morning_out VARCHAR(50),
-    afternoon_in VARCHAR(50),
-    afternoon_out VARCHAR(50),
-    morning_status VARCHAR(50),
-    afternoon_status VARCHAR(50),
-    time_in VARCHAR(50),
-    time_out VARCHAR(50),
-    rate DECIMAL(10,2) DEFAULT 0,
-    earned_amount DECIMAL(10,2) DEFAULT 0,
-    advance DECIMAL(10,2) DEFAULT 0,
-    status VARCHAR(50) DEFAULT 'Present',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  );
-
-  CREATE TABLE IF NOT EXISTS assets (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    project_id INT,
-    name VARCHAR(255) NOT NULL,
-    type VARCHAR(100),
-    status VARCHAR(50) DEFAULT 'Available',
-    assigned_to VARCHAR(255),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  );
-
-  CREATE TABLE IF NOT EXISTS materials (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    project_id INT,
-    date DATE,
-    name VARCHAR(255) NOT NULL,
-    qty DECIMAL(10,2) DEFAULT 0,
-    unit VARCHAR(50),
-    cost DECIMAL(10,2) DEFAULT 0,
-    remarks TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  );
-
-  CREATE TABLE IF NOT EXISTS cash_advances (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    project_id INT,
-    worker_id INT,
-    workerName VARCHAR(255) NOT NULL,
-    amount DECIMAL(15,2),
-    date DATE,
-    reason VARCHAR(255),
-    status VARCHAR(50) DEFAULT 'Pending',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL
-  );
-
-  CREATE TABLE IF NOT EXISTS borrow_history (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    project_id INT,
-    tool_name VARCHAR(255),
-    borrower_name VARCHAR(255),
-    quantity INT DEFAULT 1,
-    action VARCHAR(50),
-    condition_status VARCHAR(100),
-    date_time DATETIME DEFAULT CURRENT_TIMESTAMP,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  );
-
-  CREATE TABLE IF NOT EXISTS schedules (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    project_id INT,
-    expense_id INT,
-    link_type VARCHAR(50) DEFAULT 'General',
-    title VARCHAR(255) NOT NULL,
-    schedule_date DATE NOT NULL,
-    assigned_to VARCHAR(255),
-    status VARCHAR(50) DEFAULT 'Scheduled',
-    notes TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL,
-    FOREIGN KEY (expense_id) REFERENCES expenses(id) ON DELETE SET NULL
-  );
-
-  CREATE TABLE IF NOT EXISTS admins (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    username VARCHAR(100) NOT NULL UNIQUE,
-    email VARCHAR(255) UNIQUE,
-    password VARCHAR(255) NOT NULL,
-    full_name VARCHAR(255),
-    first_name VARCHAR(100),
-    middle_name VARCHAR(100),
-    last_name VARCHAR(100),
-    phone VARCHAR(20),
-    home_address TEXT,
-    address_obj LONGTEXT,
-    role VARCHAR(100) DEFAULT 'Administrator',
-    emp_id VARCHAR(50) DEFAULT 'SCON-ADMIN-001',
-    dept VARCHAR(100) DEFAULT 'Management',
-    assigned_project_site VARCHAR(255),
-    terminal_id VARCHAR(50),
-    push_notifications_enabled BOOLEAN DEFAULT true,
-    biometric_login_enabled BOOLEAN DEFAULT false,
-    status VARCHAR(50) DEFAULT 'Active',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-  );
-`
-
-dbInit.connect(err => {
-  if (err) {
-    console.error('Cannot connect to MySQL. Make sure XAMPP is running.', err.message)
-    process.exit(1)
-  }
-
-  const initTables = () => {
-    // Create all tables one by one
-    const statements = CREATE_TABLES.split(';').map(s => s.trim()).filter(s => s.length > 0)
-    let done = 0
-    statements.forEach(sql => {
-      dbInit.query(sql, (err) => {
-        if (err) console.error('Table error:', err.message)
-        done++
-        if (done === statements.length) {
-          // Ensure assets.borrow_at column exists (legacy migration)
-          dbInit.query("SHOW COLUMNS FROM assets LIKE 'borrow_at'", (err, cols) => {
-            if (!err && cols.length === 0) {
-              dbInit.query("ALTER TABLE assets ADD COLUMN borrow_at DATETIME", () => { })
-            }
-          })
-          dbInit.query("SHOW COLUMNS FROM expenses LIKE 'image'", (err, cols) => {
-            if (!err && cols.length === 0) {
-              dbInit.query('ALTER TABLE expenses ADD COLUMN image LONGTEXT', () => { })
-            }
-          })
-          // Migrate attendance columns
-          const attendanceNewCols = [
-            { col: 'role', def: 'VARCHAR(100)' },
-            { col: 'morning_in', def: 'VARCHAR(50)' },
-            { col: 'morning_out', def: 'VARCHAR(50)' },
-            { col: 'afternoon_in', def: 'VARCHAR(50)' },
-            { col: 'afternoon_out', def: 'VARCHAR(50)' },
-            { col: 'morning_status', def: 'VARCHAR(50)' },
-            { col: 'afternoon_status', def: 'VARCHAR(50)' },
-            { col: 'time_in', def: 'VARCHAR(50)' },
-            { col: 'time_out', def: 'VARCHAR(50)' },
-            { col: 'rate', def: 'DECIMAL(10,2) DEFAULT 0' },
-            { col: 'earned_amount', def: 'DECIMAL(10,2) DEFAULT 0' },
-            { col: 'advance', def: 'DECIMAL(10,2) DEFAULT 0' }
-          ]
-          attendanceNewCols.forEach(({ col, def }) => {
-            dbInit.query(`SHOW COLUMNS FROM attendance LIKE '${col}'`, (err, c) => {
-              if (!err && c.length === 0) {
-                dbInit.query(`ALTER TABLE attendance ADD COLUMN ${col} ${def}`, () => { })
-              }
-            })
-          })
-          // Migrate new admin columns for existing databases
-          const adminNewCols = [
-            { col: 'full_name', def: 'VARCHAR(255)' },
-            { col: 'phone', def: 'VARCHAR(20)' },
-            { col: 'assigned_project_site', def: 'VARCHAR(255)' },
-            { col: 'terminal_id', def: 'VARCHAR(50)' },
-            { col: 'push_notifications_enabled', def: 'BOOLEAN DEFAULT true' },
-            { col: 'biometric_login_enabled', def: 'BOOLEAN DEFAULT false' },
-            { col: 'status', def: "VARCHAR(50) DEFAULT 'Active'" },
-            { col: 'updated_at', def: 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP' },
-            { col: 'full_name', def: 'VARCHAR(255)' },
-            { col: 'first_name', def: 'VARCHAR(100)' },
-            { col: 'middle_name', def: 'VARCHAR(100)' },
-            { col: 'last_name', def: 'VARCHAR(100)' },
-            { col: 'home_address', def: 'TEXT' },
-            { col: 'address_obj', def: 'LONGTEXT' },
-            { col: 'role', def: "VARCHAR(100) DEFAULT 'Administrator'" },
-            { col: 'emp_id', def: "VARCHAR(50) DEFAULT 'SCON-ADMIN-001'" },
-            { col: 'dept', def: "VARCHAR(100) DEFAULT 'Management'" }
-          ]
-          adminNewCols.forEach(({ col, def }) => {
-            dbInit.query(`SHOW COLUMNS FROM admins LIKE '${col}'`, (err, c) => {
-              if (!err && c.length === 0) {
-                dbInit.query(`ALTER TABLE admins ADD COLUMN ${col} ${def}`, () => { })
-              }
-            })
-          })
-            ;['start_time', 'end_time'].forEach(col => {
-              dbInit.query(`SHOW COLUMNS FROM schedules LIKE '${col}'`, (err, c) => {
-                if (!err && c.length > 0) {
-                  dbInit.query(`ALTER TABLE schedules DROP COLUMN ${col}`, () => { })
-                }
-              })
-            })
-
-          console.log('All tables ready.')
-
-          // Seed default admin if none exists
-          dbInit.query('SELECT COUNT(*) AS cnt FROM admins', async (err, rows) => {
-            if (!err && rows[0].cnt === 0) {
-              const defaultHash = await bcrypt.hash('admin123', 10)
-              dbInit.query(
-                "INSERT INTO admins (username, email, password, first_name, last_name, role) VALUES (?, ?, ?, ?, ?, ?)",
-                ['admin', 'admin@scons.com', defaultHash, 'System', 'Administrator', 'Administrator'],
-                (err) => {
-                  if (err) console.error('Failed to seed default admin:', err.message)
-                  else console.log('Default admin created: username=admin, password=admin123')
-                }
-              )
-            }
-            ensureScheduleLinkColumns(dbInit, () => startServer(dbInit))
-          })
-        }
-      })
-    })
-  }
-
-  // Kung may DB_NAME galing Render/Aiven, direct na sa tables
-  if (process.env.DB_NAME) {
-    console.log(`Using Cloud Database: ${process.env.DB_NAME}`)
-    initTables()
-  } else {
-    // Local fallback: Create database kung wala pa
-    dbInit.query(`CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\``, (err) => {
-      if (err) { console.error('Failed to create database:', err.message); process.exit(1) }
-      dbInit.query(`USE \`${DB_NAME}\``, (err) => {
-        if (err) { console.error(err.message); process.exit(1) }
-        console.log(`Database "${DB_NAME}" ready.`)
-        initTables()
-      })
-    })
-  }
-})
-
-function ensureScheduleLinkColumns(db, done) {
-  const cols = [
-    { col: 'expense_id', def: 'INT NULL' },
-    { col: 'link_type', def: "VARCHAR(50) DEFAULT 'General'" }
-  ]
-  const step = (i) => {
-    if (i >= cols.length) return done()
-    const { col, def } = cols[i]
-    db.query(`SHOW COLUMNS FROM schedules LIKE '${col}'`, (err, rows) => {
-      if (err || rows.length > 0) return step(i + 1)
-      db.query(`ALTER TABLE schedules ADD COLUMN ${col} ${def}`, (alterErr) => {
-        if (alterErr) console.error('Schedule column error:', alterErr.message)
-        step(i + 1)
-      })
-    })
-  }
-  step(0)
-}
+app.use(express.json({ limit: '50mb' }))
+app.use(express.urlencoded({ limit: '50mb', extended: true }))
 
 function scheduleLink(body) {
   const type = body.link_type === 'Project' || body.link_type === 'Transaction' ? body.link_type : 'General'
@@ -346,51 +28,94 @@ function scheduleLink(body) {
   }
 }
 
-function startServer(db) {
+function startServer() {
 
-  app.get('/api/schedules', (req, res) => {
-    db.query(`SELECT s.*, p.name AS project_name, e.receipt_no AS expense_receipt, e.category AS expense_category
-      FROM schedules s
-      LEFT JOIN projects p ON p.id = s.project_id
-      LEFT JOIN expenses e ON e.id = s.expense_id
-      ORDER BY s.schedule_date, s.title`, (err, rows) => {
-      if (err) return res.status(500).json({ error: err.message })
-      res.json(rows)
-    })
+  app.get('/api/schedules', async (req, res) => {
+    try {
+      const snapshot = await db.collection('schedules').orderBy('schedule_date').orderBy('title').get()
+      const results = []
+      
+      for (const doc of snapshot.docs) {
+        const data = doc.data()
+        let project_name = null
+        let expense_receipt = null
+        let expense_category = null
+
+        if (data.project_id) {
+          const pDoc = await db.collection('projects').doc(data.project_id).get()
+          if (pDoc.exists) project_name = pDoc.data().name
+        }
+        if (data.expense_id) {
+          const eDoc = await db.collection('expenses').doc(data.expense_id).get()
+          if (eDoc.exists) {
+            expense_receipt = eDoc.data().receipt_no
+            expense_category = eDoc.data().category
+          }
+        }
+
+        results.push({
+          id: doc.id,
+          ...data,
+          project_name,
+          expense_receipt,
+          expense_category
+        })
+      }
+      res.json(results)
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   })
-  app.post('/api/schedules', (req, res) => {
+  app.post('/api/schedules', async (req, res) => {
     const { title, schedule_date, assigned_to, status, notes } = req.body
     const link = scheduleLink(req.body)
-    db.query('INSERT INTO schedules (project_id, expense_id, link_type, title, schedule_date, assigned_to, status, notes) VALUES (?,?,?,?,?,?,?,?)', [link.projectId, link.expenseId, link.type, title, schedule_date, assigned_to || null, status || 'Scheduled', notes || null], (err, result) => {
-      if (err) return res.status(500).json({ error: err.message })
-      res.json({ id: result.insertId, ...req.body, link_type: link.type, project_id: link.projectId, expense_id: link.expenseId })
-    })
+    try {
+      const newSchedule = {
+        project_id: link.projectId, expense_id: link.expenseId, link_type: link.type,
+        title, schedule_date, assigned_to: assigned_to || null, status: status || 'Scheduled', notes: notes || null,
+        created_at: FieldValue.serverTimestamp()
+      }
+      const docRef = await db.collection('schedules').add(newSchedule)
+      res.json({ id: docRef.id, ...req.body, link_type: link.type, project_id: link.projectId, expense_id: link.expenseId })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   })
-  app.put('/api/schedules/:id', (req, res) => {
+  app.put('/api/schedules/:id', async (req, res) => {
     const { title, schedule_date, assigned_to, status, notes } = req.body
     const link = scheduleLink(req.body)
-    db.query('UPDATE schedules SET project_id=?, expense_id=?, link_type=?, title=?, schedule_date=?, assigned_to=?, status=?, notes=? WHERE id=?', [link.projectId, link.expenseId, link.type, title, schedule_date, assigned_to || null, status, notes || null, req.params.id], err => {
-      if (err) return res.status(500).json({ error: err.message })
+    try {
+      await db.collection('schedules').doc(req.params.id).update({
+        project_id: link.projectId, expense_id: link.expenseId, link_type: link.type,
+        title, schedule_date, assigned_to: assigned_to || null, status, notes: notes || null
+      })
       res.json({ success: true })
-    })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   })
-  app.delete('/api/schedules/:id', (req, res) => {
-    db.query('DELETE FROM schedules WHERE id=?', [req.params.id], err => {
-      if (err) return res.status(500).json({ error: err.message })
+  app.delete('/api/schedules/:id', async (req, res) => {
+    try {
+      await db.collection('schedules').doc(req.params.id).delete()
       res.json({ success: true })
-    })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   })
 
   // ── PROJECTS ──
-  app.get('/api/projects', (req, res) => {
-    db.query('SELECT * FROM projects', (err, results) => {
-      if (err) return res.status(500).json({ error: err.message })
+  app.get('/api/projects', async (req, res) => {
+    try {
+      const snapshot = await db.collection('projects').get()
+      const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
       res.json(results)
-    })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   })
 
   // Rule: Only 1 active project at a time. A new project cannot be created unless existing ones are COMPLETED.
-  app.post('/api/projects', (req, res) => {
+  app.post('/api/projects', async (req, res) => {
     const { name, location, budget, progress, start_date, end_date, status } = req.body
     const targetStatus = status || 'Active'
     const MAX_AMOUNT = 999999999999
@@ -399,35 +124,31 @@ function startServer(db) {
       return res.status(400).json({ error: 'Budget allocated cannot exceed ₱999,999,999,999.' })
     }
 
-    if (String(targetStatus).toUpperCase() !== 'COMPLETED') {
-      db.query("SELECT id, name, status FROM projects WHERE UPPER(status) NOT IN ('COMPLETED')", (err, activeProjects) => {
-        if (err) return res.status(500).json({ error: err.message })
-        if (activeProjects && activeProjects.length > 0) {
-          const activeProj = activeProjects[0]
+    try {
+      if (String(targetStatus).toUpperCase() !== 'COMPLETED') {
+        const activeProjects = await db.collection('projects')
+          .where('status', '!=', 'COMPLETED')
+          .get()
+        
+        if (!activeProjects.empty) {
+          const activeProj = activeProjects.docs[0].data()
           return res.status(400).json({
-            error: `Hindi pa maaaring mag-umpisa ng bagong proyekto dahil may kasalukuyang active project pa ("${activeProj.name}"). Kailangan munang ma-mark bilang COMPLETED ang kasalukuyang proyekto.`
+            error: `Cannot start a new project because there is currently an active project ("${activeProj.name}"). You must mark the current project as COMPLETED first.`
           })
         }
+      }
 
-        insertProject()
-      })
-    } else {
-      insertProject()
-    }
-
-    function insertProject() {
-      db.query(
-        'INSERT INTO projects (name, location, budget, progress, start_date, end_date, status) VALUES (?,?,?,?,?,?,?)',
-        [name, location, budget, progress || 0, start_date, end_date, targetStatus],
-        (err, result) => {
-          if (err) return res.status(500).json({ error: err.message })
-          res.json({ id: result.insertId, ...req.body, status: targetStatus })
-        }
-      )
+      const newProject = {
+        name, location, budget, progress: progress || 0, start_date, end_date, status: targetStatus, created_at: FieldValue.serverTimestamp()
+      }
+      const docRef = await db.collection('projects').add(newProject)
+      res.json({ id: docRef.id, ...newProject })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
     }
   })
 
-  app.put('/api/projects/:id', (req, res) => {
+  app.put('/api/projects/:id', async (req, res) => {
     const { name, location, budget, progress, start_date, end_date, status } = req.body
     const MAX_AMOUNT = 999999999999
 
@@ -435,52 +156,53 @@ function startServer(db) {
       return res.status(400).json({ error: 'Budget allocated cannot exceed ₱999,999,999,999.' })
     }
 
-    if (status && String(status).toUpperCase() !== 'COMPLETED') {
-      db.query("SELECT id, name FROM projects WHERE id != ? AND UPPER(status) NOT IN ('COMPLETED')", [req.params.id], (err, otherActive) => {
-        if (err) return res.status(500).json({ error: err.message })
-        if (otherActive && otherActive.length > 0) {
+    try {
+      if (status && String(status).toUpperCase() !== 'COMPLETED') {
+        const otherActive = await db.collection('projects')
+          .where('status', '!=', 'COMPLETED')
+          .get()
+        
+        const hasOtherActive = otherActive.docs.some(doc => doc.id !== req.params.id)
+        if (hasOtherActive) {
+          const activeProj = otherActive.docs.find(doc => doc.id !== req.params.id).data()
           return res.status(400).json({
-            error: `Hindi maaaring maging active ang proyektong ito dahil may isa pang ongoing project ("${otherActive[0].name}"). Isa lamang ang pinapayagang active project sa bawat oras.`
+            error: `This project cannot be active because there is another ongoing project ("${activeProj.name}"). Only one active project is allowed at a time.`
           })
         }
-
-        updateProject()
-      })
-    } else {
-      updateProject()
-    }
-
-    function updateProject() {
-      db.query(
-        'UPDATE projects SET name=?, location=?, budget=?, progress=?, start_date=?, end_date=?, status=? WHERE id=?',
-        [name, location, budget, progress, start_date, end_date, status, req.params.id],
-        (err) => {
-          if (err) return res.status(500).json({ error: err.message })
-          res.json({ success: true })
-        }
-      )
-    }
-  })
-
-  app.delete('/api/projects/:id', (req, res) => {
-    db.query('DELETE FROM projects WHERE id=?', [req.params.id], (err) => {
-      if (err) return res.status(500).json({ error: err.message })
-      res.json({ success: true })
-    })
-  })
-
-  app.get('/api/projects/:id/budget-additions', (req, res) => {
-    db.query(
-      'SELECT * FROM budget_additions WHERE project_id=? ORDER BY date DESC, id DESC',
-      [req.params.id],
-      (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message })
-        res.json(rows)
       }
-    )
+
+      await db.collection('projects').doc(req.params.id).update({
+        name, location, budget, progress, start_date, end_date, status
+      })
+      res.json({ success: true })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   })
 
-  app.post('/api/projects/:id/budget-additions', (req, res) => {
+  app.delete('/api/projects/:id', async (req, res) => {
+    try {
+      await db.collection('projects').doc(req.params.id).delete()
+      res.json({ success: true })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  app.get('/api/projects/:id/budget-additions', async (req, res) => {
+    try {
+      const snapshot = await db.collection('budget_additions')
+        .where('project_id', '==', req.params.id)
+        .orderBy('date', 'desc')
+        .get()
+      const rows = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+      res.json(rows)
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  app.post('/api/projects/:id/budget-additions', async (req, res) => {
     const MAX_AMOUNT = 999999999999
     const amount = Number(req.body.amount)
     const note = String(req.body.note || '').trim().slice(0, 255)
@@ -490,171 +212,249 @@ function startServer(db) {
       return res.status(400).json({ error: 'Please enter a valid budget amount.' })
     }
 
-    db.query('SELECT id, name, budget FROM projects WHERE id=?', [req.params.id], (err, rows) => {
-      if (err) return res.status(500).json({ error: err.message })
-      if (!rows.length) return res.status(404).json({ error: 'Project not found.' })
+    try {
+      const projectRef = db.collection('projects').doc(req.params.id)
+      const projectDoc = await projectRef.get()
+      
+      if (!projectDoc.exists) return res.status(404).json({ error: 'Project not found.' })
 
-      const current = Number(rows[0].budget) || 0
+      const current = Number(projectDoc.data().budget) || 0
       const next = Math.round((current + amount) * 100) / 100
       if (next > MAX_AMOUNT) {
         return res.status(400).json({ error: 'Budget allocated cannot exceed ₱999,999,999,999.' })
       }
 
-      db.query(
-        'INSERT INTO budget_additions (project_id, amount, note, date) VALUES (?,?,?,?)',
-        [req.params.id, amount, note || null, date],
-        (err2, result) => {
-          if (err2) return res.status(500).json({ error: err2.message })
-          db.query('UPDATE projects SET budget=? WHERE id=?', [next, req.params.id], (err3) => {
-            if (err3) return res.status(500).json({ error: err3.message })
-            res.json({
-              id: result.insertId,
-              project_id: Number(req.params.id),
-              project_name: rows[0].name,
-              amount,
-              note: note || null,
-              date,
-              previous_budget: current,
-              budget: next
-            })
-          })
-        }
-      )
-    })
+      await projectRef.update({ budget: next })
+      const newAddition = {
+        project_id: req.params.id,
+        amount,
+        note,
+        date,
+        created_at: FieldValue.serverTimestamp()
+      }
+      const docRef = await db.collection('budget_additions').add(newAddition)
+      res.json({ id: docRef.id, ...newAddition })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   })
 
   // ── EXPENSES ──
-  app.get('/api/expenses', (req, res) => {
-    db.query('SELECT * FROM expenses ORDER BY created_at DESC', (err, results) => {
-      if (err) return res.status(500).json({ error: err.message })
+  app.get('/api/expenses', async (req, res) => {
+    try {
+      const snapshot = await db.collection('expenses').orderBy('created_at', 'desc').get()
+      const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
       res.json(results)
-    })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   })
 
   // Monthly totals for graphs — MUST be before /:project_id
-  app.get('/api/expenses/monthly', (req, res) => {
+  app.get('/api/expenses/monthly', async (req, res) => {
     const year = new Date().getFullYear()
-    db.query(
-      'SELECT MONTH(date) as month, SUM(amount) as total FROM expenses WHERE YEAR(date)=? GROUP BY MONTH(date)',
-      [year],
-      (err, results) => {
-        if (err) return res.status(500).json({ error: err.message })
-        const months = Array(12).fill(0)
-        results.forEach(r => { months[r.month - 1] = Number(r.total) })
-        res.json(months)
-      }
-    )
+    try {
+      const snapshot = await db.collection('expenses').get()
+      const months = Array(12).fill(0)
+      
+      snapshot.docs.forEach(doc => {
+        const data = doc.data()
+        if (data.date) {
+          const d = new Date(data.date)
+          if (d.getFullYear() === year) {
+            months[d.getMonth()] += Number(data.amount || 0)
+          }
+        }
+      })
+      res.json(months)
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   })
 
   // Budget summary for Hero Card
-  app.get('/api/expenses/budget-summary', (req, res) => {
-    db.query('SELECT SUM(budget) as totalBudget FROM projects', (err, budgetRes) => {
-      if (err) return res.status(500).json({ error: err.message })
-      db.query('SELECT SUM(amount) as totalSpent FROM expenses', (err, spentRes) => {
-        if (err) return res.status(500).json({ error: err.message })
-        db.query('SELECT category, SUM(amount) as total FROM expenses GROUP BY category', (err, catRes) => {
-          if (err) return res.status(500).json({ error: err.message })
-          const totalBudget = Number(budgetRes[0].totalBudget) || 0
-          const totalSpent = Number(spentRes[0].totalSpent) || 0
-          res.json({
-            totalBudget,
-            totalSpent,
-            remaining: totalBudget - totalSpent,
-            percent: totalBudget > 0 ? Math.round((totalSpent / totalBudget) * 100) : 0,
-            categories: catRes
-          })
-        })
+  app.get('/api/expenses/budget-summary', async (req, res) => {
+    try {
+      const pSnap = await db.collection('projects').get()
+      const totalBudget = pSnap.docs.reduce((sum, doc) => sum + Number(doc.data().budget || 0), 0)
+      
+      const eSnap = await db.collection('expenses').get()
+      const expenses = eSnap.docs.map(d => d.data())
+      const totalSpent = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0)
+      
+      const catMap = {}
+      expenses.forEach(e => {
+        const cat = e.category || 'Uncategorized'
+        catMap[cat] = (catMap[cat] || 0) + Number(e.amount || 0)
       })
-    })
+      const categories = Object.keys(catMap).map(category => ({ category, total: catMap[category] }))
+
+      res.json({
+        totalBudget,
+        totalSpent,
+        remaining: totalBudget - totalSpent,
+        percent: totalBudget > 0 ? Math.round((totalSpent / totalBudget) * 100) : 0,
+        categories
+      })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   })
 
   // Summary for Dashboard — MUST be before /api/expenses/:project_id
-  app.get('/api/expenses/summary', (req, res) => {
-    db.query('SELECT SUM(amount) as total FROM expenses', (err, totals) => {
-      if (err) return res.status(500).json({ error: err.message })
-      db.query('SELECT category, amount, date FROM expenses ORDER BY created_at DESC LIMIT 5', (err, recent) => {
-        if (err) return res.status(500).json({ error: err.message })
-        res.json({ total: totals[0].total || 0, recent })
-      })
-    })
+  app.get('/api/expenses/summary', async (req, res) => {
+    try {
+      const snapshot = await db.collection('expenses').orderBy('created_at', 'desc').get()
+      const expenses = snapshot.docs.map(d => d.data())
+      
+      const total = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0)
+      const recent = expenses.slice(0, 5).map(e => ({ category: e.category, amount: e.amount, date: e.date }))
+      
+      res.json({ total, recent })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   })
 
   // Parameterized route — MUST be after all specific /expenses/* routes
-  app.get('/api/expenses/:project_id', (req, res) => {
-    db.query('SELECT * FROM expenses WHERE project_id=? ORDER BY date DESC', [req.params.project_id], (err, results) => {
-      if (err) return res.status(500).json({ error: err.message })
+  app.get('/api/expenses/:project_id', async (req, res) => {
+    try {
+      const snapshot = await db.collection('expenses')
+        .where('project_id', '==', req.params.project_id)
+        .orderBy('date', 'desc')
+        .get()
+      const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
       res.json(results)
-    })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   })
 
-  app.post('/api/expenses', (req, res) => {
+  app.post('/api/expenses', async (req, res) => {
     const { project_id, project, category, amount, receipt_no, date, time, items, cash_tendered, change, image } = req.body
-    db.query(
-      'INSERT INTO expenses (project_id, project, category, amount, receipt_no, date, time, items, cash_tendered, `change`, image) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
-      [project_id, project, category, amount, receipt_no, date, time, JSON.stringify(items), cash_tendered, change, image || null],
-      (err, result) => {
-        if (err) return res.status(500).json({ error: err.message })
-        res.json({ id: result.insertId, ...req.body })
+    try {
+      const newExpense = {
+        project_id, project, category, amount, receipt_no, date, time, 
+        items: typeof items === 'string' ? JSON.parse(items) : (items || []), 
+        cash_tendered, change, image: image || null,
+        created_at: FieldValue.serverTimestamp()
       }
-    )
+      const docRef = await db.collection('expenses').add(newExpense)
+      res.json({ id: docRef.id, ...req.body })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   })
 
-  app.put('/api/expenses/:id', (req, res) => {
+  app.put('/api/expenses/:id', async (req, res) => {
     const { category, amount, receipt_no, date, time, items, cash_tendered, change, image } = req.body
-    db.query(
-      'UPDATE expenses SET category=?, amount=?, receipt_no=?, date=?, time=?, items=?, cash_tendered=?, `change`=?, image=COALESCE(?, image) WHERE id=?',
-      [category, amount, receipt_no, date, time, typeof items === 'string' ? items : JSON.stringify(items || []), cash_tendered, change, image || null, req.params.id],
-      (err) => {
-        if (err) return res.status(500).json({ error: err.message })
-        res.json({ success: true })
+    try {
+      const updateData = {
+        category, amount, receipt_no, date, time, 
+        items: typeof items === 'string' ? JSON.parse(items) : (items || []), 
+        cash_tendered, change
       }
-    )
+      if (image) updateData.image = image
+      
+      await db.collection('expenses').doc(req.params.id).update(updateData)
+      res.json({ success: true })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   })
 
-  app.delete('/api/expenses/:id', (req, res) => {
-    db.query('DELETE FROM expenses WHERE id=?', [req.params.id], (err) => {
-      if (err) return res.status(500).json({ error: err.message })
+  app.delete('/api/expenses/:id', async (req, res) => {
+    try {
+      await db.collection('expenses').doc(req.params.id).delete()
       res.json({ success: true })
-    })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   })
 
   // ── REPORTS ──
-  app.get('/api/reports/expenses', (req, res) => {
+  app.get('/api/reports/expenses', async (req, res) => {
     const { project_id, month } = req.query
     const [year, mon] = month ? month.split('-') : [null, null]
-    let sql = 'SELECT e.*, p.budget FROM expenses e LEFT JOIN projects p ON e.project_id = p.id WHERE 1=1'
-    const params = []
-    if (project_id && project_id !== 'ALL') { sql += ' AND e.project_id=?'; params.push(project_id) }
-    if (year && mon) { sql += ' AND YEAR(e.date)=? AND MONTH(e.date)=?'; params.push(year, parseInt(mon)) }
-    sql += ' ORDER BY e.date DESC'
-    db.query(sql, params, (err, rows) => {
-      if (err) return res.status(500).json({ error: err.message })
-      const totalSpent = rows.reduce((s, r) => s + Number(r.amount), 0)
-      // Get budget for selected project(s)
-      const budgetSql = project_id && project_id !== 'ALL'
-        ? 'SELECT budget FROM projects WHERE id=?'
-        : 'SELECT SUM(budget) as budget FROM projects'
-      db.query(budgetSql, project_id && project_id !== 'ALL' ? [project_id] : [], (err2, bRes) => {
-        const budget = Number(bRes?.[0]?.budget || 0)
-        res.json({ totalSpent, budget, remaining: budget - totalSpent, rows })
-      })
-    })
+    
+    try {
+      let query = db.collection('expenses')
+      if (project_id && project_id !== 'ALL') {
+        query = query.where('project_id', '==', project_id)
+      }
+      
+      const snapshot = await query.orderBy('date', 'desc').get()
+      let rows = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+      
+      if (year && mon) {
+        rows = rows.filter(r => {
+          if (!r.date) return false
+          const d = new Date(r.date)
+          return d.getFullYear() === parseInt(year) && (d.getMonth() + 1) === parseInt(mon)
+        })
+      }
+
+      // Fetch project budgets
+      let totalBudget = 0
+      for (let i = 0; i < rows.length; i++) {
+        if (rows[i].project_id) {
+          const pDoc = await db.collection('projects').doc(rows[i].project_id).get()
+          if (pDoc.exists) rows[i].budget = pDoc.data().budget
+        }
+      }
+
+      if (project_id && project_id !== 'ALL') {
+        const pDoc = await db.collection('projects').doc(project_id).get()
+        if (pDoc.exists) totalBudget = Number(pDoc.data().budget || 0)
+      } else {
+        const pSnap = await db.collection('projects').get()
+        totalBudget = pSnap.docs.reduce((sum, doc) => sum + Number(doc.data().budget || 0), 0)
+      }
+
+      const totalSpent = rows.reduce((s, r) => s + Number(r.amount || 0), 0)
+      res.json({ totalSpent, budget: totalBudget, remaining: totalBudget - totalSpent, rows })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   })
 
-  app.get('/api/reports/manpower', (req, res) => {
+  app.get('/api/reports/manpower', async (req, res) => {
     const { project_id, month } = req.query
     const [year, mon] = month ? month.split('-') : [null, null]
-    let sql = 'SELECT a.*, w.role, w.daily_rate FROM attendance a LEFT JOIN workers w ON a.worker_id = w.id WHERE 1=1'
-    const params = []
-    if (project_id && project_id !== 'ALL') { sql += ' AND a.project_id=?'; params.push(project_id) }
-    if (year && mon) { sql += ' AND YEAR(a.date)=? AND MONTH(a.date)=?'; params.push(year, parseInt(mon)) }
-    sql += ' ORDER BY a.date DESC'
-    db.query(sql, params, (err, rows) => {
-      if (err) return res.status(500).json({ error: err.message })
+    
+    try {
+      let query = db.collection('attendance')
+      if (project_id && project_id !== 'ALL') {
+        query = query.where('project_id', '==', project_id)
+      }
+      
+      const snapshot = await query.orderBy('date', 'desc').get()
+      let rows = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+      
+      if (year && mon) {
+        rows = rows.filter(r => {
+          if (!r.date) return false
+          const d = new Date(r.date)
+          return d.getFullYear() === parseInt(year) && (d.getMonth() + 1) === parseInt(mon)
+        })
+      }
+
+      // Fetch worker roles and rates
+      for (let i = 0; i < rows.length; i++) {
+        if (rows[i].worker_id) {
+          const wDoc = await db.collection('workers').doc(rows[i].worker_id).get()
+          if (wDoc.exists) {
+            rows[i].role = wDoc.data().role
+            rows[i].daily_rate = wDoc.data().daily_rate
+          }
+        }
+      }
+
       const present = rows.filter(r => r.status === 'Present').length
       const late = rows.filter(r => r.status === 'Late' || r.status === 'Double Late').length
       const halfday = rows.filter(r => String(r.status).includes('Halfday')).length
       const absent = rows.filter(r => r.status === 'Absent').length
+      
       const totalWage = rows.reduce((s, r) => {
         if (r.earned_amount !== null && r.earned_amount !== undefined) return s + Number(r.earned_amount)
         const base = Number(r.daily_rate || r.rate || 0)
@@ -664,106 +464,138 @@ function startServer(db) {
         if (String(r.status).includes('Halfday')) return s + Math.round((base / 2) * 100) / 100
         return s
       }, 0)
+      
       res.json({ present, late, halfday, absent, totalWage, rows })
-    })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   })
 
-  app.get('/api/reports/materials', (req, res) => {
+  app.get('/api/reports/materials', async (req, res) => {
     const { project_id } = req.query
-    let sql = 'SELECT m.*, p.name as project_name FROM materials m LEFT JOIN projects p ON m.project_id = p.id WHERE 1=1'
-    const params = []
-    if (project_id && project_id !== 'ALL') { sql += ' AND m.project_id=?'; params.push(project_id) }
-    db.query(sql, params, (err, rows) => {
-      if (err) return res.status(500).json({ error: err.message })
-      const totalCost = rows.reduce((s, r) => s + (Number(r.quantity) * Number(r.unit_cost)), 0)
+    try {
+      let query = db.collection('materials')
+      if (project_id && project_id !== 'ALL') {
+        query = query.where('project_id', '==', project_id)
+      }
+      
+      const snapshot = await query.get()
+      const rows = []
+      
+      for (const doc of snapshot.docs) {
+        const data = doc.data()
+        let project_name = null
+        if (data.project_id) {
+          const pDoc = await db.collection('projects').doc(data.project_id).get()
+          if (pDoc.exists) project_name = pDoc.data().name
+        }
+        rows.push({ id: doc.id, ...data, project_name })
+      }
+      
+      const totalCost = rows.reduce((s, r) => s + (Number(r.qty || r.quantity || 0) * Number(r.cost || r.unit_cost || 0)), 0)
       res.json({ totalCost, itemCount: rows.length, rows })
-    })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   })
 
-  app.get('/api/reports/assets', (req, res) => {
+  app.get('/api/reports/assets', async (req, res) => {
     const { project_id } = req.query
-    let sql = 'SELECT a.*, p.name as project_name FROM assets a LEFT JOIN projects p ON a.project_id = p.id WHERE 1=1'
-    const params = []
-    if (project_id && project_id !== 'ALL') { sql += ' AND a.project_id=?'; params.push(project_id) }
-    db.query(sql, params, (err, rows) => {
-      if (err) return res.status(500).json({ error: err.message })
+    try {
+      let query = db.collection('assets')
+      if (project_id && project_id !== 'ALL') {
+        query = query.where('project_id', '==', project_id)
+      }
+      
+      const snapshot = await query.get()
+      const rows = []
+      
+      for (const doc of snapshot.docs) {
+        const data = doc.data()
+        let project_name = null
+        if (data.project_id) {
+          const pDoc = await db.collection('projects').doc(data.project_id).get()
+          if (pDoc.exists) project_name = pDoc.data().name
+        }
+        rows.push({ id: doc.id, ...data, project_name })
+      }
+      
       const inUse = rows.filter(r => r.status === 'In Use').length
       const available = rows.filter(r => r.status === 'Available').length
       const maintenance = rows.filter(r => r.status === 'Maintenance').length
       res.json({ inUse, available, maintenance, rows })
-    })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   })
 
   // ── NOTIFICATIONS ──
-  app.get('/api/notifications', (req, res) => {
+  app.get('/api/notifications', async (req, res) => {
     const alerts = []
-    let pending = 3
-    const done = () => { if (--pending === 0) res.json(alerts) }
-
-    // 1. Budget warnings: projects where total expenses >= 80% of budget
-    db.query(
-      `SELECT p.id, p.name, p.budget,
-        COALESCE((SELECT SUM(e.amount) FROM expenses e WHERE e.project_id = p.id), 0) as spent
-       FROM projects p WHERE p.budget > 0`,
-      (err, projects) => {
-        if (!err) {
-          projects.forEach(p => {
-            const pct = Math.round((p.spent / p.budget) * 100)
-            if (pct >= 80) {
-              alerts.push({
-                id: `budget-${p.id}`,
-                type: 'Budget',
-                title: 'Budget Warning Threshold Reached',
-                message: `Project "${p.name}" has utilized ${pct}% of its allocated budget.`,
-                date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-                read: false,
-                severity: pct >= 95 ? 'High' : 'Medium'
-              })
-            }
+    try {
+      // 1. Budget warnings
+      const pSnap = await db.collection('projects').where('budget', '>', 0).get()
+      for (const pDoc of pSnap.docs) {
+        const p = pDoc.data()
+        const eSnap = await db.collection('expenses').where('project_id', '==', pDoc.id).get()
+        const spent = eSnap.docs.reduce((sum, eDoc) => sum + Number(eDoc.data().amount || 0), 0)
+        
+        const pct = Math.round((spent / p.budget) * 100)
+        if (pct >= 80) {
+          alerts.push({
+            id: `budget-${pDoc.id}`,
+            type: 'Budget',
+            title: 'Budget Warning Threshold Reached',
+            message: `Project "${p.name}" has utilized ${pct}% of its allocated budget.`,
+            date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+            read: false,
+            severity: pct >= 95 ? 'High' : 'Medium'
           })
         }
-        done()
       }
-    )
 
-    // 2. Equipment in use alerts
-    db.query('SELECT * FROM assets WHERE status="In Use"', (err, assets) => {
-      if (!err) {
-        assets.forEach(a => {
+      // 2. Equipment in use alerts
+      const aSnap = await db.collection('assets').where('status', '==', 'In Use').get()
+      aSnap.docs.forEach(aDoc => {
+        const a = aDoc.data()
+        alerts.push({
+          id: `asset-${aDoc.id}`,
+          type: 'Tools',
+          title: 'Equipment Currently In Use',
+          message: `"${a.name}" is currently checked out${a.assigned_to ? ` by ${a.assigned_to}` : ''}.`,
+          date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+          read: false,
+          severity: 'Medium'
+        })
+      })
+
+      // 3. Large expenses
+      const expSnap = await db.collection('expenses').get()
+      const expenses = expSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+      if (expenses.length > 0) {
+        const avg = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0) / expenses.length
+        const largeExps = expenses
+          .filter(e => Number(e.amount || 0) > (avg * 2))
+          .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
+          .slice(0, 3)
+        
+        largeExps.forEach(e => {
           alerts.push({
-            id: `asset-${a.id}`,
-            type: 'Tools',
-            title: 'Equipment Currently In Use',
-            message: `"${a.name}" is currently checked out${a.assigned_to ? ` by ${a.assigned_to}` : ''}.`,
-            date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+            id: `expense-${e.id}`,
+            type: 'Expenses',
+            title: 'Large Expense Logged',
+            message: `A ${e.category} expense of ₱${Number(e.amount).toLocaleString()} was logged for project "${e.project}".`,
+            date: new Date(e.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
             read: false,
             severity: 'Medium'
           })
         })
       }
-      done()
-    })
 
-    // 3. Large expenses (top 3 recent expenses > avg)
-    db.query(
-      `SELECT * FROM expenses WHERE amount > (SELECT AVG(amount) * 2 FROM expenses) ORDER BY created_at DESC LIMIT 3`,
-      (err, exps) => {
-        if (!err) {
-          exps.forEach(e => {
-            alerts.push({
-              id: `expense-${e.id}`,
-              type: 'Expenses',
-              title: 'Large Expense Logged',
-              message: `A ${e.category} expense of \u20b1${Number(e.amount).toLocaleString()} was logged for project "${e.project}".`,
-              date: new Date(e.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-              read: false,
-              severity: 'Medium'
-            })
-          })
-        }
-        done()
-      }
-    )
+      res.json(alerts)
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   })
 
   app.put('/api/notifications/:id/read', (req, res) => {
@@ -772,76 +604,105 @@ function startServer(db) {
   })
 
   // ── WORKERS SUMMARY (for Dashboard) — MUST be before /api/workers plain GET ──
-  app.get('/api/workers/summary', (req, res) => {
+  app.get('/api/workers/summary', async (req, res) => {
     const today = new Date().toISOString().split('T')[0]
-    db.query('SELECT COUNT(*) as totalCount, SUM(daily_rate) as total FROM workers WHERE status="Approved"', (err, totals) => {
-      if (err) return res.status(500).json({ error: err.message })
-      db.query('SELECT status, COUNT(*) as count FROM attendance WHERE date=? GROUP BY status', [today], (err, att) => {
-        if (err) return res.status(500).json({ error: err.message })
-        const present = att.find(r => r.status === 'Present')?.count || 0
-        const absent = att.find(r => r.status === 'Absent')?.count || 0
-        db.query('SELECT role, COUNT(*) as count FROM workers WHERE status="Approved" GROUP BY role', (err, roles) => {
-          if (err) return res.status(500).json({ error: err.message })
-          db.query(
-            'SELECT SUM(w.daily_rate) as payroll FROM workers w INNER JOIN attendance a ON w.id=a.worker_id WHERE a.date=? AND a.status="Present"',
-            [today],
-            (err, pay) => {
-              if (err) return res.status(500).json({ error: err.message })
-              res.json({
-                totalManpower: totals[0].totalCount || 0,
-                presentToday: present,
-                absent,
-                roles,
-                todayPayroll: pay[0].payroll || 0
-              })
-            }
-          )
-        })
+    try {
+      const wSnap = await db.collection('workers').where('status', '==', 'Approved').get()
+      const workers = wSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+      
+      const totalManpower = workers.length
+      
+      const aSnap = await db.collection('attendance').where('date', '==', today).get()
+      const attendance = aSnap.docs.map(d => d.data())
+      
+      const presentToday = attendance.filter(a => a.status === 'Present').length
+      const absent = attendance.filter(a => a.status === 'Absent').length
+      
+      const rolesMap = {}
+      workers.forEach(w => {
+        const r = w.role || 'Worker'
+        rolesMap[r] = (rolesMap[r] || 0) + 1
       })
-    })
+      const roles = Object.keys(rolesMap).map(role => ({ role, count: rolesMap[role] }))
+      
+      let todayPayroll = 0
+      attendance.filter(a => a.status === 'Present').forEach(a => {
+        const worker = workers.find(w => w.id === a.worker_id)
+        if (worker) todayPayroll += Number(worker.daily_rate || 0)
+      })
+
+      res.json({
+        totalManpower,
+        presentToday,
+        absent,
+        roles,
+        todayPayroll
+      })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   })
 
   // ── WORKERS ──
-  app.get('/api/workers', (req, res) => {
-    db.query('SELECT * FROM workers ORDER BY created_at DESC', (err, results) => {
-      if (err) return res.status(500).json({ error: err.message })
+  app.get('/api/workers', async (req, res) => {
+    try {
+      const snapshot = await db.collection('workers').orderBy('created_at', 'desc').get()
+      const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
       res.json(results)
-    })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   })
 
   app.post('/api/workers', async (req, res) => {
     const { first_name, middle_name, last_name, full_name, birthday, age, phone, address, role, position, daily_rate, password, approval_status, status, project_id } = req.body
     const computedFullName = full_name || [first_name, middle_name, last_name].filter(Boolean).join(' ')
     const hashedPassword = password ? await bcrypt.hash(password, 10) : await bcrypt.hash('worker123', 10)
-    db.query(
-      'INSERT INTO workers (first_name, middle_name, last_name, full_name, birthday, age, phone, address, role, position, daily_rate, password, approval_status, status, project_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-      [first_name, middle_name || null, last_name, computedFullName, birthday || null, age || null, phone || null, address || null, role || 'Worker', position || null, daily_rate || 600, hashedPassword, approval_status || 'Approved', status || 'Active', project_id || null],
-      (err, result) => {
-        if (err) return res.status(500).json({ error: err.message })
-        res.json({ id: result.insertId, ...req.body, full_name: computedFullName, approval_status: approval_status || 'Approved' })
+    
+    try {
+      const newWorker = {
+        first_name, middle_name: middle_name || null, last_name, full_name: computedFullName, 
+        birthday: birthday || null, age: age || null, phone: phone || null, address: address || null, 
+        role: role || 'Worker', position: position || null, daily_rate: daily_rate || 600, 
+        password: hashedPassword, approval_status: approval_status || 'Approved', 
+        status: status || 'Active', project_id: project_id || null,
+        created_at: FieldValue.serverTimestamp()
       }
-    )
+      const docRef = await db.collection('workers').add(newWorker)
+      res.json({ id: docRef.id, ...req.body, full_name: computedFullName, approval_status: approval_status || 'Approved' })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   })
 
   app.put('/api/workers/:id', async (req, res) => {
     const { first_name, middle_name, last_name, full_name, birthday, age, phone, address, role, position, daily_rate, password, approval_status, status, project_id } = req.body
     const computedFullName = full_name || [first_name, middle_name, last_name].filter(Boolean).join(' ')
-    const hashedPassword = password ? await bcrypt.hash(password, 10) : null
-    db.query(
-      'UPDATE workers SET first_name=?, middle_name=?, last_name=?, full_name=?, birthday=?, age=?, phone=?, address=?, role=?, position=?, daily_rate=?, password=COALESCE(NULLIF(?,\'\'), password), approval_status=?, status=?, project_id=? WHERE id=?',
-      [first_name, middle_name || null, last_name, computedFullName, birthday || null, age || null, phone || null, address || null, role, position || null, daily_rate || 600, hashedPassword, approval_status || 'Approved', status || 'Active', project_id || null, req.params.id],
-      (err) => {
-        if (err) return res.status(500).json({ error: err.message })
-        res.json({ success: true })
+    
+    try {
+      const updateData = {
+        first_name, middle_name: middle_name || null, last_name, full_name: computedFullName, 
+        birthday: birthday || null, age: age || null, phone: phone || null, address: address || null, 
+        role, position: position || null, daily_rate: daily_rate || 600, 
+        approval_status: approval_status || 'Approved', status: status || 'Active', project_id: project_id || null
       }
-    )
+      if (password) {
+        updateData.password = await bcrypt.hash(password, 10)
+      }
+      await db.collection('workers').doc(req.params.id).update(updateData)
+      res.json({ success: true })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   })
 
-  app.delete('/api/workers/:id', (req, res) => {
-    db.query('DELETE FROM workers WHERE id=?', [req.params.id], (err) => {
-      if (err) return res.status(500).json({ error: err.message })
+  app.delete('/api/workers/:id', async (req, res) => {
+    try {
+      await db.collection('workers').doc(req.params.id).delete()
       res.json({ success: true })
-    })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   })
 
   // ── 2-SESSION ATTENDANCE LOGIC & POLICY RULES ──
@@ -953,40 +814,46 @@ function startServer(db) {
   }
 
   // ── ATTENDANCE ──
-  app.get('/api/attendance/:project_id', (req, res) => {
+  app.get('/api/attendance/:project_id', async (req, res) => {
     const { project_id } = req.params
-    const sql = (!project_id || project_id === 'ALL')
-      ? 'SELECT * FROM attendance ORDER BY date DESC, created_at DESC'
-      : 'SELECT * FROM attendance WHERE project_id=? ORDER BY date DESC, created_at DESC'
-    const params = (!project_id || project_id === 'ALL') ? [] : [project_id]
-
-    db.query(sql, params, (err, results) => {
-      if (err) return res.status(500).json({ error: err.message })
-      res.json(results.map(r => ({
-        id: r.id,
-        project_id: r.project_id,
-        worker_id: r.worker_id,
-        worker_name: r.worker_name,
-        name: r.worker_name,
-        date: r.date,
-        role: r.role,
-        morningIn: r.morning_in || r.time_in || '—',
-        morningOut: r.morning_out || '—',
-        afternoonIn: r.afternoon_in || '—',
-        afternoonOut: r.afternoon_out || r.time_out || '—',
-        morningStatus: r.morning_status,
-        afternoonStatus: r.afternoon_status,
-        timeIn: r.morning_in || r.afternoon_in || r.time_in || '—',
-        timeOut: r.afternoon_out || r.morning_out || r.time_out || '—',
-        rate: Number(r.rate) || 0,
-        earned_amount: Number(r.earned_amount) || 0,
-        advance: Number(r.advance) || 0,
-        status: r.status
-      })))
-    })
+    try {
+      let query = db.collection('attendance')
+      if (project_id && project_id !== 'ALL') {
+        query = query.where('project_id', '==', project_id)
+      }
+      
+      const snapshot = await query.orderBy('date', 'desc').orderBy('created_at', 'desc').get()
+      const results = snapshot.docs.map(doc => {
+        const r = doc.data()
+        return {
+          id: doc.id,
+          project_id: r.project_id,
+          worker_id: r.worker_id,
+          worker_name: r.worker_name,
+          name: r.worker_name,
+          date: r.date,
+          role: r.role,
+          morningIn: r.morning_in || r.time_in || '—',
+          morningOut: r.morning_out || '—',
+          afternoonIn: r.afternoon_in || '—',
+          afternoonOut: r.afternoon_out || r.time_out || '—',
+          morningStatus: r.morning_status,
+          afternoonStatus: r.afternoon_status,
+          timeIn: r.morning_in || r.afternoon_in || r.time_in || '—',
+          timeOut: r.afternoon_out || r.morning_out || r.time_out || '—',
+          rate: Number(r.rate) || 0,
+          earned_amount: Number(r.earned_amount) || 0,
+          advance: Number(r.advance) || 0,
+          status: r.status
+        }
+      })
+      res.json(results)
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   })
 
-  app.post('/api/attendance', (req, res) => {
+  app.post('/api/attendance', async (req, res) => {
     const {
       project_id, worker_id, worker_name, name, date, role,
       morningIn, morningOut, afternoonIn, afternoonOut,
@@ -997,7 +864,6 @@ function startServer(db) {
     const finalDate = date || new Date().toISOString().slice(0, 10)
     const baseRate = Number(rate) || 0
 
-    // Auto-classify single timeIn into morning or afternoon if not explicitly separated
     let mIn = morningIn || null
     let mOut = morningOut || null
     let aIn = afternoonIn || null
@@ -1016,58 +882,41 @@ function startServer(db) {
     const status = req.body.status && req.body.status !== 'Present' ? req.body.status : evaluated.status
     const earnedAmount = (status === 'Absent') ? 0 : evaluated.earnedAmount
 
-    db.query(
-      `INSERT INTO attendance (
-        project_id, worker_id, worker_name, date, role,
-        morning_in, morning_out, afternoon_in, afternoon_out,
-        morning_status, afternoon_status,
-        time_in, time_out, rate, earned_amount, advance, status
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [
-        project_id || null, worker_id || null, finalName, finalDate, role || 'Laborer',
-        mIn || '—', mOut || '—', aIn || '—', aOut || '—',
-        evaluated.morningStatus, evaluated.afternoonStatus,
-        mIn || aIn || '—', aOut || mOut || '—',
-        baseRate, earnedAmount, advance || 0, status
-      ],
-      (err, result) => {
-        if (err) return res.status(500).json({ error: err.message })
-        res.json({
-          id: result.insertId,
-          project_id,
-          worker_id,
-          worker_name: finalName,
-          name: finalName,
-          date: finalDate,
-          role: role || 'Laborer',
-          morningIn: mIn || '—',
-          morningOut: mOut || '—',
-          afternoonIn: aIn || '—',
-          afternoonOut: aOut || '—',
-          timeIn: mIn || aIn || '—',
-          timeOut: aOut || mOut || '—',
-          rate: baseRate,
-          earned_amount: earnedAmount,
-          advance: advance || 0,
-          status
-        })
+    try {
+      const newAttendance = {
+        project_id: project_id || null, worker_id: worker_id || null, worker_name: finalName, date: finalDate, role: role || 'Laborer',
+        morning_in: mIn || '—', morning_out: mOut || '—', afternoon_in: aIn || '—', afternoon_out: aOut || '—',
+        morning_status: evaluated.morningStatus, afternoon_status: evaluated.afternoonStatus,
+        time_in: mIn || aIn || '—', time_out: aOut || mOut || '—', rate: baseRate, earned_amount: earnedAmount, advance: advance || 0, status,
+        created_at: FieldValue.serverTimestamp()
       }
-    )
+      const docRef = await db.collection('attendance').add(newAttendance)
+      
+      res.json({
+        id: docRef.id,
+        project_id, worker_id, worker_name: finalName, name: finalName, date: finalDate, role: role || 'Laborer',
+        morningIn: mIn || '—', morningOut: mOut || '—', afternoonIn: aIn || '—', afternoonOut: aOut || '—',
+        timeIn: mIn || aIn || '—', timeOut: aOut || mOut || '—', rate: baseRate, earned_amount: earnedAmount, advance: advance || 0, status
+      })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   })
 
   // Update attendance (for Morning Out, Afternoon In, Afternoon Out)
-  app.put('/api/attendance/:id', (req, res) => {
+  app.put('/api/attendance/:id', async (req, res) => {
     const {
       morningIn, morningOut, afternoonIn, afternoonOut,
       timeIn, timeOut, status, rate
     } = req.body
 
-    // First fetch existing record to recalculate combined status and wage
-    db.query('SELECT * FROM attendance WHERE id = ?', [req.params.id], (err, rows) => {
-      if (err) return res.status(500).json({ error: err.message })
-      if (!rows || rows.length === 0) return res.status(404).json({ error: 'Record not found' })
+    try {
+      const docRef = db.collection('attendance').doc(req.params.id)
+      const docSnap = await docRef.get()
+      
+      if (!docSnap.exists) return res.status(404).json({ error: 'Record not found' })
 
-      const existing = rows[0]
+      const existing = docSnap.data()
       const mIn = morningIn !== undefined ? morningIn : existing.morning_in
       const mOut = morningOut !== undefined ? morningOut : existing.morning_out
       const aIn = afternoonIn !== undefined ? afternoonIn : existing.afternoon_in
@@ -1078,242 +927,299 @@ function startServer(db) {
       const finalStatus = status || evaluated.status
       const finalEarned = (finalStatus === 'Absent') ? 0 : evaluated.earnedAmount
 
-      db.query(
-        `UPDATE attendance SET 
-          morning_in = ?, morning_out = ?, afternoon_in = ?, afternoon_out = ?,
-          morning_status = ?, afternoon_status = ?,
-          time_in = ?, time_out = ?,
-          earned_amount = ?, status = ?
-         WHERE id = ?`,
-        [
-          mIn || '—', mOut || '—', aIn || '—', aOut || '—',
-          evaluated.morningStatus, evaluated.afternoonStatus,
-          mIn || aIn || '—', aOut || mOut || '—',
-          finalEarned, finalStatus, req.params.id
-        ],
-        (err2) => {
-          if (err2) return res.status(500).json({ error: err2.message })
-          res.json({
-            success: true,
-            status: finalStatus,
-            earned_amount: finalEarned
-          })
-        }
-      )
-    })
+      await docRef.update({
+        morning_in: mIn || '—', morning_out: mOut || '—', afternoon_in: aIn || '—', afternoon_out: aOut || '—',
+        morning_status: evaluated.morningStatus, afternoon_status: evaluated.afternoonStatus,
+        time_in: mIn || aIn || '—', time_out: aOut || mOut || '—',
+        earned_amount: finalEarned, status: finalStatus
+      })
+
+      res.json({
+        success: true,
+        status: finalStatus,
+        earned_amount: finalEarned
+      })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   })
 
   // Assets summary for Dashboard — MUST be before /:project_id
-  app.get('/api/assets/summary', (req, res) => {
-    db.query('SELECT status, COUNT(*) as count FROM assets GROUP BY status', (err, results) => {
-      if (err) return res.status(500).json({ error: err.message })
-      const available = results.find(r => r.status === 'Available')?.count || 0
-      const inUse = results.find(r => r.status === 'In Use')?.count || 0
-      const maintenance = results.find(r => r.status === 'Maintenance')?.count || 0
+  app.get('/api/assets/summary', async (req, res) => {
+    try {
+      const snapshot = await db.collection('assets').get()
+      const assets = snapshot.docs.map(d => d.data())
+      
+      const available = assets.filter(a => a.status === 'Available').length
+      const inUse = assets.filter(a => a.status === 'In Use').length
+      const maintenance = assets.filter(a => a.status === 'Maintenance').length
+      
       res.json({ available, inUse, maintenance })
-    })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   })
 
   // ── ASSETS ──
-  app.get('/api/assets/:project_id', (req, res) => {
-    db.query('SELECT * FROM assets WHERE project_id=?', [req.params.project_id], (err, results) => {
-      if (err) return res.status(500).json({ error: err.message })
+  app.get('/api/assets/:project_id', async (req, res) => {
+    try {
+      const snapshot = await db.collection('assets').where('project_id', '==', req.params.project_id).get()
+      const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
       res.json(results)
-    })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   })
 
-  app.post('/api/assets', (req, res) => {
+  app.post('/api/assets', async (req, res) => {
     const { project_id, name, type, status, assigned_to, condition } = req.body
     const cond = condition || type || 'Good'
-    db.query(
-      'INSERT INTO assets (project_id, name, type, status, assigned_to) VALUES (?,?,?,?,?)',
-      [project_id, name, cond, status || 'Available', assigned_to],
-      (err, result) => {
-        if (err) return res.status(500).json({ error: err.message })
-        res.json({ id: result.insertId, ...req.body, condition: cond, type: cond })
+    try {
+      const newAsset = {
+        project_id, name, type: cond, status: status || 'Available', assigned_to,
+        created_at: FieldValue.serverTimestamp()
       }
-    )
+      const docRef = await db.collection('assets').add(newAsset)
+      res.json({ id: docRef.id, ...req.body, condition: cond, type: cond })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   })
 
-  app.put('/api/assets/:id', (req, res) => {
+  app.put('/api/assets/:id', async (req, res) => {
     const { name, type, status, assigned_to, borrow_at, condition } = req.body
     const cond = condition || type || 'Good'
-    db.query(
-      'UPDATE assets SET name=?, type=?, status=?, assigned_to=?, borrow_at=? WHERE id=?',
-      [name, cond, status, assigned_to, borrow_at || null, req.params.id],
-      (err) => {
-        if (err) return res.status(500).json({ error: err.message })
-        res.json({ success: true })
-      }
-    )
+    try {
+      await db.collection('assets').doc(req.params.id).update({
+        name, type: cond, status, assigned_to, borrow_at: borrow_at || null
+      })
+      res.json({ success: true })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   })
 
-  app.delete('/api/assets/:id', (req, res) => {
-    db.query('DELETE FROM assets WHERE id=?', [req.params.id], (err) => {
-      if (err) return res.status(500).json({ error: err.message })
+  app.delete('/api/assets/:id', async (req, res) => {
+    try {
+      await db.collection('assets').doc(req.params.id).delete()
       res.json({ success: true })
-    })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   })
 
   // ── BORROW HISTORY ──
-  app.get('/api/borrow-history/:project_id', (req, res) => {
-    db.query('SELECT * FROM borrow_history WHERE project_id=? ORDER BY created_at DESC', [req.params.project_id], (err, results) => {
-      if (err) return res.status(500).json({ error: err.message })
+  app.get('/api/borrow-history/:project_id', async (req, res) => {
+    try {
+      const snapshot = await db.collection('borrow_history')
+        .where('project_id', '==', req.params.project_id)
+        .orderBy('created_at', 'desc')
+        .get()
+      const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
       res.json(results)
-    })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   })
 
-  app.post('/api/borrow-history', (req, res) => {
+  app.post('/api/borrow-history', async (req, res) => {
     const { project_id, tool_name, borrower_name, quantity, action, condition_status, date_time } = req.body
-    db.query(
-      'INSERT INTO borrow_history (project_id, tool_name, borrower_name, quantity, action, condition_status, date_time) VALUES (?,?,?,?,?,?,?)',
-      [project_id, tool_name, borrower_name, quantity || 1, action, condition_status || 'Good', date_time || new Date()],
-      (err, result) => {
-        if (err) return res.status(500).json({ error: err.message })
-        res.json({ id: result.insertId, ...req.body })
+    try {
+      const newHistory = {
+        project_id, tool_name, borrower_name, quantity: quantity || 1, action, 
+        condition_status: condition_status || 'Good', date_time: date_time || new Date(),
+        created_at: FieldValue.serverTimestamp()
       }
-    )
+      const docRef = await db.collection('borrow_history').add(newHistory)
+      res.json({ id: docRef.id, ...req.body })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   })
 
   // ── MATERIALS ──
-  app.get('/api/materials/:project_id', (req, res) => {
-    db.query('SELECT * FROM materials WHERE project_id=? ORDER BY date DESC, created_at DESC', [req.params.project_id], (err, results) => {
-      if (err) return res.status(500).json({ error: err.message })
+  app.get('/api/materials/:project_id', async (req, res) => {
+    try {
+      const snapshot = await db.collection('materials')
+        .where('project_id', '==', req.params.project_id)
+        .orderBy('date', 'desc')
+        .get()
+      const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
       res.json(results)
-    })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   })
 
-  app.post('/api/materials', (req, res) => {
+  app.post('/api/materials', async (req, res) => {
     const { project_id, date, name, qty, unit, cost, remarks } = req.body
-    db.query(
-      'INSERT INTO materials (project_id, date, name, qty, unit, cost, remarks) VALUES (?,?,?,?,?,?,?)',
-      [project_id, date, name, qty, unit, cost, remarks],
-      (err, result) => {
-        if (err) return res.status(500).json({ error: err.message })
-        res.json({ id: result.insertId, ...req.body })
+    try {
+      const newMaterial = {
+        project_id, date, name, qty, unit, cost, remarks,
+        created_at: FieldValue.serverTimestamp()
       }
-    )
+      const docRef = await db.collection('materials').add(newMaterial)
+      res.json({ id: docRef.id, ...req.body })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   })
 
-  app.put('/api/materials/:id', (req, res) => {
+  app.put('/api/materials/:id', async (req, res) => {
     const { date, name, qty, unit, cost, remarks } = req.body
-    db.query(
-      'UPDATE materials SET date=?, name=?, qty=?, unit=?, cost=?, remarks=? WHERE id=?',
-      [date, name, qty, unit, cost, remarks, req.params.id],
-      (err) => {
-        if (err) return res.status(500).json({ error: err.message })
-        res.json({ success: true })
-      }
-    )
+    try {
+      await db.collection('materials').doc(req.params.id).update({
+        date, name, qty, unit, cost, remarks
+      })
+      res.json({ success: true })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   })
 
-  app.delete('/api/materials/:id', (req, res) => {
-    db.query('DELETE FROM materials WHERE id=?', [req.params.id], (err) => {
-      if (err) return res.status(500).json({ error: err.message })
+  app.delete('/api/materials/:id', async (req, res) => {
+    try {
+      await db.collection('materials').doc(req.params.id).delete()
       res.json({ success: true })
-    })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   })
 
   // Update attendance status only (e.g. RFID status updates)
-  app.put('/api/attendance/:id/status', (req, res) => {
+  app.put('/api/attendance/:id/status', async (req, res) => {
     const { status } = req.body
-    db.query(
-      'UPDATE attendance SET status=? WHERE id=?',
-      [status, req.params.id],
-      (err) => {
-        if (err) return res.status(500).json({ error: err.message })
-        res.json({ success: true })
-      }
-    )
+    try {
+      await db.collection('attendance').doc(req.params.id).update({ status })
+      res.json({ success: true })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   })
 
   // ── CASH ADVANCES ──
   // Must be before /:project_id to avoid route conflict
-  app.get('/api/cash-advances/pending', (req, res) => {
-    db.query(
-      `SELECT ca.*, w.full_name as workerFullName, w.role as workerRole, w.position as workerPosition
-       FROM cash_advances ca
-       LEFT JOIN workers w ON ca.worker_id = w.id
-       WHERE ca.status = 'Pending'
-       ORDER BY ca.created_at DESC`,
-      (err, results) => {
-        if (err) return res.status(500).json({ error: err.message })
-        res.json(results.map(r => ({
-          id: r.id,
-          name: r.workerFullName || r.workerName,
-          amount: `₱${Number(r.amount).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`,
-          rawAmount: r.amount,
-          role: r.workerRole || 'Worker',
-          reason: r.reason,
-          date: r.date,
-          status: r.status,
-          worker_id: r.worker_id,
-          project_id: r.project_id
-        })))
+  app.get('/api/cash-advances/pending', async (req, res) => {
+    try {
+      const snapshot = await db.collection('cash_advances')
+        .where('status', '==', 'Pending')
+        .orderBy('created_at', 'desc')
+        .get()
+      
+      const results = []
+      for (const doc of snapshot.docs) {
+        const data = doc.data()
+        let workerFullName = data.workerName
+        let workerRole = 'Worker'
+        let workerPosition = null
+
+        if (data.worker_id) {
+          const workerDoc = await db.collection('workers').doc(data.worker_id).get()
+          if (workerDoc.exists) {
+            const workerData = workerDoc.data()
+            workerFullName = workerData.full_name || workerFullName
+            workerRole = workerData.role || workerRole
+            workerPosition = workerData.position
+          }
+        }
+
+        results.push({
+          id: doc.id,
+          name: workerFullName,
+          amount: `₱${Number(data.amount).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`,
+          rawAmount: data.amount,
+          role: workerRole,
+          reason: data.reason,
+          date: data.date,
+          status: data.status,
+          worker_id: data.worker_id,
+          project_id: data.project_id
+        })
       }
-    )
+      res.json(results)
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   })
 
-  app.put('/api/cash-advances/:id/approve', (req, res) => {
+  app.put('/api/cash-advances/:id/approve', async (req, res) => {
     const { status } = req.body // 'Approved' or 'Rejected'
     if (!['Approved', 'Rejected'].includes(status)) {
       return res.status(400).json({ error: 'Invalid status.' })
     }
-    db.query('UPDATE cash_advances SET status = ? WHERE id = ?', [status, req.params.id], (err) => {
-      if (err) return res.status(500).json({ error: err.message })
+    try {
+      await db.collection('cash_advances').doc(req.params.id).update({ status })
       res.json({ success: true, status })
-    })
-  })
-
-  app.get('/api/cash-advances/:project_id', (req, res) => {
-    const { project_id } = req.params
-    if (!project_id || project_id === 'ALL' || project_id === 'undefined') {
-      db.query('SELECT * FROM cash_advances ORDER BY date DESC, created_at DESC', (err, results) => {
-        if (err) return res.status(500).json({ error: err.message })
-        res.json(results)
-      })
-    } else {
-      db.query('SELECT * FROM cash_advances WHERE project_id=? OR project_id IS NULL ORDER BY date DESC, created_at DESC', [project_id], (err, results) => {
-        if (err) return res.status(500).json({ error: err.message })
-        res.json(results)
-      })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
     }
   })
 
-  app.post('/api/cash-advances', (req, res) => {
+  app.get('/api/cash-advances/:project_id', async (req, res) => {
+    const { project_id } = req.params
+    try {
+      let query = db.collection('cash_advances').orderBy('date', 'desc').orderBy('created_at', 'desc')
+      
+      if (project_id && project_id !== 'ALL' && project_id !== 'undefined') {
+        // Note: Firestore doesn't support OR queries easily like SQL (project_id=? OR project_id IS NULL)
+        // We will fetch by project_id. If you need nulls too, you'd fetch both and merge.
+        query = db.collection('cash_advances').where('project_id', '==', project_id).orderBy('date', 'desc').orderBy('created_at', 'desc')
+      }
+      
+      const snapshot = await query.get()
+      const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+      res.json(results)
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  app.post('/api/cash-advances', async (req, res) => {
     const { project_id, workerName, workerId, amount, date, reason, status } = req.body
     const cleanDate = date ? String(date).slice(0, 10) : new Date().toISOString().slice(0, 10)
     
-    // Resolve workerName from workerId if sent from mobile app
-    const resolveAndInsert = (name) => {
-      db.query(
-        'INSERT INTO cash_advances (project_id, worker_id, workerName, amount, date, reason, status) VALUES (?,?,?,?,?,?,?)',
-        [project_id || null, workerId || null, name, amount, cleanDate, reason, status || 'Pending'],
-        (err, result) => {
-          if (err) return res.status(500).json({ error: err.message })
-          res.json({ id: result.insertId, ...req.body, workerName: name, date: cleanDate })
+    const resolveAndInsert = async (name) => {
+      try {
+        const newAdvance = {
+          project_id: project_id || null,
+          worker_id: workerId || null,
+          workerName: name,
+          amount,
+          date: cleanDate,
+          reason,
+          status: status || 'Pending',
+          created_at: FieldValue.serverTimestamp()
         }
-      )
+        const docRef = await db.collection('cash_advances').add(newAdvance)
+        res.json({ id: docRef.id, ...req.body, workerName: name, date: cleanDate })
+      } catch (err) {
+        res.status(500).json({ error: err.message })
+      }
     }
 
     if (workerId && !workerName) {
-      db.query('SELECT full_name FROM workers WHERE id = ?', [workerId], (err, rows) => {
-        resolveAndInsert(rows?.[0]?.full_name || 'Unknown')
-      })
+      try {
+        const workerDoc = await db.collection('workers').doc(workerId).get()
+        resolveAndInsert(workerDoc.exists ? (workerDoc.data().full_name || 'Unknown') : 'Unknown')
+      } catch (err) {
+        resolveAndInsert('Unknown')
+      }
     } else {
       resolveAndInsert(workerName || 'Unknown')
     }
   })
 
-  app.get('/api/workers/:id/cash-advances', (req, res) => {
-    db.query(
-      'SELECT * FROM cash_advances WHERE worker_id = ? ORDER BY created_at DESC',
-      [req.params.id],
-      (err, results) => {
-        if (err) return res.status(500).json({ error: err.message })
-        res.json(results)
-      }
-    )
+  app.get('/api/workers/:id/cash-advances', async (req, res) => {
+    try {
+      const snapshot = await db.collection('cash_advances')
+        .where('worker_id', '==', req.params.id)
+        .orderBy('created_at', 'desc')
+        .get()
+      const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+      res.json(results)
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   })
 
   // ── REGISTRATION ──
@@ -1324,15 +1230,15 @@ function startServer(db) {
       const fullName = `${firstName}${middleName ? ' ' + middleName : ''} ${lastName}`.trim()
       const hashedPassword = await bcrypt.hash(password, 10)
 
-      db.query(
-        `INSERT INTO workers (first_name, middle_name, last_name, full_name, birthday, age, phone, address, role, position, password, approval_status, status) 
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [firstName, middleName || null, lastName, fullName, birthday, age, phone, address, role, position || null, hashedPassword, 'Pending', 'Active'],
-        (err, result) => {
-          if (err) return res.status(500).json({ error: err.message })
-          res.json({ success: true, message: 'Registration submitted for approval', id: result.insertId })
-        }
-      )
+      const newWorker = {
+        first_name: firstName, middle_name: middleName || null, last_name: lastName, full_name: fullName,
+        birthday, age, phone, address, role, position: position || null, password: hashedPassword,
+        approval_status: 'Pending', status: 'Active',
+        created_at: FieldValue.serverTimestamp()
+      }
+      
+      const docRef = await db.collection('workers').add(newWorker)
+      res.json({ success: true, message: 'Registration submitted for approval', id: docRef.id })
     } catch (err) {
       res.status(500).json({ error: 'Failed to process registration' })
     }
@@ -1342,16 +1248,19 @@ function startServer(db) {
   app.post('/api/login', async (req, res) => {
     const { username, password } = req.body
 
-    // Try to find by phone (username) or name
-    const sql = `SELECT * FROM workers WHERE phone = ? OR full_name = ? LIMIT 1`
-    db.query(sql, [username, username], async (err, results) => {
-      if (err) return res.status(500).json({ error: err.message })
+    try {
+      // Try to find by phone (username) or name
+      let snapshot = await db.collection('workers').where('phone', '==', username).limit(1).get()
+      if (snapshot.empty) {
+        snapshot = await db.collection('workers').where('full_name', '==', username).limit(1).get()
+      }
 
-      if (results.length === 0) {
+      if (snapshot.empty) {
         return res.status(401).json({ error: 'Account not found' })
       }
 
-      const user = results[0]
+      const userDoc = snapshot.docs[0]
+      const user = userDoc.data()
 
       // Check approval status
       if (user.approval_status === 'Pending') {
@@ -1372,7 +1281,7 @@ function startServer(db) {
       res.json({
         success: true,
         user: {
-          id: user.id,
+          id: userDoc.id,
           name: user.full_name,
           firstName: user.first_name,
           middleName: user.middle_name,
@@ -1384,85 +1293,115 @@ function startServer(db) {
           approval_status: user.approval_status
         }
       })
-    })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   })
 
   // ── GET ALL PENDING REGISTRATIONS (for Admin) ──
-  app.get('/api/pending-registrations', (req, res) => {
-    db.query(
-      `SELECT id, first_name, middle_name, last_name, full_name, phone, address, role, position, birthday, age, approval_status, created_at 
-       FROM workers WHERE approval_status = 'Pending' ORDER BY created_at DESC`,
-      (err, results) => {
-        if (err) return res.status(500).json({ error: err.message })
-        res.json(results)
-      }
-    )
+  app.get('/api/pending-registrations', async (req, res) => {
+    try {
+      const snapshot = await db.collection('workers')
+        .where('approval_status', '==', 'Pending')
+        .orderBy('created_at', 'desc')
+        .get()
+      
+      const results = snapshot.docs.map(doc => {
+        const data = doc.data()
+        return {
+          id: doc.id,
+          first_name: data.first_name,
+          middle_name: data.middle_name,
+          last_name: data.last_name,
+          full_name: data.full_name,
+          phone: data.phone,
+          address: data.address,
+          role: data.role,
+          position: data.position,
+          birthday: data.birthday,
+          age: data.age,
+          approval_status: data.approval_status,
+          created_at: data.created_at
+        }
+      })
+      res.json(results)
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   })
 
   // ── APPROVE/REJECT REGISTRATION (for Admin) ──
-  app.put('/api/workers/:id/approve', (req, res) => {
+  app.put('/api/workers/:id/approve', async (req, res) => {
     const { status } = req.body // 'Approved' or 'Rejected'
-    db.query(
-      'UPDATE workers SET approval_status = ? WHERE id = ?',
-      [status, req.params.id],
-      (err) => {
-        if (err) return res.status(500).json({ error: err.message })
-        res.json({ success: true, message: `User ${status.toLowerCase()}` })
-      }
-    )
+    try {
+      await db.collection('workers').doc(req.params.id).update({ approval_status: status })
+      res.json({ success: true, message: `User ${status.toLowerCase()}` })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   })
 
   // ── ADMIN LOGIN ──
-  app.post('/api/admin/login', (req, res) => {
+  app.post('/api/admin/login', async (req, res) => {
     const { username, password } = req.body
     if (!username || !password) return res.status(400).json({ error: 'Username and password are required.' })
 
-    db.query('SELECT * FROM admins WHERE username = ?', [username], async (err, results) => {
-      if (err) return res.status(500).json({ error: err.message })
-      if (results.length === 0) return res.status(401).json({ error: 'Invalid username or password.' })
+    try {
+      const snapshot = await db.collection('admins').where('username', '==', username).limit(1).get()
+      if (snapshot.empty) return res.status(401).json({ error: 'Invalid username or password.' })
 
-      const admin = results[0]
-      const match = await bcrypt.compare(password, admin.password)
+      const adminDoc = snapshot.docs[0]
+      const adminData = adminDoc.data()
+      
+      const match = await bcrypt.compare(password, adminData.password)
       if (!match) return res.status(401).json({ error: 'Invalid username or password.' })
 
-      const token = jwt.sign({ id: admin.id, type: 'admin' }, process.env.JWT_SECRET || 'scon_super_secret_key_2026', { expiresIn: '8h' })
+      const token = jwt.sign({ id: adminDoc.id, type: 'admin' }, process.env.JWT_SECRET || 'scon_super_secret_key_2026', { expiresIn: '8h' })
 
       res.json({
         success: true,
         token,
         admin: {
-          id: admin.id,
-          username: admin.username,
-          email: admin.email,
-          fullName: admin.full_name,
-          firstName: admin.first_name,
-          middleName: admin.middle_name,
-          lastName: admin.last_name,
-          phone: admin.phone,
-          homeAddress: admin.home_address,
-          role: admin.role || 'Administrator',
-          empId: admin.emp_id || 'SCON-ADMIN-001',
-          dept: admin.dept || 'Management'
+          id: adminDoc.id,
+          username: adminData.username,
+          email: adminData.email,
+          fullName: adminData.full_name,
+          firstName: adminData.first_name,
+          middleName: adminData.middle_name,
+          lastName: adminData.last_name,
+          phone: adminData.phone,
+          homeAddress: adminData.home_address,
+          role: adminData.role || 'Administrator',
+          empId: adminData.emp_id || 'SCON-ADMIN-001',
+          dept: adminData.dept || 'Management'
         }
       })
-    })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   })
 
   // ── ADMIN FORGOT PASSWORD ──
   app.post('/api/admin/forgot-password', async (req, res) => {
     const { username } = req.body
-    db.query('SELECT * FROM admins WHERE email = ? OR username = ?', [username, username], async (err, results) => {
-      if (err) return res.status(500).json({ error: err.message })
-      if (results.length === 0) {
+    try {
+      let snapshot = await db.collection('admins').where('email', '==', username).limit(1).get()
+      if (snapshot.empty) {
+        snapshot = await db.collection('admins').where('username', '==', username).limit(1).get()
+      }
+
+      if (snapshot.empty) {
         return res.json({ success: true, message: 'Password reset link sent.' })
       }
 
-      const admin = results[0]
-      if (!admin.email) {
+      const adminDoc = snapshot.docs[0]
+      const adminData = adminDoc.data()
+      
+      if (!adminData.email) {
         return res.status(400).json({ error: 'No email associated with this account.' })
       }
 
-      const token = jwt.sign({ id: admin.id, type: 'admin' }, process.env.JWT_SECRET || 'scon_super_secret_key_2026', { expiresIn: '15m' })
+      const token = jwt.sign({ id: adminDoc.id, type: 'admin' }, process.env.JWT_SECRET || 'scon_super_secret_key_2026', { expiresIn: '15m' })
       const frontendURL = process.env.FRONTEND_URL || 'https://buildtrack-sotalbo-system.vercel.app'
       const resetLink = `${frontendURL}/reset-password/${token}`
 
@@ -1476,7 +1415,7 @@ function startServer(db) {
 
       const mailOptions = {
         from: `"BuildTrack System" <${process.env.EMAIL_USER}>`,
-        to: admin.email,
+        to: adminData.email,
         subject: 'Sotalbo Construction: Password Reset Request',
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
@@ -1498,7 +1437,9 @@ function startServer(db) {
         }
         res.json({ success: true, message: 'Password reset link sent.' })
       })
-    })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   })
 
   // ── ADMIN RESET PASSWORD (NEW ROUTE) ──
@@ -1509,10 +1450,8 @@ function startServer(db) {
       if (decoded.type !== 'admin') return res.status(400).json({ error: 'Invalid token type' })
 
       const hashed = await bcrypt.hash(newPassword, 10)
-      db.query('UPDATE admins SET password = ? WHERE id = ?', [hashed, decoded.id], (err) => {
-        if (err) return res.status(500).json({ error: err.message })
-        res.json({ success: true, message: 'Password has been reset successfully.' })
-      })
+      await db.collection('admins').doc(decoded.id).update({ password: hashed })
+      res.json({ success: true, message: 'Password has been reset successfully.' })
     } catch (e) {
       res.status(400).json({ error: 'Token expired or invalid.' })
     }
@@ -1524,29 +1463,39 @@ function startServer(db) {
     if (!username || !password) return res.status(400).json({ error: 'Username and password are required.' })
 
     try {
+      // Check for duplicates
+      const usernameCheck = await db.collection('admins').where('username', '==', username).get()
+      if (!usernameCheck.empty) return res.status(409).json({ error: 'Username already exists.' })
+      
+      if (email) {
+        const emailCheck = await db.collection('admins').where('email', '==', email).get()
+        if (!emailCheck.empty) return res.status(409).json({ error: 'Email already exists.' })
+      }
+
       const hashed = await bcrypt.hash(password, 10)
-      db.query(
-        'INSERT INTO admins (username, email, password, full_name) VALUES (?, ?, ?, ?)',
-        [username, email || null, hashed, full_name || null],
-        (err, result) => {
-          if (err) {
-            if (err.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'Username or email already exists.' })
-            return res.status(500).json({ error: err.message })
-          }
-          res.json({ success: true, id: result.insertId, username })
-        }
-      )
+      const newAdmin = {
+        username, email: email || null, password: hashed, full_name: full_name || null,
+        created_at: FieldValue.serverTimestamp()
+      }
+      const docRef = await db.collection('admins').add(newAdmin)
+      res.json({ success: true, id: docRef.id, username })
     } catch (e) {
       res.status(500).json({ error: e.message })
     }
   })
 
   // ── GET ALL ADMINS ──
-  app.get('/api/admins', (req, res) => {
-    db.query('SELECT id, username, email, full_name, created_at FROM admins ORDER BY created_at DESC', (err, results) => {
-      if (err) return res.status(500).json({ error: err.message })
+  app.get('/api/admins', async (req, res) => {
+    try {
+      const snapshot = await db.collection('admins').orderBy('created_at', 'desc').get()
+      const results = snapshot.docs.map(doc => {
+        const data = doc.data()
+        return { id: doc.id, username: data.username, email: data.email, full_name: data.full_name, created_at: data.created_at }
+      })
       res.json(results)
-    })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   })
 
   // ── UPDATE ADMIN PASSWORD ──
@@ -1554,27 +1503,19 @@ function startServer(db) {
     const { currentPassword, newPassword, password } = req.body
     const targetPass = newPassword || password
     if (!targetPass) return res.status(400).json({ error: 'New password is required.' })
+    
     try {
       if (currentPassword) {
-        db.query('SELECT password FROM admins WHERE id = ?', [req.params.id], async (err, rows) => {
-          if (err) return res.status(500).json({ error: err.message })
-          if (!rows || rows.length === 0) return res.status(404).json({ error: 'Admin not found.' })
-          const match = await bcrypt.compare(currentPassword, rows[0].password)
-          if (!match) return res.status(400).json({ error: 'Incorrect current password.' })
-
-          const hashed = await bcrypt.hash(targetPass, 10)
-          db.query('UPDATE admins SET password = ? WHERE id = ?', [hashed, req.params.id], (err2) => {
-            if (err2) return res.status(500).json({ error: err2.message })
-            res.json({ success: true, message: 'Password updated successfully.' })
-          })
-        })
-      } else {
-        const hashed = await bcrypt.hash(targetPass, 10)
-        db.query('UPDATE admins SET password = ? WHERE id = ?', [hashed, req.params.id], (err) => {
-          if (err) return res.status(500).json({ error: err.message })
-          res.json({ success: true, message: 'Password updated successfully.' })
-        })
+        const adminDoc = await db.collection('admins').doc(req.params.id).get()
+        if (!adminDoc.exists) return res.status(404).json({ error: 'Admin not found.' })
+        
+        const match = await bcrypt.compare(currentPassword, adminDoc.data().password)
+        if (!match) return res.status(400).json({ error: 'Incorrect current password.' })
       }
+      
+      const hashed = await bcrypt.hash(targetPass, 10)
+      await db.collection('admins').doc(req.params.id).update({ password: hashed })
+      res.json({ success: true, message: 'Password updated successfully.' })
     } catch (e) {
       res.status(500).json({ error: e.message })
     }
@@ -1583,113 +1524,53 @@ function startServer(db) {
   // ── SAVE ADMIN PROFILE ──
   app.post('/api/admin/profile/save', async (req, res) => {
     const {
-      adminId,
-      firstName,
-      middleName,
-      lastName,
-      email,
-      phone,
-      homeAddress,
-      addressObj,
-      role,
-      empId,
-      dept,
-      assignedProjectSite,
-      terminalId,
-      pushNotificationsEnabled,
-      biometricLoginEnabled,
-      status
+      adminId, firstName, middleName, lastName, email, phone, homeAddress, addressObj,
+      role, empId, dept, assignedProjectSite, terminalId, pushNotificationsEnabled, biometricLoginEnabled, status
     } = req.body
 
     try {
       const fullName = [firstName, middleName, lastName].filter(Boolean).join(' ').trim()
       const addressObjStr = typeof addressObj === 'object' ? JSON.stringify(addressObj) : (addressObj || null)
 
-      // Find real admin id first
-      db.query('SELECT id FROM admins WHERE id = ?', [adminId || 1], (idErr, idRows) => {
-        if (idErr) return res.status(500).json({ error: idErr.message })
+      let targetId = adminId
+      if (!targetId || targetId === 1) {
+        // Find first admin if no valid ID provided
+        const snapshot = await db.collection('admins').limit(1).get()
+        if (snapshot.empty) return res.status(404).json({ error: 'No admin account found in database to update.' })
+        targetId = snapshot.docs[0].id
+      }
 
-        let finalAdminId = idRows && idRows.length > 0 ? idRows[0].id : null
+      const updateData = {
+        full_name: fullName,
+        first_name: firstName || null,
+        middle_name: middleName || null,
+        last_name: lastName || null,
+        phone: phone || null,
+        home_address: homeAddress || null,
+        address_obj: addressObjStr,
+        updated_at: FieldValue.serverTimestamp()
+      }
 
-        const performUpdate = (targetId) => {
-          db.query(
-            `UPDATE admins SET 
-              full_name = ?,
-              first_name = ?,
-              middle_name = ?,
-              last_name = ?,
-              email = COALESCE(?, email), 
-              phone = ?, 
-              home_address = ?,
-              address_obj = ?,
-              role = COALESCE(?, role),
-              emp_id = COALESCE(?, emp_id),
-              dept = COALESCE(?, dept),
-              assigned_project_site = COALESCE(?, assigned_project_site), 
-              terminal_id = COALESCE(?, terminal_id), 
-              push_notifications_enabled = COALESCE(?, push_notifications_enabled), 
-              biometric_login_enabled = COALESCE(?, biometric_login_enabled), 
-              status = COALESCE(?, status),
-              updated_at = NOW()
-             WHERE id = ?`,
-            [
-              fullName,
-              firstName || null,
-              middleName || null,
-              lastName || null,
-              email || null,
-              phone || null,
-              homeAddress || null,
-              addressObjStr,
-              role || null,
-              empId || null,
-              dept || null,
-              assignedProjectSite || null,
-              terminalId || null,
-              pushNotificationsEnabled !== undefined ? (pushNotificationsEnabled ? 1 : 0) : null,
-              biometricLoginEnabled !== undefined ? (biometricLoginEnabled ? 1 : 0) : null,
-              status || null,
-              targetId
-            ],
-            (updateErr) => {
-              if (updateErr) return res.status(500).json({ error: updateErr.message })
-              res.json({
-                success: true,
-                message: 'Admin profile saved successfully',
-                data: {
-                  id: targetId,
-                  fullName,
-                  firstName,
-                  middleName,
-                  lastName,
-                  email,
-                  phone,
-                  homeAddress,
-                  addressObj: addressObj || {},
-                  role: role || 'Administrator',
-                  empId: empId || 'SCON-ADMIN-001',
-                  dept: dept || 'Management',
-                  assignedProjectSite,
-                  terminalId,
-                  pushNotificationsEnabled,
-                  biometricLoginEnabled,
-                  status
-                }
-              })
-            }
-          )
-        }
+      // Only update these if they are provided
+      if (email !== undefined) updateData.email = email || null
+      if (role !== undefined) updateData.role = role || null
+      if (empId !== undefined) updateData.emp_id = empId || null
+      if (dept !== undefined) updateData.dept = dept || null
+      if (assignedProjectSite !== undefined) updateData.assigned_project_site = assignedProjectSite || null
+      if (terminalId !== undefined) updateData.terminal_id = terminalId || null
+      if (pushNotificationsEnabled !== undefined) updateData.push_notifications_enabled = pushNotificationsEnabled ? 1 : 0
+      if (biometricLoginEnabled !== undefined) updateData.biometric_login_enabled = biometricLoginEnabled ? 1 : 0
+      if (status !== undefined) updateData.status = status || null
 
-        if (finalAdminId) {
-          performUpdate(finalAdminId)
-        } else {
-          // Fallback to first available admin row
-          db.query('SELECT id FROM admins ORDER BY id ASC LIMIT 1', (firstErr, firstRows) => {
-            if (firstErr || !firstRows || firstRows.length === 0) {
-              return res.status(404).json({ error: 'No admin account found in database to update.' })
-            }
-            performUpdate(firstRows[0].id)
-          })
+      await db.collection('admins').doc(targetId).update(updateData)
+
+      res.json({
+        success: true,
+        message: 'Admin profile saved successfully',
+        data: {
+          id: targetId, fullName, firstName, middleName, lastName, email, phone, homeAddress,
+          addressObj: addressObj || {}, role: role || 'Administrator', empId: empId || 'SCON-ADMIN-001',
+          dept: dept || 'Management', assignedProjectSite, terminalId, pushNotificationsEnabled, biometricLoginEnabled, status
         }
       })
     } catch (e) {
@@ -1698,93 +1579,78 @@ function startServer(db) {
   })
 
   // ── GET ADMIN PROFILE ──
-  app.get('/api/admin/profile/:id', (req, res) => {
+  app.get('/api/admin/profile/:id', async (req, res) => {
     const rawId = req.params.id
-    const targetAdminId = (rawId && rawId !== 'undefined' && rawId !== 'null') ? rawId : 1
+    let targetAdminId = (rawId && rawId !== 'undefined' && rawId !== 'null') ? rawId : null
 
-    db.query(
-      `SELECT id, username, email, full_name, first_name, middle_name, last_name,
-              phone, home_address, address_obj, role, emp_id, dept,
-              assigned_project_site, terminal_id, 
-              push_notifications_enabled, biometric_login_enabled, status, created_at, updated_at 
-       FROM admins WHERE id = ? LIMIT 1`,
-      [targetAdminId],
-      (err, results) => {
-        if (err) return res.status(500).json({ error: err.message })
-        if (!results || results.length === 0) {
-          // If not found by ID, attempt to get first admin
-          db.query('SELECT * FROM admins ORDER BY id ASC LIMIT 1', (err2, fallback) => {
-            if (err2 || !fallback || fallback.length === 0) {
-              return res.status(404).json({ error: 'Admin not found' })
-            }
-            return sendAdminResponse(fallback[0], res)
-          })
-          return
-        }
-
-        sendAdminResponse(results[0], res)
+    try {
+      let adminDoc
+      if (targetAdminId && targetAdminId !== '1') {
+        adminDoc = await db.collection('admins').doc(targetAdminId).get()
       }
-    )
+      
+      if (!adminDoc || !adminDoc.exists) {
+        const snapshot = await db.collection('admins').limit(1).get()
+        if (snapshot.empty) return res.status(404).json({ error: 'Admin not found' })
+        adminDoc = snapshot.docs[0]
+      }
 
-    function sendAdminResponse(admin, resObj) {
+      const adminData = adminDoc.data()
       let parsedAddressObj = {}
       try {
-        if (admin.address_obj) {
-          parsedAddressObj = typeof admin.address_obj === 'string' ? JSON.parse(admin.address_obj) : admin.address_obj
+        if (adminData.address_obj) {
+          parsedAddressObj = typeof adminData.address_obj === 'string' ? JSON.parse(adminData.address_obj) : adminData.address_obj
         }
       } catch {
         parsedAddressObj = {}
       }
 
-      resObj.json({
-        id: admin.id,
-        username: admin.username,
-        email: admin.email,
-        fullName: admin.full_name,
-        firstName: admin.first_name,
-        middleName: admin.middle_name,
-        lastName: admin.last_name,
-        phone: admin.phone,
-        homeAddress: admin.home_address,
+      res.json({
+        id: adminDoc.id,
+        username: adminData.username,
+        email: adminData.email,
+        fullName: adminData.full_name,
+        firstName: adminData.first_name,
+        middleName: adminData.middle_name,
+        lastName: adminData.last_name,
+        phone: adminData.phone,
+        homeAddress: adminData.home_address,
         addressObj: parsedAddressObj,
-        role: admin.role || 'Administrator',
-        empId: admin.emp_id || 'SCON-ADMIN-001',
-        dept: admin.dept || 'Management',
-        assignedProjectSite: admin.assigned_project_site,
-        terminalId: admin.terminal_id,
-        pushNotificationsEnabled: Boolean(admin.push_notifications_enabled),
-        biometricLoginEnabled: Boolean(admin.biometric_login_enabled),
-        status: admin.status,
-        createdAt: admin.created_at,
-        updatedAt: admin.updated_at
+        role: adminData.role || 'Administrator',
+        empId: adminData.emp_id || 'SCON-ADMIN-001',
+        dept: adminData.dept || 'Management',
+        assignedProjectSite: adminData.assigned_project_site,
+        terminalId: adminData.terminal_id,
+        pushNotificationsEnabled: Boolean(adminData.push_notifications_enabled),
+        biometricLoginEnabled: Boolean(adminData.biometric_login_enabled),
+        status: adminData.status,
+        createdAt: adminData.created_at,
+        updatedAt: adminData.updated_at
       })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
     }
   })
 
   // ── UPDATE ADMIN SETTINGS ──
-  app.put('/api/admin/:id/settings', (req, res) => {
+  app.put('/api/admin/:id/settings', async (req, res) => {
     const { pushNotificationsEnabled, biometricLoginEnabled, assignedProjectSite } = req.body
 
-    db.query(
-      `UPDATE admins SET 
-        push_notifications_enabled = ?, 
-        biometric_login_enabled = ?, 
-        assigned_project_site = ?,
-        updated_at = NOW()
-       WHERE id = ?`,
-      [
-        pushNotificationsEnabled ? 1 : 0,
-        biometricLoginEnabled ? 1 : 0,
-        assignedProjectSite || null,
-        req.params.id
-      ],
-      (err) => {
-        if (err) return res.status(500).json({ error: err.message })
-        res.json({ success: true, message: 'Settings updated successfully' })
-      }
-    )
+    try {
+      await db.collection('admins').doc(req.params.id).update({
+        push_notifications_enabled: pushNotificationsEnabled ? 1 : 0,
+        biometric_login_enabled: biometricLoginEnabled ? 1 : 0,
+        assigned_project_site: assignedProjectSite || null,
+        updated_at: FieldValue.serverTimestamp()
+      })
+      res.json({ success: true, message: 'Settings updated successfully' })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   })
 
   const PORT = process.env.PORT || 5000
   app.listen(PORT, () => console.log('Server running on port ' + PORT))
 }
+
+startServer()

@@ -91,7 +91,7 @@ export default function Projects() {
 
     const openAddModal = () => {
         if (activeOngoingProject) {
-            alert(`Hindi pa maaaring magdagdag ng bagong proyekto.\n\nKasalukuyang may active project pa: "${activeOngoingProject.name}".\n\nIsang proyekto lamang ang pinapayagang tanggapin sa bawat pagkakataon. Kailangan munang tapusin at i-mark bilang "COMPLETED" ang kasalukuyang proyekto bago makapag-umpisa ng bago.`);
+            alert(`Cannot add a new project yet.\n\nThere is currently an active project: "${activeOngoingProject.name}".\n\nOnly one project is allowed to be active at a time. You must finish and mark the current project as "COMPLETED" before starting a new one.`);
             return;
         }
 
@@ -279,10 +279,10 @@ export default function Projects() {
                         </div>
                         <div>
                             <p className="text-[11px] font-extrabold text-amber-900">
-                                🔒 May Kasalukuyang Aktibong Proyekto: <span className="underline">{activeOngoingProject.name}</span>
+                                🔒 Currently Active Project: <span className="underline">{activeOngoingProject.name}</span>
                             </p>
                             <p className="text-[9px] text-amber-700 font-medium mt-0.5">
-                                Patakaran: 1 aktibong proyekto lamang sa bawat oras. Tapusin muna (i-mark bilang Completed) bago makapag-umpisa ng bagong proyekto.
+                                Policy: Only 1 active project at a time. Finish first (mark as Completed) before starting a new project.
                             </p>
                         </div>
                     </div>
@@ -297,10 +297,10 @@ export default function Projects() {
                     </div>
                     <div>
                         <p className="text-[11px] font-extrabold text-green-900">
-                            ✅ Handa Para sa Panibagong Proyekto
+                            ✅ Ready for a New Project
                         </p>
                         <p className="text-[9px] text-green-700 font-medium mt-0.5">
-                            Walang ongoing project sa kasalukuyan. Maaari nang magdagdag ng bagong proyekto.
+                            There are no ongoing projects currently. You can now add a new project.
                         </p>
                     </div>
                 </div>

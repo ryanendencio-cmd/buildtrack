@@ -628,7 +628,7 @@ export default function Assets() {
                 )}
             </div>
 
-            {/* ═════════ MODALS (PINALAKI, WALANG ICONS) ═════════ */}
+            {/* ═════════ MODALS (ENLARGED, NO ICONS) ═════════ */}
 
             {modalState === 'BORROW_TOOLS' && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 transition-all">
