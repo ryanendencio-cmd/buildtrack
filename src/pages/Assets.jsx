@@ -19,7 +19,7 @@ export default function Assets() {
 
     const [workers, setWorkers] = useState([]);
     useEffect(() => {
-        api.get('/workers').then(data => setWorkers(data.filter(w => w.status === 'Active'))).catch(console.error);
+        api.get('/workers').then(data => setWorkers(data.filter(w => w.status === 'Active' && (w.approval_status || 'Approved') !== 'Pending'))).catch(console.error);
     }, []);
 
     const currentProjectId = id || (dropdownProjects[0]?.id ?? '1');

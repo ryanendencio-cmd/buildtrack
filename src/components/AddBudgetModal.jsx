@@ -49,8 +49,9 @@ export default function AddBudgetModal({ project, onClose, onSaved }) {
             note: note.trim(),
             date
         }).then((data) => {
-            setSaved(data)
-            onSaved(data)
+            const result = { ...data, budget: data?.budget ?? nextTotal }
+            setSaved(result)
+            onSaved(result)
             setStep('SUCCESS')
         }).catch((err) => {
             setError(err.message || 'Failed to add budget.')

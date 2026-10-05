@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import AdminLayout from '../components/AdminLayout'
 import PhilippineAddressSelector from '../components/PhilippineAddressSelector'
+import { parseLocationToAddress } from '../services/psgc'
 import { api } from '../api'
 
 export default function Workers() {
@@ -138,6 +139,7 @@ export default function Workers() {
             age: Number(formData.age) || null,
             phone: formData.phone,
             address: computedAddress,
+            address_obj: formData.addressObj || {},
             role: formData.role,
             position: formData.position,
             daily_rate: Number(formData.daily_rate) || 600,
@@ -182,9 +184,9 @@ export default function Workers() {
         setModalState('ADD');
     };
 
-    const openEditModal = (worker) => {
+    const openEditModal = async (worker) => {
         const parsed = parseFullName(worker.full_name || '');
-        setFormData({
+        const initialData = {
             id: worker.id,
             firstName: worker.first_name || parsed.firstName,
             middleName: worker.middle_name || parsed.middleName,
@@ -192,15 +194,41 @@ export default function Workers() {
             birthday: worker.birthday ? String(worker.birthday).slice(0, 10) : '',
             age: worker.age || '',
             phone: worker.phone || '',
-            street: '',
-            addressObj: {},
+            street: (worker.address_obj && worker.address_obj.street) || '',
+            addressObj: worker.address_obj || {},
             address: worker.address || '',
             role: worker.role || 'Worker',
             position: worker.position || '',
             daily_rate: worker.daily_rate || 600,
             password: '',
             status: worker.status || 'Active'
-        });
+        };
+
+        // 1. If worker already has stored address_obj with regionCode, use it directly
+        if (worker.address_obj && typeof worker.address_obj === 'object' && worker.address_obj.regionCode) {
+            setFormData({
+                ...initialData,
+                street: worker.address_obj.street || '',
+                addressObj: worker.address_obj
+            });
+            setModalState('EDIT');
+            return;
+        }
+
+        // 2. Otherwise, dynamically resolve address from worker.address
+        if (worker.address) {
+            try {
+                const parsedAddr = await parseLocationToAddress(worker.address);
+                if (parsedAddr) {
+                    initialData.addressObj = parsedAddr;
+                    initialData.street = parsedAddr.street || '';
+                }
+            } catch (e) {
+                console.warn('Error parsing worker address:', e);
+            }
+        }
+
+        setFormData(initialData);
         setModalState('EDIT');
     };
 
@@ -248,14 +276,17 @@ export default function Workers() {
         return 'bg-[#fff8e1] text-[#8a6d1a]';
     };
 
-    const filteredWorkers = workers.filter(w => {
+    // Only approved workers appear in the All Workers list
+    const approvedWorkers = workers.filter(w => (w.approval_status || 'Approved') !== 'Pending');
+
+    const filteredWorkers = approvedWorkers.filter(w => {
         const matchesSearch = (w.full_name || '').toLowerCase().includes(searchTerm.toLowerCase());
         const matchesStatus = statusFilter === 'All' || w.status === statusFilter;
         return matchesSearch && matchesStatus;
     });
 
-    const activeCount = workers.filter(w => w.status === 'Active').length;
-    const inactiveCount = workers.filter(w => w.status === 'Inactive').length;
+    const activeCount = approvedWorkers.filter(w => w.status === 'Active').length;
+    const inactiveCount = approvedWorkers.filter(w => w.status === 'Inactive').length;
 
     const selectStyles = {
         backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3e%3cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3e%3c/svg%3e")`,
@@ -285,7 +316,7 @@ export default function Workers() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-3">
                 <div className="bg-white p-2.5 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-center text-center">
                     <p className="text-[9px] font-bold text-gray-400 tracking-wider uppercase mb-0.5">TOTAL WORKERS</p>
-                    <h2 className="text-lg font-extrabold text-gray-900">{workers.length}</h2>
+                    <h2 className="text-lg font-extrabold text-gray-900">{approvedWorkers.length}</h2>
                 </div>
                 <div className="bg-white p-2.5 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-center text-center">
                     <p className="text-[9px] font-bold text-[#2e7d32] tracking-wider uppercase mb-0.5">ACTIVE ACCOUNTS</p>

@@ -116,7 +116,7 @@ function startServer() {
 
   // Rule: Only 1 active project at a time. A new project cannot be created unless existing ones are COMPLETED.
   app.post('/api/projects', async (req, res) => {
-    const { name, location, budget, progress, start_date, end_date, status } = req.body
+    const { name, location, budget, progress, start_date, end_date, status, address_obj } = req.body
     const targetStatus = status || 'Active'
     const MAX_AMOUNT = 999999999999
 
@@ -139,7 +139,9 @@ function startServer() {
       }
 
       const newProject = {
-        name, location, budget, progress: progress || 0, start_date, end_date, status: targetStatus, created_at: FieldValue.serverTimestamp()
+        name, location, budget, progress: progress || 0, start_date, end_date, status: targetStatus,
+        address_obj: address_obj || null,
+        created_at: FieldValue.serverTimestamp()
       }
       const docRef = await db.collection('projects').add(newProject)
       res.json({ id: docRef.id, ...newProject })
@@ -149,7 +151,7 @@ function startServer() {
   })
 
   app.put('/api/projects/:id', async (req, res) => {
-    const { name, location, budget, progress, start_date, end_date, status } = req.body
+    const { name, location, budget, progress, start_date, end_date, status, address_obj } = req.body
     const MAX_AMOUNT = 999999999999
 
     if (budget !== undefined && Number(budget) > MAX_AMOUNT) {
@@ -171,9 +173,14 @@ function startServer() {
         }
       }
 
-      await db.collection('projects').doc(req.params.id).update({
+      const updateData = {
         name, location, budget, progress, start_date, end_date, status
-      })
+      }
+      if (address_obj !== undefined) {
+        updateData.address_obj = address_obj
+      }
+
+      await db.collection('projects').doc(req.params.id).update(updateData)
       res.json({ success: true })
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -233,7 +240,7 @@ function startServer() {
         created_at: FieldValue.serverTimestamp()
       }
       const docRef = await db.collection('budget_additions').add(newAddition)
-      res.json({ id: docRef.id, ...newAddition })
+      res.json({ id: docRef.id, ...newAddition, budget: next })
     } catch (err) {
       res.status(500).json({ error: err.message })
     }
@@ -607,8 +614,10 @@ function startServer() {
   app.get('/api/workers/summary', async (req, res) => {
     const today = new Date().toISOString().split('T')[0]
     try {
-      const wSnap = await db.collection('workers').where('status', '==', 'Approved').get()
-      const workers = wSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+      const wSnap = await db.collection('workers').get()
+      const workers = wSnap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter(w => (w.approval_status || 'Approved') !== 'Pending')
       
       const totalManpower = workers.length
       
@@ -655,7 +664,7 @@ function startServer() {
   })
 
   app.post('/api/workers', async (req, res) => {
-    const { first_name, middle_name, last_name, full_name, birthday, age, phone, address, role, position, daily_rate, password, approval_status, status, project_id } = req.body
+    const { first_name, middle_name, last_name, full_name, birthday, age, phone, address, role, position, daily_rate, password, approval_status, status, project_id, address_obj } = req.body
     const computedFullName = full_name || [first_name, middle_name, last_name].filter(Boolean).join(' ')
     const hashedPassword = password ? await bcrypt.hash(password, 10) : await bcrypt.hash('worker123', 10)
     
@@ -663,6 +672,7 @@ function startServer() {
       const newWorker = {
         first_name, middle_name: middle_name || null, last_name, full_name: computedFullName, 
         birthday: birthday || null, age: age || null, phone: phone || null, address: address || null, 
+        address_obj: address_obj || null,
         role: role || 'Worker', position: position || null, daily_rate: daily_rate || 600, 
         password: hashedPassword, approval_status: approval_status || 'Approved', 
         status: status || 'Active', project_id: project_id || null,
@@ -676,7 +686,7 @@ function startServer() {
   })
 
   app.put('/api/workers/:id', async (req, res) => {
-    const { first_name, middle_name, last_name, full_name, birthday, age, phone, address, role, position, daily_rate, password, approval_status, status, project_id } = req.body
+    const { first_name, middle_name, last_name, full_name, birthday, age, phone, address, role, position, daily_rate, password, approval_status, status, project_id, address_obj } = req.body
     const computedFullName = full_name || [first_name, middle_name, last_name].filter(Boolean).join(' ')
     
     try {
@@ -685,6 +695,9 @@ function startServer() {
         birthday: birthday || null, age: age || null, phone: phone || null, address: address || null, 
         role, position: position || null, daily_rate: daily_rate || 600, 
         approval_status: approval_status || 'Approved', status: status || 'Active', project_id: project_id || null
+      }
+      if (address_obj !== undefined) {
+        updateData.address_obj = address_obj
       }
       if (password) {
         updateData.password = await bcrypt.hash(password, 10)
@@ -1224,15 +1237,15 @@ function startServer() {
 
   // ── REGISTRATION ──
   app.post('/api/register', async (req, res) => {
-    const { firstName, middleName, lastName, birthday, age, phone, address, role, position, password } = req.body
+    const { firstName, middleName, lastName, username, birthday, age, phone, address, address_obj, role, position, password } = req.body
 
     try {
       const fullName = `${firstName}${middleName ? ' ' + middleName : ''} ${lastName}`.trim()
       const hashedPassword = await bcrypt.hash(password, 10)
 
       const newWorker = {
-        first_name: firstName, middle_name: middleName || null, last_name: lastName, full_name: fullName,
-        birthday, age, phone, address, role, position: position || null, password: hashedPassword,
+        first_name: firstName, middle_name: middleName || null, last_name: lastName, full_name: fullName, username: username || null,
+        birthday, age, phone, address, address_obj: address_obj || null, role, position: position || null, password: hashedPassword,
         approval_status: 'Pending', status: 'Active',
         created_at: FieldValue.serverTimestamp()
       }
@@ -1249,10 +1262,30 @@ function startServer() {
     const { username, password } = req.body
 
     try {
-      // Try to find by phone (username) or name
-      let snapshot = await db.collection('workers').where('phone', '==', username).limit(1).get()
+      if (!username || !password) {
+        return res.status(400).json({ error: 'Username/Phone and password are required' })
+      }
+
+      const rawUser = String(username).trim()
+      const cleanDigits = rawUser.replace(/\D/g, '')
+      let candidatePhones = [rawUser]
+      if (cleanDigits.length >= 10) {
+        const last10 = cleanDigits.slice(-10)
+        candidatePhones.push(`+63${last10}`, `0${last10}`, `63${last10}`, last10)
+      }
+      candidatePhones = [...new Set(candidatePhones)]
+
+      // 1. Try to find by phone (supporting 09..., +639..., 639..., 9...)
+      let snapshot = await db.collection('workers').where('phone', 'in', candidatePhones).limit(1).get()
+
+      // 2. Try by username
       if (snapshot.empty) {
-        snapshot = await db.collection('workers').where('full_name', '==', username).limit(1).get()
+        snapshot = await db.collection('workers').where('username', '==', rawUser).limit(1).get()
+      }
+
+      // 3. Try by full_name
+      if (snapshot.empty) {
+        snapshot = await db.collection('workers').where('full_name', '==', rawUser).limit(1).get()
       }
 
       if (snapshot.empty) {
@@ -1269,6 +1302,10 @@ function startServer() {
 
       if (user.approval_status === 'Rejected') {
         return res.status(403).json({ error: 'rejected', message: 'Account was rejected' })
+      }
+
+      if (!user.password) {
+        return res.status(401).json({ error: 'No password set for this account. Please contact administrator.' })
       }
 
       // Verify password
@@ -1303,7 +1340,6 @@ function startServer() {
     try {
       const snapshot = await db.collection('workers')
         .where('approval_status', '==', 'Pending')
-        .orderBy('created_at', 'desc')
         .get()
       
       const results = snapshot.docs.map(doc => {
@@ -1324,6 +1360,14 @@ function startServer() {
           created_at: data.created_at
         }
       })
+
+      // Sort newest first in memory without requiring composite index
+      results.sort((a, b) => {
+        const timeA = a.created_at?._seconds || 0
+        const timeB = b.created_at?._seconds || 0
+        return timeB - timeA
+      })
+
       res.json(results)
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -1334,8 +1378,13 @@ function startServer() {
   app.put('/api/workers/:id/approve', async (req, res) => {
     const { status } = req.body // 'Approved' or 'Rejected'
     try {
-      await db.collection('workers').doc(req.params.id).update({ approval_status: status })
-      res.json({ success: true, message: `User ${status.toLowerCase()}` })
+      const cleanStatus = status === 'Approved' ? 'Approved' : 'Rejected'
+      const updateData = {
+        approval_status: cleanStatus,
+        status: cleanStatus === 'Approved' ? 'Active' : 'Inactive'
+      }
+      await db.collection('workers').doc(req.params.id).update(updateData)
+      res.json({ success: true, message: `User ${cleanStatus.toLowerCase()}` })
     } catch (err) {
       res.status(500).json({ error: err.message })
     }

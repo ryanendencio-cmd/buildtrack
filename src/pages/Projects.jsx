@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { api } from '../api'
 import PhilippineAddressSelector from '../components/PhilippineAddressSelector'
+import { parseLocationToAddress } from '../services/psgc'
 import AddBudgetModal from '../components/AddBudgetModal'
 
 const isOngoingStatus = (statusStr) => {
@@ -118,7 +119,7 @@ export default function Projects() {
         setModalState('ADD');
     };
 
-    const openEditModal = (proj) => {
+    const openEditModal = async (proj) => {
         const locStr = proj.location || '';
         const parts = locStr.split(',').map(s => s.trim());
 
@@ -139,20 +140,36 @@ export default function Projects() {
             status: (proj.status || 'ONGOING').toUpperCase() === 'COMPLETED' ? 'COMPLETED' : 'ONGOING'
         });
 
-        setAddressState({
-            regionCode: '130000000',
-            regionName: parts.length > 4 ? parts[parts.length - 2] : 'National Capital Region (NCR)',
-            provinceCode: 'NCR',
-            provinceName: parts.length > 3 ? parts[parts.length - 3] : 'Metro Manila (NCR)',
-            cityCode: '',
-            cityName: parts.length > 2 ? parts[parts.length - (parts.length > 4 ? 4 : 3)] : '',
-            barangayName: bgyVal,
-            zipCode: zipVal,
-            street: streetVal
-        });
-
         setDateError('');
         setContractError('');
+
+        // 1. If project already has stored address_obj, load it directly
+        if (proj.address_obj && typeof proj.address_obj === 'object' && proj.address_obj.regionCode) {
+            setAddressState({
+                regionCode: proj.address_obj.regionCode || '',
+                regionName: proj.address_obj.regionName || '',
+                provinceCode: proj.address_obj.provinceCode || '',
+                provinceName: proj.address_obj.provinceName || '',
+                cityCode: proj.address_obj.cityCode || '',
+                cityName: proj.address_obj.cityName || '',
+                barangayName: proj.address_obj.barangayName || bgyVal,
+                zipCode: proj.address_obj.zipCode || zipVal,
+                street: proj.address_obj.street || streetVal
+            });
+            setModalState('EDIT');
+            return;
+        }
+
+        // 2. Parse location string accurately using PSGC service
+        try {
+            const parsed = await parseLocationToAddress(locStr);
+            if (parsed) {
+                setAddressState(parsed);
+            }
+        } catch (e) {
+            console.warn('Error resolving address details for edit modal:', e);
+        }
+
         setModalState('EDIT');
     };
 
@@ -192,6 +209,7 @@ export default function Projects() {
         const payload = {
             name: formData.title.toUpperCase(),
             location: locationString,
+            address_obj: addressState,
             budget: parseFloat(formData.contract || 0),
             start_date: formData.startDate || null,
             end_date: formData.targetDate || null,
@@ -533,8 +551,9 @@ export default function Projects() {
                     project={budgetProject}
                     onClose={() => setBudgetProject(null)}
                     onSaved={(data) => {
-                        setProjects(prev => prev.map(p => String(p.id) === String(data.project_id) ? { ...p, budget: data.budget } : p));
-                        setBudgetProject(prev => prev ? { ...prev, budget: data.budget } : prev);
+                        const newBudget = data.budget !== undefined ? data.budget : (Number(budgetProject?.budget || 0) + Number(data.amount || 0));
+                        setProjects(prev => prev.map(p => String(p.id) === String(data.project_id) ? { ...p, budget: newBudget } : p));
+                        setBudgetProject(prev => prev ? { ...prev, budget: newBudget } : prev);
                     }}
                 />
             )}

@@ -272,7 +272,8 @@ export default function ProjectDetails() {
                     project={project}
                     onClose={() => setShowAddBudget(false)}
                     onSaved={(data) => {
-                        setProject(prev => ({ ...prev, budget: data.budget }))
+                        const newBudget = data.budget !== undefined ? data.budget : (Number(project?.budget || 0) + Number(data.amount || 0));
+                        setProject(prev => ({ ...prev, budget: newBudget }))
                         setAdditions(prev => [{
                             id: data.id,
                             project_id: data.project_id,

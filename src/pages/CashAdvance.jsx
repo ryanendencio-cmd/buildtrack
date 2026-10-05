@@ -34,7 +34,7 @@ export default function CashAdvance() {
 
         api.get('/workers').then(data => {
             if (Array.isArray(data)) {
-                setWorkersList(data);
+                setWorkersList(data.filter(w => (w.approval_status || 'Approved') !== 'Pending'));
             }
         }).catch(console.error);
     }, []);

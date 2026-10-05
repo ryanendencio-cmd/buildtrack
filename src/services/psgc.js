@@ -337,3 +337,158 @@ export function getZipCodeForCity(cityName, cityCode) {
 
     return '1000';
 }
+
+export async function parseLocationToAddress(locStr) {
+    if (!locStr) return null;
+    const parts = locStr.split(',').map(s => s.trim());
+    const locLower = locStr.toLowerCase();
+
+    const regions = await getRegions();
+
+    function findRegionInText(text) {
+        if (!text) return null;
+        const lower = text.toLowerCase();
+        const sortedByName = [...regions].sort((a, b) => (b.name || '').length - (a.name || '').length);
+        for (const r of sortedByName) {
+            if (r.name && lower.includes(r.name.toLowerCase())) return r;
+        }
+        const sortedByRegionName = [...regions].sort((a, b) => (b.regionName || '').length - (a.regionName || '').length);
+        for (const r of sortedByRegionName) {
+            if (r.regionName && lower.includes(r.regionName.toLowerCase())) return r;
+        }
+        return null;
+    }
+
+    function cleanName(str) {
+        return (str || '').toLowerCase()
+            .replace(/^(brgy\.?|city of|municipality of)\s+/i, '')
+            .replace(/\s+(city|municipality)$/i, '')
+            .trim();
+    }
+
+    // Check if parts[0] is region (Mobile format)
+    const firstPartRegion = findRegionInText(parts[0]);
+    // Check if last part is region (Web format)
+    const lastPartRegion = findRegionInText(parts[parts.length - 1]);
+
+    const isMobileFormat = Boolean(firstPartRegion);
+    const matchedRegion = firstPartRegion || lastPartRegion || findRegionInText(locStr);
+
+    if (!matchedRegion) {
+        return {
+            regionCode: '',
+            regionName: '',
+            provinceCode: '',
+            provinceName: '',
+            cityCode: '',
+            cityName: '',
+            barangayName: '',
+            street: ''
+        };
+    }
+
+    const regCode = matchedRegion.code;
+    const regName = formatRegionLabel(matchedRegion);
+    const isNCR = regCode === '130000000';
+
+    let provTarget = '';
+    let cityTarget = '';
+    let bgyTarget = '';
+    let streetVal = '';
+
+    if (isMobileFormat) {
+        // Mobile format: [Region, Province, City, Barangay]
+        // or NCR: [Region, Metro Manila, City, Barangay]
+        provTarget = parts[1] || '';
+        cityTarget = isNCR && parts.length === 3 ? parts[1] : (parts[2] || '');
+        bgyTarget = parts[3] || parts[parts.length - 1] || '';
+    } else {
+        // Web format: [Street?, Brgy?, City, Province, Region]
+        // or NCR: [Street?, Brgy?, City, Metro Manila?, NCR]
+        const bgyPart = parts.find(p => p.toLowerCase().startsWith('brgy.'));
+        bgyTarget = bgyPart ? bgyPart.replace(/brgy\./i, '').trim() : '';
+
+        if (parts[0] && !parts[0].toLowerCase().startsWith('brgy.') && !parts[0].toLowerCase().startsWith('zip')) {
+            streetVal = parts[0];
+        }
+
+        if (isNCR) {
+            const mmIndex = parts.findIndex(p => p.toLowerCase().includes('metro manila'));
+            cityTarget = mmIndex > 0 ? parts[mmIndex - 1] : (parts.length > 2 ? parts[parts.length - 2] : '');
+        } else {
+            provTarget = parts.length > 3 ? parts[parts.length - 2] : '';
+            cityTarget = parts.length > 2 ? parts[parts.length - (parts.length > 4 ? 3 : 2)] : '';
+        }
+    }
+
+    let provCode = isNCR ? 'NCR' : '';
+    let provName = isNCR ? 'Metro Manila (NCR)' : '';
+    let cityCode = '';
+    let cityName = '';
+    let bgyVal = '';
+
+    try {
+        if (!isNCR) {
+            const provRes = await getProvinces(regCode);
+            const cleanProv = cleanName(provTarget);
+            const matchedProv = provRes.find(p => cleanName(p.name) === cleanProv) || 
+                                provRes.find(p => cleanName(p.name).includes(cleanProv) || cleanProv.includes(cleanName(p.name)));
+            if (matchedProv) {
+                provCode = matchedProv.code;
+                provName = matchedProv.name;
+            }
+        }
+
+        // Fetch cities for province or NCR region
+        let cities = [];
+        if (isNCR) {
+            cities = await getCitiesMunicipalities(regCode, 'NCR');
+        } else if (provCode) {
+            cities = await getCitiesMunicipalities(regCode, provCode);
+        }
+
+        if (cities && cities.length > 0) {
+            const cleanCity = cleanName(cityTarget);
+            
+            // PRIORITY 1: Exact name match on target part!
+            let matchedCity = cities.find(c => cleanName(c.name) === cleanCity);
+            
+            // PRIORITY 2: Match with prefix/suffix (e.g. City of Calamba vs Calamba)
+            if (!matchedCity && cleanCity) {
+                matchedCity = cities.find(c => cleanName(c.name).includes(cleanCity) || cleanCity.includes(cleanName(c.name)));
+            }
+
+            if (matchedCity) {
+                cityCode = matchedCity.code;
+                cityName = matchedCity.name;
+
+                // Fetch barangays for this city
+                const bgys = await getBarangays(cityCode);
+                const cleanBgy = cleanName(bgyTarget);
+
+                let matchedBgy = bgys.find(b => cleanName(b.name) === cleanBgy);
+                if (!matchedBgy && cleanBgy) {
+                    matchedBgy = bgys.find(b => cleanName(b.name).includes(cleanBgy) || cleanBgy.includes(cleanName(b.name)));
+                }
+                if (matchedBgy) {
+                    bgyVal = matchedBgy.name;
+                } else {
+                    bgyVal = bgyTarget;
+                }
+            }
+        }
+    } catch (e) {
+        console.warn('Error resolving address details:', e);
+    }
+
+    return {
+        regionCode: regCode,
+        regionName: regName,
+        provinceCode: provCode,
+        provinceName: provName || provTarget,
+        cityCode: cityCode,
+        cityName: cityName || cityTarget,
+        barangayName: bgyVal || bgyTarget,
+        street: streetVal
+    };
+}
