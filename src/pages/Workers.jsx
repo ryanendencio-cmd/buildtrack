@@ -4,6 +4,19 @@ import PhilippineAddressSelector from '../components/PhilippineAddressSelector'
 import { parseLocationToAddress } from '../services/psgc'
 import { api } from '../api'
 
+const POSITION_OPTIONS = [
+    'Worker',
+    'Attendance Monitoring',
+    'Tools Monitoring'
+];
+
+const parsePositions = (pos) => {
+    if (!pos) return ['Worker'];
+    if (Array.isArray(pos)) return pos.length > 0 ? pos : ['Worker'];
+    const parts = String(pos).split(',').map(s => s.trim()).filter(Boolean);
+    return parts.length > 0 ? parts : ['Worker'];
+};
+
 export default function Workers() {
     const [workers, setWorkers] = useState([]);
 
@@ -28,7 +41,8 @@ export default function Workers() {
         addressObj: {},
         address: '',
         role: 'Worker',
-        position: '',
+        positions: ['Worker'],
+        position: 'Worker',
         daily_rate: 600,
         password: '',
         status: 'Active'
@@ -43,12 +57,31 @@ export default function Workers() {
             .join(' ');
     };
 
+    const togglePosition = (opt) => {
+        setFormData(prev => {
+            const current = parsePositions(prev.positions || prev.position);
+            let updated;
+            if (current.includes(opt)) {
+                updated = current.filter(p => p !== opt);
+                if (updated.length === 0) {
+                    updated = ['Worker']; // Keep at least Worker
+                }
+            } else {
+                updated = [...current, opt];
+            }
+            return {
+                ...prev,
+                positions: updated,
+                position: updated.join(', ')
+            };
+        });
+    };
+
     const handleInputChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({
             ...prev,
-            [name]: value,
-            ...(name === 'role' && value !== 'Staff' ? { position: '' } : {})
+            [name]: value
         }));
     };
 
@@ -130,6 +163,10 @@ export default function Workers() {
 
         const computedAddress = locParts.length > 0 ? locParts.join(', ') : (formData.address || '');
 
+        const joinedPosition = Array.isArray(formData.positions) && formData.positions.length > 0
+            ? formData.positions.join(', ')
+            : (formData.position || 'Worker');
+
         const payload = {
             first_name: formattedFirstName,
             middle_name: formattedMiddleName,
@@ -141,12 +178,15 @@ export default function Workers() {
             address: computedAddress,
             address_obj: formData.addressObj || {},
             role: formData.role,
-            position: formData.position,
+            position: joinedPosition,
             daily_rate: Number(formData.daily_rate) || 600,
-            password: formData.password || null,
             status: formData.status,
             approval_status: 'Approved'
         };
+
+        if (formData.password && formData.password.trim().length > 0) {
+            payload.password = formData.password.trim();
+        }
 
         if (modalState === 'ADD') {
             api.post('/workers', payload).then(newWorker => {
@@ -176,7 +216,8 @@ export default function Workers() {
             addressObj: {},
             address: '',
             role: 'Worker',
-            position: '',
+            positions: ['Worker'],
+            position: 'Worker',
             daily_rate: 600,
             password: '',
             status: 'Active'
@@ -186,6 +227,7 @@ export default function Workers() {
 
     const openEditModal = async (worker) => {
         const parsed = parseFullName(worker.full_name || '');
+        const initialPositions = parsePositions(worker.position);
         const initialData = {
             id: worker.id,
             firstName: worker.first_name || parsed.firstName,
@@ -198,7 +240,8 @@ export default function Workers() {
             addressObj: worker.address_obj || {},
             address: worker.address || '',
             role: worker.role || 'Worker',
-            position: worker.position || '',
+            positions: initialPositions,
+            position: initialPositions.join(', '),
             daily_rate: worker.daily_rate || 600,
             password: '',
             status: worker.status || 'Active'
@@ -252,7 +295,7 @@ export default function Workers() {
     const handleApproval = (worker, decision) => {
         const roleOverride = approvalRoles[worker.id] || {}
         const role = roleOverride.role || worker.role || 'Worker'
-        const position = role === 'Staff' ? (roleOverride.position || worker.position || '') : ''
+        const position = roleOverride.position || worker.position || 'Worker'
 
         const doApprove = () => api.put(`/workers/${worker.id}/approve`, { status: decision }).then(() => {
             setWorkers(prev => prev.map(w => w.id === worker.id ? { ...w, approval_status: decision, role, position } : w))
@@ -261,7 +304,8 @@ export default function Workers() {
         }).catch(console.error)
 
         if (decision === 'Approved' && (role !== worker.role || position !== (worker.position || ''))) {
-            api.put(`/workers/${worker.id}`, { ...worker, role, position }).then(doApprove).catch(console.error)
+            const { password, ...workerWithoutPassword } = worker
+            api.put(`/workers/${worker.id}`, { ...workerWithoutPassword, role, position }).then(doApprove).catch(console.error)
         } else {
             doApprove()
         }
@@ -401,7 +445,14 @@ export default function Workers() {
                                             </p>
                                         </td>
                                         <td className="py-1.5 border-b border-gray-50 text-center">
-                                            <span className="text-[8px] text-gray-700 font-semibold">{worker.role}</span>
+                                            <div className="flex flex-col items-center gap-0.5">
+                                                <span className="text-[8px] text-gray-900 font-bold">{worker.role || 'Worker'}</span>
+                                                {worker.position && (
+                                                    <span className="text-[7px] text-[#A63228] font-semibold bg-red-50 px-1.5 py-0.5 rounded border border-red-100 max-w-[130px] truncate" title={worker.position}>
+                                                        {worker.position}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </td>
                                         <td className="py-1.5 border-b border-gray-50 text-center">
                                             <span className={`inline-flex items-center justify-center px-1.5 py-0.5 rounded-full text-[8px] font-extrabold uppercase tracking-wider ${worker.status === 'Active' ? 'bg-[#e6f4ea] text-[#2e7d32]' : 'bg-gray-100 text-gray-500'}`}>
@@ -482,24 +533,25 @@ export default function Workers() {
                                         <div className="flex flex-col items-center gap-1.5">
                                             <div className="flex items-center gap-1">
                                                 <select
-                                                    value={approvalRoles[worker.id]?.role || 'Worker'}
-                                                    onChange={e => setApprovalRoles(prev => ({ ...prev, [worker.id]: { role: e.target.value, position: '' } }))}
+                                                    value={approvalRoles[worker.id]?.role || worker.role || 'Worker'}
+                                                    onChange={e => setApprovalRoles(prev => ({ ...prev, [worker.id]: { ...(prev[worker.id] || {}), role: e.target.value } }))}
                                                     className="bg-gray-50 border border-gray-200 rounded text-[8px] font-semibold px-1.5 py-1 outline-none focus:border-[#A63228]"
                                                 >
                                                     <option value="Worker">Worker</option>
                                                     <option value="Staff">Staff</option>
                                                 </select>
-                                                {(approvalRoles[worker.id]?.role || 'Worker') === 'Staff' && (
-                                                    <select
-                                                        value={approvalRoles[worker.id]?.position || ''}
-                                                        onChange={e => setApprovalRoles(prev => ({ ...prev, [worker.id]: { ...prev[worker.id], position: e.target.value } }))}
-                                                        className="bg-gray-50 border border-gray-200 rounded text-[8px] font-semibold px-1.5 py-1 outline-none focus:border-[#A63228]"
-                                                    >
-                                                        <option value="" disabled>Position</option>
-                                                        <option value="Attendance Monitoring">Attendance</option>
-                                                        <option value="Tools Monitoring">Tools</option>
-                                                    </select>
-                                                )}
+                                                <select
+                                                    value={approvalRoles[worker.id]?.position || worker.position || 'Worker'}
+                                                    onChange={e => setApprovalRoles(prev => ({ ...prev, [worker.id]: { ...(prev[worker.id] || {}), position: e.target.value } }))}
+                                                    className="bg-gray-50 border border-gray-200 rounded text-[8px] font-semibold px-1.5 py-1 outline-none focus:border-[#A63228]"
+                                                >
+                                                    <option value="Worker">Worker</option>
+                                                    <option value="Attendance Monitoring">Attendance Monitoring</option>
+                                                    <option value="Tools Monitoring">Tools Monitoring</option>
+                                                    <option value="Worker, Tools Monitoring">Worker + Tools</option>
+                                                    <option value="Worker, Attendance Monitoring">Worker + Attendance</option>
+                                                    <option value="Worker, Attendance Monitoring, Tools Monitoring">All Positions</option>
+                                                </select>
                                             </div>
                                             <div className="flex items-center gap-1.5">
                                                 <button
@@ -663,16 +715,6 @@ export default function Workers() {
                                                 <option value="Staff">Staff</option>
                                             </select>
                                         </div>
-                                        {formData.role === 'Staff' && (
-                                            <div>
-                                                <label className="block text-[8px] font-bold text-gray-700 mb-0.5 uppercase">Position</label>
-                                                <select name="position" value={formData.position} onChange={handleInputChange} required className="w-full bg-[#f4f1ee] border border-transparent rounded-md pl-2 pr-6 py-1.5 text-[9px] font-medium focus:border-[#A63228] outline-none appearance-none" style={selectStyles}>
-                                                    <option value="" disabled>Select a position</option>
-                                                    <option value="Attendance Monitoring">Attendance Monitoring</option>
-                                                    <option value="Tools Monitoring">Tools Monitoring</option>
-                                                </select>
-                                            </div>
-                                        )}
                                         <div>
                                             <label className="block text-[8px] font-bold text-gray-700 mb-0.5 uppercase">Daily Salary Rate (₱) <span className="text-[#A63228]">*</span></label>
                                             <input
@@ -692,6 +734,46 @@ export default function Workers() {
                                                 <option value="Active">Active (Can Login)</option>
                                                 <option value="Inactive">Inactive (Resigned/Blocked)</option>
                                             </select>
+                                        </div>
+                                        <div className="sm:col-span-2">
+                                            <label className="block text-[8px] font-bold text-gray-700 mb-1 uppercase flex items-center justify-between">
+                                                <span>Position / Roles (Select all that apply) <span className="text-[#A63228]">*</span></span>
+                                                <span className="text-[7.5px] font-medium text-gray-500 normal-case bg-gray-100 px-1.5 py-0.5 rounded">
+                                                    Saved as: <strong className="text-[#A63228]">{Array.isArray(formData.positions) ? formData.positions.join(', ') : (formData.position || 'Worker')}</strong>
+                                                </span>
+                                            </label>
+                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 p-2 bg-[#f4f1ee] rounded-md border border-gray-200/60">
+                                                {POSITION_OPTIONS.map(opt => {
+                                                    const isChecked = (formData.positions || []).includes(opt);
+                                                    return (
+                                                        <label
+                                                            key={opt}
+                                                            onClick={(e) => {
+                                                                e.preventDefault();
+                                                                togglePosition(opt);
+                                                            }}
+                                                            className={`flex items-center gap-2 p-1.5 rounded cursor-pointer transition-all border ${
+                                                                isChecked 
+                                                                    ? 'bg-white border-[#A63228] shadow-sm text-gray-900 font-bold' 
+                                                                    : 'bg-transparent border-transparent text-gray-600 hover:bg-gray-100/70 font-medium'
+                                                            }`}
+                                                        >
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={isChecked}
+                                                                readOnly
+                                                                className="w-3.5 h-3.5 rounded text-[#A63228] focus:ring-[#A63228] accent-[#A63228] cursor-pointer"
+                                                            />
+                                                            <span className="text-[8.5px] leading-tight select-none">
+                                                                {opt}
+                                                            </span>
+                                                        </label>
+                                                    );
+                                                })}
+                                            </div>
+                                            <p className="text-[7px] text-gray-400 mt-1">
+                                                * Note: Specific mobile features (such as Tools or Attendance monitoring) unlock automatically based on these keywords.
+                                            </p>
                                         </div>
                                         <div className="sm:col-span-2">
                                             <label className="block text-[8px] font-bold text-gray-700 mb-0.5 uppercase">

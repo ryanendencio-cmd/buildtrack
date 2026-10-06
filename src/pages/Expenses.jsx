@@ -45,7 +45,7 @@ export default function Expenses() {
     const [stream, setStream] = useState(null);
 
     useEffect(() => {
-        const date = new Date('2026-09-05');
+        const date = new Date();
         const iso = date.toISOString().split('T')[0];
         queueMicrotask(() => {
             setTodayISO(iso);
@@ -370,7 +370,17 @@ export default function Expenses() {
     };
 
     const confirmRestore = () => {
-        setExpensesList([selectedReceipt, ...expensesList]);
+        if (selectedReceipt) {
+            const restoredPayload = {
+                ...selectedReceipt,
+                id: undefined,
+                project_id: selectedReceipt.project_id || currentProjectId
+            };
+            delete restoredPayload.id;
+            api.post('/expenses', restoredPayload).then(newExp => {
+                setExpensesList(prev => [newExp, ...prev.filter(exp => exp.id !== selectedReceipt.id)]);
+            }).catch(console.error);
+        }
         setDeletedExpenses(deletedExpenses.filter(item => item.id !== selectedReceipt.id));
         setSuccessMessage('Receipt restored successfully.');
         setReceiptModalState('SUCCESS_ACTION');

@@ -8,7 +8,7 @@ export default function Attendance() {
     const navigate = useNavigate();
 
     // ── DATE FILTER STATE ──
-    const todayISO = '2026-09-05';
+    const todayISO = new Date().toISOString().split('T')[0];
     const [selectedDate, setSelectedDate] = useState(todayISO);
 
     const [mockProjects, setMockProjects] = useState([]);

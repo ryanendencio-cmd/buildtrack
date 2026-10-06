@@ -13,6 +13,7 @@ initializeApp({
 })
 
 const db = getFirestore()
+db.settings({ ignoreUndefinedProperties: true })
 
 const app = express()
 app.use(cors())
@@ -28,11 +29,26 @@ function scheduleLink(body) {
   }
 }
 
+async function resolveProjectId(pid) {
+  if (!pid || pid === 'ALL' || pid === 'undefined' || pid === 'null') return null
+  const clean = String(pid).trim()
+  if (!clean || clean === 'ALL' || clean === 'undefined' || clean === 'null') return null
+  if (clean === '1') {
+    const directDoc = await db.collection('projects').doc('1').get()
+    if (directDoc.exists) return '1'
+    const activeSnap = await db.collection('projects').where('status', '!=', 'COMPLETED').limit(1).get()
+    if (!activeSnap.empty) return activeSnap.docs[0].id
+    const snap = await db.collection('projects').limit(1).get()
+    if (!snap.empty) return snap.docs[0].id
+  }
+  return clean
+}
+
 function startServer() {
 
   app.get('/api/schedules', async (req, res) => {
     try {
-      const snapshot = await db.collection('schedules').orderBy('schedule_date').orderBy('title').get()
+      const snapshot = await db.collection('schedules').get()
       const results = []
       
       for (const doc of snapshot.docs) {
@@ -61,6 +77,7 @@ function startServer() {
           expense_category
         })
       }
+      results.sort((a, b) => (a.schedule_date || '').localeCompare(b.schedule_date || '') || (a.title || '').localeCompare(b.title || ''))
       res.json(results)
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -200,9 +217,9 @@ function startServer() {
     try {
       const snapshot = await db.collection('budget_additions')
         .where('project_id', '==', req.params.id)
-        .orderBy('date', 'desc')
         .get()
       const rows = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+      rows.sort((a, b) => (b.date || '').localeCompare(a.date || ''))
       res.json(rows)
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -326,11 +343,14 @@ function startServer() {
   // Parameterized route — MUST be after all specific /expenses/* routes
   app.get('/api/expenses/:project_id', async (req, res) => {
     try {
-      const snapshot = await db.collection('expenses')
-        .where('project_id', '==', req.params.project_id)
-        .orderBy('date', 'desc')
-        .get()
+      const pid = await resolveProjectId(req.params.project_id)
+      let query = db.collection('expenses')
+      if (pid) {
+        query = query.where('project_id', '==', pid)
+      }
+      const snapshot = await query.get()
       const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+      results.sort((a, b) => (b.date || '').localeCompare(a.date || ''))
       res.json(results)
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -340,14 +360,15 @@ function startServer() {
   app.post('/api/expenses', async (req, res) => {
     const { project_id, project, category, amount, receipt_no, date, time, items, cash_tendered, change, image } = req.body
     try {
+      const pid = await resolveProjectId(project_id)
       const newExpense = {
-        project_id, project, category, amount, receipt_no, date, time, 
+        project_id: pid || project_id || null, project, category, amount, receipt_no, date, time, 
         items: typeof items === 'string' ? JSON.parse(items) : (items || []), 
         cash_tendered, change, image: image || null,
         created_at: FieldValue.serverTimestamp()
       }
       const docRef = await db.collection('expenses').add(newExpense)
-      res.json({ id: docRef.id, ...req.body })
+      res.json({ id: docRef.id, ...req.body, project_id: pid || project_id || null })
     } catch (err) {
       res.status(500).json({ error: err.message })
     }
@@ -385,13 +406,15 @@ function startServer() {
     const [year, mon] = month ? month.split('-') : [null, null]
     
     try {
+      const pid = await resolveProjectId(project_id)
       let query = db.collection('expenses')
-      if (project_id && project_id !== 'ALL') {
-        query = query.where('project_id', '==', project_id)
+      if (pid) {
+        query = query.where('project_id', '==', pid)
       }
       
-      const snapshot = await query.orderBy('date', 'desc').get()
+      const snapshot = await query.get()
       let rows = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+      rows.sort((a, b) => (b.date || '').localeCompare(a.date || ''))
       
       if (year && mon) {
         rows = rows.filter(r => {
@@ -410,8 +433,8 @@ function startServer() {
         }
       }
 
-      if (project_id && project_id !== 'ALL') {
-        const pDoc = await db.collection('projects').doc(project_id).get()
+      if (pid) {
+        const pDoc = await db.collection('projects').doc(pid).get()
         if (pDoc.exists) totalBudget = Number(pDoc.data().budget || 0)
       } else {
         const pSnap = await db.collection('projects').get()
@@ -430,13 +453,15 @@ function startServer() {
     const [year, mon] = month ? month.split('-') : [null, null]
     
     try {
+      const pid = await resolveProjectId(project_id)
       let query = db.collection('attendance')
-      if (project_id && project_id !== 'ALL') {
-        query = query.where('project_id', '==', project_id)
+      if (pid) {
+        query = query.where('project_id', '==', pid)
       }
       
-      const snapshot = await query.orderBy('date', 'desc').get()
+      const snapshot = await query.get()
       let rows = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+      rows.sort((a, b) => (b.date || '').localeCompare(a.date || ''))
       
       if (year && mon) {
         rows = rows.filter(r => {
@@ -481,9 +506,10 @@ function startServer() {
   app.get('/api/reports/materials', async (req, res) => {
     const { project_id } = req.query
     try {
+      const pid = await resolveProjectId(project_id)
       let query = db.collection('materials')
-      if (project_id && project_id !== 'ALL') {
-        query = query.where('project_id', '==', project_id)
+      if (pid) {
+        query = query.where('project_id', '==', pid)
       }
       
       const snapshot = await query.get()
@@ -509,9 +535,10 @@ function startServer() {
   app.get('/api/reports/assets', async (req, res) => {
     const { project_id } = req.query
     try {
+      const pid = await resolveProjectId(project_id)
       let query = db.collection('assets')
-      if (project_id && project_id !== 'ALL') {
-        query = query.where('project_id', '==', project_id)
+      if (pid) {
+        query = query.where('project_id', '==', pid)
       }
       
       const snapshot = await query.get()
@@ -656,7 +683,11 @@ function startServer() {
   app.get('/api/workers', async (req, res) => {
     try {
       const snapshot = await db.collection('workers').orderBy('created_at', 'desc').get()
-      const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+      const results = snapshot.docs.map(doc => {
+        const data = doc.data()
+        delete data.password
+        return { id: doc.id, ...data }
+      })
       res.json(results)
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -666,20 +697,24 @@ function startServer() {
   app.post('/api/workers', async (req, res) => {
     const { first_name, middle_name, last_name, full_name, birthday, age, phone, address, role, position, daily_rate, password, approval_status, status, project_id, address_obj } = req.body
     const computedFullName = full_name || [first_name, middle_name, last_name].filter(Boolean).join(' ')
-    const hashedPassword = password ? await bcrypt.hash(password, 10) : await bcrypt.hash('worker123', 10)
+    const cleanPassword = (typeof password === 'string' && password.trim().length > 0) ? password.trim() : 'worker123'
+    const hashedPassword = await bcrypt.hash(cleanPassword, 10)
+    const cleanPosition = Array.isArray(position)
+      ? position.filter(Boolean).join(', ')
+      : (typeof position === 'string' && position.trim().length > 0 ? position.trim() : null)
     
     try {
       const newWorker = {
         first_name, middle_name: middle_name || null, last_name, full_name: computedFullName, 
         birthday: birthday || null, age: age || null, phone: phone || null, address: address || null, 
         address_obj: address_obj || null,
-        role: role || 'Worker', position: position || null, daily_rate: daily_rate || 600, 
+        role: role || 'Worker', position: cleanPosition, daily_rate: daily_rate || 600, 
         password: hashedPassword, approval_status: approval_status || 'Approved', 
         status: status || 'Active', project_id: project_id || null,
         created_at: FieldValue.serverTimestamp()
       }
       const docRef = await db.collection('workers').add(newWorker)
-      res.json({ id: docRef.id, ...req.body, full_name: computedFullName, approval_status: approval_status || 'Approved' })
+      res.json({ id: docRef.id, ...req.body, position: cleanPosition, full_name: computedFullName, approval_status: approval_status || 'Approved' })
     } catch (err) {
       res.status(500).json({ error: err.message })
     }
@@ -688,22 +723,32 @@ function startServer() {
   app.put('/api/workers/:id', async (req, res) => {
     const { first_name, middle_name, last_name, full_name, birthday, age, phone, address, role, position, daily_rate, password, approval_status, status, project_id, address_obj } = req.body
     const computedFullName = full_name || [first_name, middle_name, last_name].filter(Boolean).join(' ')
+    const cleanPosition = Array.isArray(position)
+      ? position.filter(Boolean).join(', ')
+      : (typeof position === 'string' && position.trim().length > 0 ? position.trim() : (position === null ? null : undefined))
     
     try {
       const updateData = {
         first_name, middle_name: middle_name || null, last_name, full_name: computedFullName, 
         birthday: birthday || null, age: age || null, phone: phone || null, address: address || null, 
-        role, position: position || null, daily_rate: daily_rate || 600, 
+        role, daily_rate: daily_rate || 600, 
         approval_status: approval_status || 'Approved', status: status || 'Active', project_id: project_id || null
+      }
+      if (cleanPosition !== undefined) {
+        updateData.position = cleanPosition
       }
       if (address_obj !== undefined) {
         updateData.address_obj = address_obj
       }
-      if (password) {
-        updateData.password = await bcrypt.hash(password, 10)
+      if (typeof password === 'string' && password.trim().length > 0) {
+        const trimmedPass = password.trim()
+        // If password is already a bcrypt hash ($2a$ or $2b$), do NOT re-hash it!
+        if (!trimmedPass.startsWith('$2a$') && !trimmedPass.startsWith('$2b$')) {
+          updateData.password = await bcrypt.hash(trimmedPass, 10)
+        }
       }
       await db.collection('workers').doc(req.params.id).update(updateData)
-      res.json({ success: true })
+      res.json({ success: true, position: cleanPosition })
     } catch (err) {
       res.status(500).json({ error: err.message })
     }
@@ -830,12 +875,13 @@ function startServer() {
   app.get('/api/attendance/:project_id', async (req, res) => {
     const { project_id } = req.params
     try {
+      const pid = await resolveProjectId(project_id)
       let query = db.collection('attendance')
-      if (project_id && project_id !== 'ALL') {
-        query = query.where('project_id', '==', project_id)
+      if (pid) {
+        query = query.where('project_id', '==', pid)
       }
       
-      const snapshot = await query.orderBy('date', 'desc').orderBy('created_at', 'desc').get()
+      const snapshot = await query.get()
       const results = snapshot.docs.map(doc => {
         const r = doc.data()
         return {
@@ -857,9 +903,11 @@ function startServer() {
           rate: Number(r.rate) || 0,
           earned_amount: Number(r.earned_amount) || 0,
           advance: Number(r.advance) || 0,
-          status: r.status
+          status: r.status,
+          created_at: r.created_at
         }
       })
+      results.sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.created_at?._seconds || 0) - (a.created_at?._seconds || 0))
       res.json(results)
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -896,8 +944,9 @@ function startServer() {
     const earnedAmount = (status === 'Absent') ? 0 : evaluated.earnedAmount
 
     try {
+      const pid = await resolveProjectId(project_id)
       const newAttendance = {
-        project_id: project_id || null, worker_id: worker_id || null, worker_name: finalName, date: finalDate, role: role || 'Laborer',
+        project_id: pid || project_id || null, worker_id: worker_id || null, worker_name: finalName, date: finalDate, role: role || 'Laborer',
         morning_in: mIn || '—', morning_out: mOut || '—', afternoon_in: aIn || '—', afternoon_out: aOut || '—',
         morning_status: evaluated.morningStatus, afternoon_status: evaluated.afternoonStatus,
         time_in: mIn || aIn || '—', time_out: aOut || mOut || '—', rate: baseRate, earned_amount: earnedAmount, advance: advance || 0, status,
@@ -974,9 +1023,9 @@ function startServer() {
   })
 
   // ── ASSETS ──
-  app.get('/api/assets/:project_id', async (req, res) => {
+  app.get('/api/assets', async (req, res) => {
     try {
-      const snapshot = await db.collection('assets').where('project_id', '==', req.params.project_id).get()
+      const snapshot = await db.collection('assets').get()
       const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
       res.json(results)
     } catch (err) {
@@ -984,28 +1033,65 @@ function startServer() {
     }
   })
 
-  app.post('/api/assets', async (req, res) => {
-    const { project_id, name, type, status, assigned_to, condition } = req.body
-    const cond = condition || type || 'Good'
+  app.get('/api/assets/:project_id', async (req, res) => {
     try {
-      const newAsset = {
-        project_id, name, type: cond, status: status || 'Available', assigned_to,
-        created_at: FieldValue.serverTimestamp()
+      const pid = await resolveProjectId(req.params.project_id)
+      let query = db.collection('assets')
+      if (pid) {
+        query = query.where('project_id', '==', pid)
       }
-      const docRef = await db.collection('assets').add(newAsset)
-      res.json({ id: docRef.id, ...req.body, condition: cond, type: cond })
+      const snapshot = await query.get()
+      const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+      res.json(results)
     } catch (err) {
       res.status(500).json({ error: err.message })
     }
   })
 
-  app.put('/api/assets/:id', async (req, res) => {
-    const { name, type, status, assigned_to, borrow_at, condition } = req.body
+  const handleCreateAsset = async (req, res) => {
+    const { name, type, status, assigned_to, user, condition } = req.body
+    const rawPid = req.params.project_id || req.body.project_id || null
     const cond = condition || type || 'Good'
+    const assignedUser = assigned_to !== undefined ? assigned_to : (user && user !== '—' ? user : null)
     try {
-      await db.collection('assets').doc(req.params.id).update({
-        name, type: cond, status, assigned_to, borrow_at: borrow_at || null
-      })
+      const pid = await resolveProjectId(rawPid)
+      const newAsset = {
+        project_id: pid || null,
+        name: name ? String(name).trim() : 'Unnamed Tool',
+        type: cond,
+        condition: cond,
+        status: status || 'Available',
+        assigned_to: assignedUser || null,
+        created_at: FieldValue.serverTimestamp()
+      }
+      const docRef = await db.collection('assets').add(newAsset)
+      res.json({ id: docRef.id, ...newAsset, condition: cond, type: cond })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  }
+
+  app.post('/api/assets', handleCreateAsset)
+  app.post('/api/assets/:project_id', handleCreateAsset)
+
+  app.put('/api/assets/:id', async (req, res) => {
+    const { name, type, status, assigned_to, user, borrow_at, condition, project_id } = req.body
+    const cond = condition || type || 'Good'
+    const assignedUser = assigned_to !== undefined ? assigned_to : (user && user !== '—' ? user : null)
+    try {
+      const updateData = {
+        name: name ? String(name).trim() : '',
+        type: cond,
+        condition: cond,
+        status: status || 'Available',
+        assigned_to: assignedUser || null,
+        borrow_at: borrow_at || null
+      }
+      if (project_id !== undefined) {
+        const pid = await resolveProjectId(project_id)
+        updateData.project_id = pid || null
+      }
+      await db.collection('assets').doc(req.params.id).update(updateData)
       res.json({ success: true })
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -1024,59 +1110,75 @@ function startServer() {
   // ── BORROW HISTORY ──
   app.get('/api/borrow-history/:project_id', async (req, res) => {
     try {
-      const snapshot = await db.collection('borrow_history')
-        .where('project_id', '==', req.params.project_id)
-        .orderBy('created_at', 'desc')
-        .get()
+      const pid = await resolveProjectId(req.params.project_id)
+      let query = db.collection('borrow_history')
+      if (pid) {
+        query = query.where('project_id', '==', pid)
+      }
+      const snapshot = await query.get()
       const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+      results.sort((a, b) => (b.created_at?._seconds || 0) - (a.created_at?._seconds || 0))
       res.json(results)
     } catch (err) {
       res.status(500).json({ error: err.message })
     }
   })
 
-  app.post('/api/borrow-history', async (req, res) => {
-    const { project_id, tool_name, borrower_name, quantity, action, condition_status, date_time } = req.body
+  const handleCreateBorrowHistory = async (req, res) => {
+    const rawPid = req.params.project_id || req.body.project_id
+    const { tool_name, borrower_name, quantity, action, condition_status, date_time } = req.body
     try {
+      const pid = await resolveProjectId(rawPid)
       const newHistory = {
-        project_id, tool_name, borrower_name, quantity: quantity || 1, action, 
+        project_id: pid || rawPid || null, tool_name, borrower_name, quantity: quantity || 1, action, 
         condition_status: condition_status || 'Good', date_time: date_time || new Date(),
         created_at: FieldValue.serverTimestamp()
       }
       const docRef = await db.collection('borrow_history').add(newHistory)
-      res.json({ id: docRef.id, ...req.body })
+      res.json({ id: docRef.id, ...req.body, project_id: pid || rawPid || null })
     } catch (err) {
       res.status(500).json({ error: err.message })
     }
-  })
+  }
+
+  app.post('/api/borrow-history', handleCreateBorrowHistory)
+  app.post('/api/borrow-history/:project_id', handleCreateBorrowHistory)
 
   // ── MATERIALS ──
   app.get('/api/materials/:project_id', async (req, res) => {
     try {
-      const snapshot = await db.collection('materials')
-        .where('project_id', '==', req.params.project_id)
-        .orderBy('date', 'desc')
-        .get()
+      const pid = await resolveProjectId(req.params.project_id)
+      let query = db.collection('materials')
+      if (pid) {
+        query = query.where('project_id', '==', pid)
+      }
+      const snapshot = await query.get()
       const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+      results.sort((a, b) => (b.date || '').localeCompare(a.date || ''))
       res.json(results)
     } catch (err) {
       res.status(500).json({ error: err.message })
     }
   })
 
-  app.post('/api/materials', async (req, res) => {
-    const { project_id, date, name, qty, unit, cost, remarks } = req.body
+  const handleCreateMaterial = async (req, res) => {
+    const rawPid = req.params.project_id || req.body.project_id
+    const { date, name, qty, unit, cost, remarks } = req.body
     try {
+      const pid = await resolveProjectId(rawPid)
       const newMaterial = {
-        project_id, date, name, qty, unit, cost, remarks,
+        project_id: pid || rawPid || null, date, name, qty, unit, cost, remarks,
         created_at: FieldValue.serverTimestamp()
       }
       const docRef = await db.collection('materials').add(newMaterial)
-      res.json({ id: docRef.id, ...req.body })
+      res.json({ id: docRef.id, ...req.body, project_id: pid || rawPid || null })
     } catch (err) {
       res.status(500).json({ error: err.message })
     }
-  })
+  }
+
+  app.post('/api/materials', handleCreateMaterial)
+  app.post('/api/materials/:project_id', handleCreateMaterial)
 
   app.put('/api/materials/:id', async (req, res) => {
     const { date, name, qty, unit, cost, remarks } = req.body
@@ -1116,7 +1218,6 @@ function startServer() {
     try {
       const snapshot = await db.collection('cash_advances')
         .where('status', '==', 'Pending')
-        .orderBy('created_at', 'desc')
         .get()
       
       const results = []
@@ -1146,9 +1247,11 @@ function startServer() {
           date: data.date,
           status: data.status,
           worker_id: data.worker_id,
-          project_id: data.project_id
+          project_id: data.project_id,
+          created_at: data.created_at
         })
       }
+      results.sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.created_at?._seconds || 0) - (a.created_at?._seconds || 0))
       res.json(results)
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -1171,16 +1274,16 @@ function startServer() {
   app.get('/api/cash-advances/:project_id', async (req, res) => {
     const { project_id } = req.params
     try {
-      let query = db.collection('cash_advances').orderBy('date', 'desc').orderBy('created_at', 'desc')
+      const pid = await resolveProjectId(project_id)
+      let query = db.collection('cash_advances')
       
-      if (project_id && project_id !== 'ALL' && project_id !== 'undefined') {
-        // Note: Firestore doesn't support OR queries easily like SQL (project_id=? OR project_id IS NULL)
-        // We will fetch by project_id. If you need nulls too, you'd fetch both and merge.
-        query = db.collection('cash_advances').where('project_id', '==', project_id).orderBy('date', 'desc').orderBy('created_at', 'desc')
+      if (pid) {
+        query = query.where('project_id', '==', pid)
       }
       
       const snapshot = await query.get()
       const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+      results.sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.created_at?._seconds || 0) - (a.created_at?._seconds || 0))
       res.json(results)
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -1191,34 +1294,39 @@ function startServer() {
     const { project_id, workerName, workerId, amount, date, reason, status } = req.body
     const cleanDate = date ? String(date).slice(0, 10) : new Date().toISOString().slice(0, 10)
     
-    const resolveAndInsert = async (name) => {
-      try {
-        const newAdvance = {
-          project_id: project_id || null,
-          worker_id: workerId || null,
-          workerName: name,
-          amount,
-          date: cleanDate,
-          reason,
-          status: status || 'Pending',
-          created_at: FieldValue.serverTimestamp()
+    try {
+      const pid = await resolveProjectId(project_id)
+      const resolveAndInsert = async (name) => {
+        try {
+          const newAdvance = {
+            project_id: pid || project_id || null,
+            worker_id: workerId || null,
+            workerName: name,
+            amount,
+            date: cleanDate,
+            reason,
+            status: status || 'Pending',
+            created_at: FieldValue.serverTimestamp()
+          }
+          const docRef = await db.collection('cash_advances').add(newAdvance)
+          res.json({ id: docRef.id, ...req.body, project_id: pid || project_id || null, workerName: name, date: cleanDate })
+        } catch (err) {
+          res.status(500).json({ error: err.message })
         }
-        const docRef = await db.collection('cash_advances').add(newAdvance)
-        res.json({ id: docRef.id, ...req.body, workerName: name, date: cleanDate })
-      } catch (err) {
-        res.status(500).json({ error: err.message })
       }
-    }
 
-    if (workerId && !workerName) {
-      try {
-        const workerDoc = await db.collection('workers').doc(workerId).get()
-        resolveAndInsert(workerDoc.exists ? (workerDoc.data().full_name || 'Unknown') : 'Unknown')
-      } catch (err) {
-        resolveAndInsert('Unknown')
+      if (workerId && !workerName) {
+        try {
+          const workerDoc = await db.collection('workers').doc(workerId).get()
+          resolveAndInsert(workerDoc.exists ? (workerDoc.data().full_name || 'Unknown') : 'Unknown')
+        } catch (err) {
+          resolveAndInsert('Unknown')
+        }
+      } else {
+        resolveAndInsert(workerName || 'Unknown')
       }
-    } else {
-      resolveAndInsert(workerName || 'Unknown')
+    } catch (err) {
+      res.status(500).json({ error: err.message })
     }
   })
 
@@ -1226,9 +1334,9 @@ function startServer() {
     try {
       const snapshot = await db.collection('cash_advances')
         .where('worker_id', '==', req.params.id)
-        .orderBy('created_at', 'desc')
         .get()
       const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+      results.sort((a, b) => (b.created_at?._seconds || 0) - (a.created_at?._seconds || 0))
       res.json(results)
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -1241,10 +1349,14 @@ function startServer() {
 
     try {
       const fullName = `${firstName}${middleName ? ' ' + middleName : ''} ${lastName}`.trim()
-      const hashedPassword = await bcrypt.hash(password, 10)
+      const cleanPassword = (typeof password === 'string' && password.trim().length > 0) ? password.trim() : ''
+      if (!cleanPassword) {
+        return res.status(400).json({ error: 'Password is required' })
+      }
+      const hashedPassword = await bcrypt.hash(cleanPassword, 10)
 
       const newWorker = {
-        first_name: firstName, middle_name: middleName || null, last_name: lastName, full_name: fullName, username: username || null,
+        first_name: firstName, middle_name: middleName || null, last_name: lastName, full_name: fullName, username: username ? String(username).trim() : null,
         birthday, age, phone, address, address_obj: address_obj || null, role, position: position || null, password: hashedPassword,
         approval_status: 'Pending', status: 'Active',
         created_at: FieldValue.serverTimestamp()
@@ -1278,9 +1390,12 @@ function startServer() {
       // 1. Try to find by phone (supporting 09..., +639..., 639..., 9...)
       let snapshot = await db.collection('workers').where('phone', 'in', candidatePhones).limit(1).get()
 
-      // 2. Try by username
+      // 2. Try by username (exact or case-insensitive fallback)
       if (snapshot.empty) {
         snapshot = await db.collection('workers').where('username', '==', rawUser).limit(1).get()
+      }
+      if (snapshot.empty && rawUser.toLowerCase() !== rawUser) {
+        snapshot = await db.collection('workers').where('username', '==', rawUser.toLowerCase()).limit(1).get()
       }
 
       // 3. Try by full_name
@@ -1308,8 +1423,12 @@ function startServer() {
         return res.status(401).json({ error: 'No password set for this account. Please contact administrator.' })
       }
 
-      // Verify password
-      const validPassword = await bcrypt.compare(password, user.password)
+      // Verify password (supports exact match or trimmed match for mobile keyboards)
+      const rawPassword = String(password)
+      let validPassword = await bcrypt.compare(rawPassword, user.password)
+      if (!validPassword && rawPassword.trim() !== rawPassword) {
+        validPassword = await bcrypt.compare(rawPassword.trim(), user.password)
+      }
       if (!validPassword) {
         return res.status(401).json({ error: 'Invalid password' })
       }

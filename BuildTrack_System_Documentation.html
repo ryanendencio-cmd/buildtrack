@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>BuildTrack - System Architecture & API Documentation</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 10mm 12mm;
+    }
+    * {
+      box-sizing: border-box;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: #1e293b;
+      background: #ffffff;
+      line-height: 1.4;
+      font-size: 10px;
+      margin: 0;
+      padding: 0;
+    }
+    .header-banner {
+      background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+      color: #ffffff;
+      padding: 18px 22px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      border-left: 6px solid #A63228;
+    }
+    .header-banner h1 {
+      margin: 0 0 4px 0;
+      font-size: 21px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+    }
+    .header-banner p {
+      margin: 0;
+      font-size: 11px;
+      color: #94a3b8;
+    }
+    .badge-bar {
+      margin-top: 10px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .pill {
+      background: rgba(255, 255, 255, 0.14);
+      padding: 2.5px 8px;
+      border-radius: 12px;
+      font-size: 9.5px;
+      font-weight: 600;
+      color: #f1f5f9;
+    }
+    h2 {
+      font-size: 13px;
+      font-weight: 800;
+      color: #0f172a;
+      border-bottom: 2px solid #e2e8f0;
+      padding-bottom: 4px;
+      margin-top: 16px;
+      margin-bottom: 10px;
+      page-break-after: avoid;
+      break-after: avoid;
+    }
+    h3 {
+      font-size: 11px;
+      font-weight: 700;
+      color: #334155;
+      margin-top: 12px;
+      margin-bottom: 6px;
+      page-break-after: avoid;
+      break-after: avoid;
+    }
+    p, li {
+      font-size: 10px;
+      color: #334155;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 12px;
+      font-size: 9.5px;
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      overflow: hidden;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    tr {
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    th {
+      background: #f8fafc;
+      color: #475569;
+      font-weight: 700;
+      text-transform: uppercase;
+      font-size: 8.5px;
+      letter-spacing: 0.5px;
+      padding: 6px 8px;
+      border-bottom: 1px solid #cbd5e1;
+      text-align: left;
+    }
+    td {
+      padding: 5.5px 8px;
+      border-bottom: 1px solid #f1f5f9;
+      vertical-align: middle;
+    }
+    tr:nth-child(even) td {
+      background-color: #fafbfd;
+    }
+    .method {
+      display: inline-block;
+      font-weight: 800;
+      font-size: 8.5px;
+      padding: 1.5px 6px;
+      border-radius: 3px;
+      text-align: center;
+      min-width: 48px;
+    }
+    .method-get { background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; }
+    .method-post { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
+    .method-put { background: #fef3c7; color: #b45309; border: 1px solid #fde68a; }
+    .method-delete { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
+
+    .endpoint-code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 9px;
+      font-weight: 600;
+      color: #0f172a;
+    }
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+      margin-bottom: 12px;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    .card {
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 8px 10px;
+      background: #f8fafc;
+    }
+    .card-title {
+      font-size: 10px;
+      font-weight: 700;
+      color: #0f172a;
+      margin-bottom: 2px;
+    }
+    .card-desc {
+      font-size: 9px;
+      color: #64748b;
+      line-height: 1.35;
+    }
+    .workflow-box {
+      border-left: 3px solid #A63228;
+      background: #fffafa;
+      padding: 8px 12px;
+      margin-bottom: 8px;
+      border-radius: 0 5px 5px 0;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    .workflow-title {
+      font-weight: 700;
+      color: #8B1A10;
+      font-size: 10px;
+      margin-bottom: 2px;
+    }
+    .footer {
+      margin-top: 18px;
+      padding-top: 8px;
+      border-top: 1px solid #e2e8f0;
+      text-align: center;
+      font-size: 8.5px;
+      color: #94a3b8;
+    }
+    .page-break {
+      page-break-before: always;
+      break-before: always;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header-banner">
+    <h1>BUILDTRACK SYSTEM SPECIFICATION</h1>
+    <p>Comprehensive Backend Architecture, End-to-End Workflows, and Complete REST API Reference</p>
+    <div class="badge-bar">
+      <span class="pill">Node.js Express 5.2</span>
+      <span class="pill">Google Firebase Firestore</span>
+      <span class="pill">Flutter Mobile Client</span>
+      <span class="pill">React 19 Admin Web</span>
+      <span class="pill">66 Active Endpoints</span>
+    </div>
+  </div>
+
+  <h2>1. BACKEND ARCHITECTURE & TECH STACK</h2>
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 24%;">Component</th>
+        <th style="width: 24%;">Technology</th>
+        <th style="width: 52%;">Role & Implementation Details</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Server Framework</strong></td>
+        <td>Express.js v5.2.1 (Node.js)</td>
+        <td>Monolithic REST API server handling request validation, routing, JSON payload parsing, and CORS policies.</td>
+      </tr>
+      <tr>
+        <td><strong>Primary Database</strong></td>
+        <td>Google Firebase Firestore</td>
+        <td>NoSQL Cloud Document Database managed through <code>firebase-admin v14.5.0</code> service account credentials.</td>
+      </tr>
+      <tr>
+        <td><strong>Security & Encryption</strong></td>
+        <td>bcrypt v6.0.0</td>
+        <td>One-way salted password hashing for both Admin web accounts and Worker mobile profiles.</td>
+      </tr>
+      <tr>
+        <td><strong>Session Tokens</strong></td>
+        <td>jsonwebtoken (JWT) v9.0.3</td>
+        <td>Stateless token authentication for secure admin sessions and password reset authorization.</td>
+      </tr>
+      <tr>
+        <td><strong>Notification Engine</strong></td>
+        <td>Nodemailer v10.0.13</td>
+        <td>SMTP email transport service used for automated admin password recovery verification codes.</td>
+      </tr>
+      <tr>
+        <td><strong>Large Payload Support</strong></td>
+        <td>express.json (Limit: 50MB)</td>
+        <td>Supports high-resolution receipt image uploads, base64 avatars, and OCR transaction attachments.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>2. DATABASE SCHEMA (11 FIRESTORE COLLECTIONS)</h2>
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-title"><code>projects</code></div>
+      <div class="card-desc">Project name, client, location, original budget, timeline, status, and milestone metadata.</div>
+    </div>
+    <div class="card">
+      <div class="card-title"><code>budget_additions</code></div>
+      <div class="card-desc">History log of project budget top-ups, approved amounts, reasons, and timestamps.</div>
+    </div>
+    <div class="card">
+      <div class="card-title"><code>expenses</code></div>
+      <div class="card-desc">Financial transaction logs, receipt image attachments, categories, amounts, and approvals.</div>
+    </div>
+    <div class="card">
+      <div class="card-title"><code>workers</code></div>
+      <div class="card-desc">Worker profiles, QR IDs, position keywords (Worker, Attendance Monitoring, Tools Monitoring), approval status.</div>
+    </div>
+    <div class="card">
+      <div class="card-title"><code>attendance</code></div>
+      <div class="card-desc">Daily field time-in/out records, worker IDs, geo/site details, overtime, and attendance status.</div>
+    </div>
+    <div class="card">
+      <div class="card-title"><code>assets</code></div>
+      <div class="card-desc">Tool & equipment registry, current status (Available, In Use, Maintenance), and condition grades.</div>
+    </div>
+    <div class="card">
+      <div class="card-title"><code>borrow_history</code></div>
+      <div class="card-desc">Complete immutable audit trail of all check-outs and check-ins, custodians, and return conditions.</div>
+    </div>
+    <div class="card">
+      <div class="card-title"><code>materials</code></div>
+      <div class="card-desc">Raw materials inventory per project, current stock levels, units, and minimum re-order thresholds.</div>
+    </div>
+    <div class="card">
+      <div class="card-title"><code>cash_advances</code></div>
+      <div class="card-desc">Worker cash advance (bale) requests, requested amount, repayment balance, and admin approval status.</div>
+    </div>
+    <div class="card">
+      <div class="card-title"><code>schedules</code></div>
+      <div class="card-desc">Project timeline tasks, equipment maintenance dates, and calendar events linked to projects.</div>
+    </div>
+    <div class="card">
+      <div class="card-title"><code>admins</code></div>
+      <div class="card-desc">Web portal administrator profiles, encrypted credentials, system privileges, and preferences.</div>
+    </div>
+    <div class="card">
+      <div class="card-title"><code>notifications</code></div>
+      <div class="card-desc">System alerts triggered by low material stock, unreturned tools, or pending worker sign-ups.</div>
+    </div>
+  </div>
+
+  <div class="page-break"></div>
+
+  <h2>3. END-TO-END WORKFLOW ARCHITECTURE</h2>
+  
+  <div class="workflow-box">
+    <div class="workflow-title">A. User Onboarding & Access Control</div>
+    <div>• <strong>Admin Web</strong>: Direct secure login via <code>/api/admin/login</code> with session tokens. Includes email-based password recovery via Nodemailer.<br>• <strong>Mobile Workers</strong>: Self-registration on Flutter app enters a <em>Pending</em> approval state. Admin approves worker profiles on Web Dashboard before login access is granted.</div>
+  </div>
+
+  <div class="workflow-box">
+    <div class="workflow-title">B. Project Creation & Dynamic Budget Allocation</div>
+    <div>• Admin registers projects on Web Portal with base capital allocation.<br>• Live project expense tracking deducts from budget in real time.<br>• Additional project capital injections are recorded via <code>/api/projects/:id/budget-additions</code> for transparent financial auditing.</div>
+  </div>
+
+  <div class="workflow-box">
+    <div class="workflow-title">C. Expense Tracking & OCR Receipt Integration</div>
+    <div>• Site engineers and staff log material and logistical costs.<br>• Receipts can be captured directly or scanned via client-side OCR for automated field filling.<br>• Aggregated financials are served via monthly and category summary endpoints for analytics charts.</div>
+  </div>
+
+  <div class="workflow-box">
+    <div class="workflow-title">D. Attendance Monitoring & On-Site QR Verification</div>
+    <div>• Personnel designated with <em>Attendance Monitoring</em> position use the Mobile App to scan worker QR identification.<br>• Time-in, Time-out, and late calculations sync instantly to Firestore.<br>• Admin monitors real-time headcounts, present lists, and manpower costs on the Web Portal.</div>
+  </div>
+
+  <div class="workflow-box">
+    <div class="workflow-title">E. Equipment Custody & Tool Checkout Pipeline</div>
+    <div>• <strong>Web Portal (Admin)</strong>: Strictly handles tool inventory creation, editing, maintenance logs, and monitoring unreturned tools.<br>• <strong>Mobile App (Field Custodian)</strong>: Exclusively manages tool Check-Out on-site.<br>• Returns update tool condition (Good / Needs Repair / Broken) and automatically archive to <code>borrow_history</code>.</div>
+  </div>
+
+  <div class="workflow-box">
+    <div class="workflow-title">F. Worker Cash Advance (Bale) Lifecycle</div>
+    <div>• Workers submit cash advance requests via Flutter Mobile App with specified amounts and reasons.<br>• Requests surface on Admin Web Portal under <em>Pending Advances</em>.<br>• Admin approval/rejection updates worker balance ledger and logs the transaction.</div>
+  </div>
+
+  <h2>4. COMPLETE REST API ENDPOINTS SPECIFICATION (66 ENDPOINTS)</h2>
+
+  <h3>A. Authentication & Admin Management (10 Endpoints)</h3>
+  <table>
+    <thead><tr><th style="width: 12%;">Method</th><th style="width: 38%;">Endpoint</th><th style="width: 50%;">Description / Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><span class="method method-post">POST</span></td><td class="endpoint-code">/api/admin/login</td><td>Authenticates administrator credentials and returns session data.</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td class="endpoint-code">/api/admin/register</td><td>Registers a new administrator profile in Firestore.</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td class="endpoint-code">/api/admin/forgot-password</td><td>Generates password reset token and emails it via Nodemailer.</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td class="endpoint-code">/api/admin/reset-password</td><td>Validates reset token and sets new encrypted password.</td></tr>
+      <tr><td><span class="method method-get">GET</span></td><td class="endpoint-code">/api/admins</td><td>Retrieves list of all registered administrators.</td></tr>
+      <tr><td><span class="method method-get">GET</span></td><td class="endpoint-code">/api/admin/profile/:id</td><td>Fetches profile details, contact, and preferences for an admin.</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td class="endpoint-code">/api/admin/profile/save</td><td>Updates admin personal details and avatar image.</td></tr>
+      <tr><td><span class="method method-put">PUT</span></td><td class="endpoint-code">/api/admin/:id/password</td><td>Updates admin password from the settings dashboard.</td></tr>
+      <tr><td><span class="method method-put">PUT</span></td><td class="endpoint-code">/api/admin/:id/settings</td><td>Saves system preferences and notification configurations.</td></tr>
+      <tr><td><span class="method method-get">GET</span></td><td class="endpoint-code">/api/pending-registrations</td><td>Fetches worker registrations awaiting admin approval.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>B. Worker Authentication & Management (8 Endpoints)</h3>
+  <table>
+    <thead><tr><th style="width: 12%;">Method</th><th style="width: 38%;">Endpoint</th><th style="width: 50%;">Description / Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><span class="method method-post">POST</span></td><td class="endpoint-code">/api/register</td><td>Worker sign-up from mobile app (status default: Pending).</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td class="endpoint-code">/api/login</td><td>Worker mobile login (authenticates username or phone number).</td></tr>
+      <tr><td><span class="method method-get">GET</span></td><td class="endpoint-code">/api/workers</td><td>Lists all registered workers with approval status.</td></tr>
+      <tr><td><span class="method method-get">GET</span></td><td class="endpoint-code">/api/workers/summary</td><td>Aggregates active, pending, and total manpower counts.</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td class="endpoint-code">/api/workers</td><td>Admin directly creates a worker profile with assigned positions.</td></tr>
+      <tr><td><span class="method method-put">PUT</span></td><td class="endpoint-code">/api/workers/:id</td><td>Updates worker position (supports multi-role comma separated values).</td></tr>
+      <tr><td><span class="method method-delete">DELETE</span></td><td class="endpoint-code">/api/workers/:id</td><td>Deletes worker profile record.</td></tr>
+      <tr><td><span class="method method-put">PUT</span></td><td class="endpoint-code">/api/workers/:id/approve</td><td>Admin approves pending mobile registration to grant login access.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="page-break"></div>
+
+  <h3>C. Project & Budget Management (6 Endpoints)</h3>
+  <table>
+    <thead><tr><th style="width: 12%;">Method</th><th style="width: 38%;">Endpoint</th><th style="width: 50%;">Description / Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><span class="method method-get">GET</span></td><td class="endpoint-code">/api/projects</td><td>Fetches all active and completed construction projects.</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td class="endpoint-code">/api/projects</td><td>Creates a new project record with initial budget.</td></tr>
+      <tr><td><span class="method method-put">PUT</span></td><td class="endpoint-code">/api/projects/:id</td><td>Updates project timelines, location, or status.</td></tr>
+      <tr><td><span class="method method-delete">DELETE</span></td><td class="endpoint-code">/api/projects/:id</td><td>Removes project and associated data references.</td></tr>
+      <tr><td><span class="method method-get">GET</span></td><td class="endpoint-code">/api/projects/:id/budget-additions</td><td>Retrieves audit log of additional funds injected into project.</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td class="endpoint-code">/api/projects/:id/budget-additions</td><td>Adds additional budget top-up to active project.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>D. Expenses & Financial Accounting (8 Endpoints)</h3>
+  <table>
+    <thead><tr><th style="width: 12%;">Method</th><th style="width: 38%;">Endpoint</th><th style="width: 50%;">Description / Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><span class="method method-get">GET</span></td><td class="endpoint-code">/api/expenses</td><td>Retrieves all global financial transactions.</td></tr>
+      <tr><td><span class="method method-get">GET</span></td><td class="endpoint-code">/api/expenses/:project_id</td><td>Retrieves filtered expenses for a specific project.</td></tr>
+      <tr><td><span class="method method-get">GET</span></td><td class="endpoint-code">/api/expenses/monthly</td><td>Aggregates expenses by month for analytical trend charts.</td></tr>
+      <tr><td><span class="method method-get">GET</span></td><td class="endpoint-code">/api/expenses/budget-summary</td><td>Calculates total budget, total spent, and remaining variance.</td></tr>
+      <tr><td><span class="method method-get">GET</span></td><td class="endpoint-code">/api/expenses/summary</td><td>Returns expense totals grouped by operational category.</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td class="endpoint-code">/api/expenses</td><td>Logs new expense receipt with amount, category, and date.</td></tr>
+      <tr><td><span class="method method-put">PUT</span></td><td class="endpoint-code">/api/expenses/:id</td><td>Edits existing expense transaction record.</td></tr>
+      <tr><td><span class="method method-delete">DELETE</span></td><td class="endpoint-code">/api/expenses/:id</td><td>Deletes expense record and updates budget tally.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>E. Attendance & Timekeeping (4 Endpoints)</h3>
+  <table>
+    <thead><tr><th style="width: 12%;">Method</th><th style="width: 38%;">Endpoint</th><th style="width: 50%;">Description / Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><span class="method method-get">GET</span></td><td class="endpoint-code">/api/attendance/:project_id</td><td>Fetches attendance logs for a project (resolves project aliases).</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td class="endpoint-code">/api/attendance</td><td>Logs attendance entry (time-in/out) via Mobile App QR scan.</td></tr>
+      <tr><td><span class="method method-put">PUT</span></td><td class="endpoint-code">/api/attendance/:id</td><td>Updates recorded attendance record details.</td></tr>
+      <tr><td><span class="method method-put">PUT</span></td><td class="endpoint-code">/api/attendance/:id/status</td><td>Updates status flag (Present, Late, Half-Day, Overtime).</td></tr>
+    </tbody>
+  </table>
+
+  <h3>F. Equipment, Tools (Assets) & Borrow History (9 Endpoints)</h3>
+  <table>
+    <thead><tr><th style="width: 12%;">Method</th><th style="width: 38%;">Endpoint</th><th style="width: 50%;">Description / Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><span class="method method-get">GET</span></td><td class="endpoint-code">/api/assets</td><td>Retrieves full equipment inventory across all projects.</td></tr>
+      <tr><td><span class="method method-get">GET</span></td><td class="endpoint-code">/api/assets/:project_id</td><td>Retrieves equipment assigned to a specific project.</td></tr>
+      <tr><td><span class="method method-get">GET</span></td><td class="endpoint-code">/api/assets/summary</td><td>Summary counts of Available, In-Use, and Maintenance tools.</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td class="endpoint-code">/api/assets</td><td>Registers new tools into inventory (supports batch insertion).</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td class="endpoint-code">/api/assets/:project_id</td><td>Registers new tool directly bound to a project.</td></tr>
+      <tr><td><span class="method method-put">PUT</span></td><td class="endpoint-code">/api/assets/:id</td><td>Updates tool status or condition (Good, Needs Repair, Broken).</td></tr>
+      <tr><td><span class="method method-delete">DELETE</span></td><td class="endpoint-code">/api/assets/:id</td><td>Removes tool asset from inventory.</td></tr>
+      <tr><td><span class="method method-get">GET</span></td><td class="endpoint-code">/api/borrow-history/:project_id</td><td>Fetches historical checkout and check-in logs for a project.</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td class="endpoint-code">/api/borrow-history</td><td>Records a checkout or check-in transaction into audit log.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="page-break"></div>
+
+  <h3>G. Materials & Inventory Control (5 Endpoints)</h3>
+  <table>
+    <thead><tr><th style="width: 12%;">Method</th><th style="width: 38%;">Endpoint</th><th style="width: 50%;">Description / Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><span class="method method-get">GET</span></td><td class="endpoint-code">/api/materials/:project_id</td><td>Lists all material stocks recorded for a project.</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td class="endpoint-code">/api/materials</td><td>Logs new material shipment with quantity and unit.</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td class="endpoint-code">/api/materials/:project_id</td><td>Adds material tied directly to project scope.</td></tr>
+      <tr><td><span class="method method-put">PUT</span></td><td class="endpoint-code">/api/materials/:id</td><td>Updates stock level, status, or unit quantity.</td></tr>
+      <tr><td><span class="method method-delete">DELETE</span></td><td class="endpoint-code">/api/materials/:id</td><td>Removes material entry from database.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>H. Cash Advance / Bale System (5 Endpoints)</h3>
+  <table>
+    <thead><tr><th style="width: 12%;">Method</th><th style="width: 38%;">Endpoint</th><th style="width: 50%;">Description / Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><span class="method method-get">GET</span></td><td class="endpoint-code">/api/cash-advances/pending</td><td>Retrieves all outstanding cash advance requests awaiting review.</td></tr>
+      <tr><td><span class="method method-get">GET</span></td><td class="endpoint-code">/api/cash-advances/:project_id</td><td>Retrieves cash advances filed under a project.</td></tr>
+      <tr><td><span class="method method-get">GET</span></td><td class="endpoint-code">/api/workers/:id/cash-advances</td><td>Retrieves personal cash advance history for a worker.</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td class="endpoint-code">/api/cash-advances</td><td>Worker files a new cash advance request from mobile app.</td></tr>
+      <tr><td><span class="method method-put">PUT</span></td><td class="endpoint-code">/api/cash-advances/:id/approve</td><td>Admin approves or rejects cash advance request.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>I. Schedules & Project Milestones (4 Endpoints)</h3>
+  <table>
+    <thead><tr><th style="width: 12%;">Method</th><th style="width: 38%;">Endpoint</th><th style="width: 50%;">Description / Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><span class="method method-get">GET</span></td><td class="endpoint-code">/api/schedules</td><td>Fetches calendar milestones with project/expense links.</td></tr>
+      <tr><td><span class="method method-post">POST</span></td><td class="endpoint-code">/api/schedules</td><td>Creates a schedule item linked to a project or expense.</td></tr>
+      <tr><td><span class="method method-put">PUT</span></td><td class="endpoint-code">/api/schedules/:id</td><td>Updates scheduled date, assignees, or completion state.</td></tr>
+      <tr><td><span class="method method-delete">DELETE</span></td><td class="endpoint-code">/api/schedules/:id</td><td>Deletes milestone from project calendar.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>J. System Reports & Business Intelligence (4 Endpoints)</h3>
+  <table>
+    <thead><tr><th style="width: 12%;">Method</th><th style="width: 38%;">Endpoint</th><th style="width: 50%;">Description / Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><span class="method method-get">GET</span></td><td class="endpoint-code">/api/reports/expenses</td><td>Consolidated financial audit report with category breakdown.</td></tr>
+      <tr><td><span class="method method-get">GET</span></td><td class="endpoint-code">/api/reports/manpower</td><td>Workforce metrics, attendance rates, and labor cost summaries.</td></tr>
+      <tr><td><span class="method method-get">GET</span></td><td class="endpoint-code">/api/reports/materials</td><td>Material utilization and remaining inventory audit report.</td></tr>
+      <tr><td><span class="method method-get">GET</span></td><td class="endpoint-code">/api/reports/assets</td><td>Equipment usage, maintenance costs, and active inventory report.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>K. Notifications Engine (2 Endpoints)</h3>
+  <table>
+    <thead><tr><th style="width: 12%;">Method</th><th style="width: 38%;">Endpoint</th><th style="width: 50%;">Description / Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><span class="method method-get">GET</span></td><td class="endpoint-code">/api/notifications</td><td>Retrieves active system alerts and operational notifications.</td></tr>
+      <tr><td><span class="method method-put">PUT</span></td><td class="endpoint-code">/api/notifications/:id/read</td><td>Marks individual notification alert as read.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="footer">
+    BuildTrack Construction Management Platform &bull; System Specification & API Reference &bull; Generated October 2026
+  </div>
+
+</body>
+</html>

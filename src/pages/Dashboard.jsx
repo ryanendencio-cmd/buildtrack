@@ -89,7 +89,7 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
-    const date = new Date('2026-09-05');
+    const date = new Date();
     const iso = date.toISOString().split('T')[0];
     queueMicrotask(() => {
       setTodayISO(iso);
@@ -401,7 +401,7 @@ export default function Dashboard() {
         </div>
         <div className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100">
           <p className="text-[9px] font-bold text-gray-400 tracking-wider mb-1 uppercase">TOTAL MANPOWER</p>
-          <h2 className="text-xl font-extrabold text-gray-900">₱{Number(kpi.totalManpower).toLocaleString()}</h2>
+          <h2 className="text-xl font-extrabold text-gray-900">{Number(kpi.totalManpower).toLocaleString()}</h2>
         </div>
         <div className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100">
           <p className="text-[9px] font-bold text-gray-400 tracking-wider mb-0.5 uppercase">EQUIPMENT</p>

@@ -14,8 +14,13 @@ export default function Assets() {
     const [dropdownProjects, setDropdownProjects] = useState([]);
 
     useEffect(() => {
-        api.get('/projects').then(setDropdownProjects).catch(console.error);
-    }, []);
+        api.get('/projects').then(data => {
+            setDropdownProjects(data);
+            if (!id && data.length > 0) {
+                navigate(`/assets/${data[0].id}`, { replace: true });
+            }
+        }).catch(console.error);
+    }, [id, navigate]);
 
     const [workers, setWorkers] = useState([]);
     useEffect(() => {
@@ -24,40 +29,6 @@ export default function Assets() {
 
     const currentProjectId = id || (dropdownProjects[0]?.id ?? '1');
     const [equipment, setEquipment] = useState([]);
-    const [borrowQuantities, setBorrowQuantities] = useState({});
-
-    const handleToggleGroupSelect = (groupKey, isChecked) => {
-        setBorrowQuantities(prev => {
-            const next = { ...prev };
-            if (isChecked) {
-                next[groupKey] = 1;
-            } else {
-                delete next[groupKey];
-            }
-            return next;
-        });
-    };
-
-    const handleGroupQtyChange = (groupKey, value, maxQty) => {
-        const parsed = parseInt(value, 10);
-        const val = isNaN(parsed) ? 1 : Math.max(1, Math.min(parsed, maxQty));
-        setBorrowQuantities(prev => ({
-            ...prev,
-            [groupKey]: val
-        }));
-    };
-
-    const handleSelectAllGrouped = (availableGrouped, e) => {
-        if (e.target.checked) {
-            const newQuantities = {};
-            availableGrouped.forEach(g => {
-                newQuantities[g.key] = 1;
-            });
-            setBorrowQuantities(newQuantities);
-        } else {
-            setBorrowQuantities({});
-        }
-    };
 
 
     const [borrowHistory, setBorrowHistory] = useState([]);
@@ -103,11 +74,11 @@ export default function Assets() {
     const handleProjectChange = (e) => navigate(`/assets/${e.target.value}`);
 
     const handleActionClick = (item) => {
+        if (item.status === 'Available') return;
         setSelectedEquipment(item);
         setFormData({ name: '', status: item.status, condition: item.condition, user: '', quantity: 1, borrowQty: 1 });
 
-        if (item.status === 'Available') setModalState('CHECK_OUT');
-        else if (item.status === 'In Use') setModalState('CHECK_IN');
+        if (item.status === 'In Use') setModalState('CHECK_IN');
         else if (item.status === 'Maintenance') setModalState('REPAIR');
     };
 
@@ -143,94 +114,6 @@ export default function Assets() {
         }
     };
 
-    const submitCheckOutMultiple = async (e) => {
-        e.preventDefault();
-        const selectedEntries = Object.entries(borrowQuantities).filter(([, qty]) => qty > 0);
-        if (selectedEntries.length === 0) return;
-
-        const borrowAt = new Date().toISOString();
-        const workerName = formData.user || 'Site Worker';
-        let allIdsToCheckout = [];
-
-        try {
-            for (const [groupKey, qty] of selectedEntries) {
-                const group = availableGrouped.find(g => g.key === groupKey);
-                if (!group) continue;
-
-                const idsToCheckout = group.ids.slice(0, qty);
-                allIdsToCheckout.push(...idsToCheckout);
-
-                const promises = idsToCheckout.map(id => {
-                    const item = equipment.find(eq => eq.id === id);
-                    return api.put(`/assets/${id}`, {
-                        ...item,
-                        status: 'In Use',
-                        assigned_to: workerName,
-                        borrow_at: borrowAt
-                    });
-                });
-                await Promise.all(promises);
-
-                recordHistory({
-                    tool_name: group.name,
-                    borrower_name: workerName,
-                    quantity: qty,
-                    action: 'Check-Out',
-                    condition_status: group.condition || 'Good',
-                    date_time: borrowAt
-                });
-            }
-
-            setEquipment(prev => prev.map(eq =>
-                allIdsToCheckout.includes(eq.id)
-                    ? { ...eq, status: 'In Use', assigned_to: workerName, user: workerName, borrow_at: borrowAt }
-                    : eq
-            ));
-
-            setSuccessMsg(`${allIdsToCheckout.length} tool(s) checked out to ${workerName}.`);
-            setModalState('SUCCESS');
-            setBorrowQuantities({});
-            setFormData(prev => ({ ...prev, user: '', borrowQty: 1 }));
-        } catch (error) {
-            console.error(error);
-        }
-    };
-
-    const submitCheckOut = async (e) => {
-        e.preventDefault();
-        const borrowAt = new Date().toISOString();
-        const qty = Math.min(parseInt(formData.borrowQty, 10) || 1, (selectedEquipment.ids || [selectedEquipment.id]).length);
-        const idsToProcess = (selectedEquipment.ids || [selectedEquipment.id]).slice(0, qty);
-        try {
-            await Promise.all(idsToProcess.map(id => {
-                const item = equipment.find(eq => eq.id === id);
-                return api.put(`/assets/${id}`, {
-                    ...item,
-                    status: 'In Use',
-                    assigned_to: formData.user || 'Site Worker',
-                    borrow_at: borrowAt
-                });
-            }));
-
-            recordHistory({
-                tool_name: selectedEquipment.name,
-                borrower_name: formData.user || 'Site Worker',
-                quantity: qty,
-                action: 'Check-Out',
-                condition_status: selectedEquipment.condition || 'Good',
-                date_time: borrowAt
-            });
-
-            setEquipment(prev => prev.map(eq => idsToProcess.includes(eq.id)
-                ? { ...eq, status: 'In Use', assigned_to: formData.user || 'Site Worker', user: formData.user || 'Site Worker', borrow_at: borrowAt }
-                : eq
-            ));
-            setSuccessMsg(`${qty} ${selectedEquipment.name}(s) checked out to ${formData.user || 'Site Worker'}.`);
-            setModalState('SUCCESS');
-        } catch (error) {
-            console.error(error);
-        }
-    };
 
     const submitCheckIn = async (e) => {
         e.preventDefault();
@@ -283,26 +166,27 @@ export default function Assets() {
     const handleRFIDScan = () => {
         setModalState('SCANNING');
         setTimeout(() => {
-            const targetItem = equipment.find(e => e.status === 'Available' || e.status === 'In Use');
+            const targetItem = equipment.find(e => e.status === 'In Use');
             if (targetItem) {
-                const isCheckingOut = targetItem.status === 'Available';
                 const updated = equipment.map(eq => eq.id === targetItem.id ? {
                     ...eq,
-                    status: isCheckingOut ? 'In Use' : 'Available',
-                    user: isCheckingOut ? 'RFID User (Tag 0x4B)' : '—'
+                    status: 'Available',
+                    user: '—',
+                    assigned_to: null,
+                    borrow_at: null
                 } : eq);
 
                 recordHistory({
                     tool_name: targetItem.name,
-                    borrower_name: isCheckingOut ? 'RFID User (Tag 0x4B)' : (targetItem.assigned_to || targetItem.user || 'RFID User'),
+                    borrower_name: targetItem.assigned_to || targetItem.user || 'RFID User',
                     quantity: 1,
-                    action: isCheckingOut ? 'Check-Out' : 'Check-In',
+                    action: 'Check-In',
                     condition_status: targetItem.condition || 'Good',
                     date_time: new Date().toISOString()
                 });
 
                 setEquipment(updated);
-                setSuccessMsg(`RFID read. ${targetItem.name} checked ${isCheckingOut ? 'out' : 'in'}.`);
+                setSuccessMsg(`RFID read. ${targetItem.name} checked in.`);
                 setModalState('SUCCESS');
             } else {
                 setModalState('NONE');
@@ -313,12 +197,17 @@ export default function Assets() {
     const handleConfirmAdd = async (e) => {
         e.preventDefault();
         const qty = parseInt(formData.quantity, 10) || 1;
+        const targetProjId = (currentProjectId && currentProjectId !== '1')
+            ? currentProjectId
+            : (dropdownProjects[0]?.id || currentProjectId || null);
+
         const payload = {
-            project_id: currentProjectId,
-            name: formData.name,
+            project_id: targetProjId,
+            name: formData.name.trim(),
             status: 'Available',
+            assigned_to: null,
             user: '—',
-            condition: formData.condition
+            condition: formData.condition || 'Good'
         };
         try {
             const promises = Array.from({ length: qty }).map(() => api.post('/assets', payload));
@@ -327,7 +216,8 @@ export default function Assets() {
             setSuccessMsg(`${qty} tool(s) added to inventory.`);
             setModalState('SUCCESS');
         } catch (error) {
-            console.error(error);
+            console.error('Error adding tool to inventory:', error);
+            alert('Failed to add tool: ' + (error.message || 'Server error'));
         }
     };
 
@@ -335,8 +225,6 @@ export default function Assets() {
         setModalState('NONE');
         setFormData({ name: '', status: 'Available', condition: 'Good', user: '', quantity: 1, borrowQty: 1 });
         setSelectedEquipment(null);
-        setSelectedForCheckout([]);
-        setBorrowQuantities({});
     };
 
     const availableCount = equipment.filter(e => e.status === 'Available').length;
@@ -363,31 +251,6 @@ export default function Assets() {
         }, {})
     );
 
-    // Group available tools by condition and then by tool name for Borrow Tools modal
-    const availableByCondition = equipment
-        .filter(eq => eq.status === 'Available')
-        .reduce((acc, item) => {
-            const cond = item.condition || item.type || 'Good';
-            if (!acc[cond]) acc[cond] = {};
-            const key = `${item.name}||${cond}`;
-            if (!acc[cond][key]) {
-                acc[cond][key] = {
-                    key,
-                    name: item.name,
-                    condition: cond,
-                    maxQty: 1,
-                    ids: [item.id]
-                };
-            } else {
-                acc[cond][key].maxQty += 1;
-                acc[cond][key].ids.push(item.id);
-            }
-            return acc;
-        }, {});
-
-    const availableGrouped = Object.values(availableByCondition).flatMap(obj => Object.values(obj));
-
-    const totalBorrowCount = Object.values(borrowQuantities).reduce((acc, qty) => acc + (qty || 0), 0);
 
     const selectStyles = {
         backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3e%3cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3e%3c/svg%3e")`,
@@ -423,9 +286,6 @@ export default function Assets() {
                 </div>
 
                 <div className="flex items-center gap-2 w-full md:w-auto">
-                    <button onClick={() => setModalState('BORROW_TOOLS')} className="bg-[#A63228] text-white w-[115px] h-8 rounded-lg font-bold text-[10px] shadow-sm hover:bg-[#8B1A10] transition-colors flex items-center justify-center">
-                        Borrow Tools
-                    </button>
                     <button onClick={handleRFIDScan} className="bg-white border border-[#A63228] text-[#A63228] w-[130px] h-8 rounded-lg font-bold text-[10px] shadow-sm hover:bg-red-50 transition-colors flex items-center justify-center">
                         RFID Scan
                     </button>
@@ -481,17 +341,18 @@ export default function Assets() {
                                 </td>
                                 <td className="py-2.5 border-b border-gray-50 text-center pr-2">
                                     <div className="flex items-center justify-center gap-1">
-                                        <button
-                                            onClick={() => handleActionClick(item)}
-                                            className={`text-[8px] font-extrabold w-[75px] py-1.5 rounded border border-gray-800 text-gray-900 text-center uppercase tracking-wider inline-block transition-colors 
-                                        ${item.status === 'Available' ? 'hover:bg-[#2e7d32] hover:border-[#2e7d32] hover:text-white' :
-                                                    item.status === 'In Use' ? 'hover:bg-[#A63228] hover:border-[#A63228] hover:text-white' :
-                                                        item.status === 'Returned' ? 'hover:bg-gray-600 hover:border-gray-600 hover:text-white' :
-                                                            'hover:bg-[#ca8a04] hover:border-[#ca8a04] hover:text-white'
+                                        {item.status !== 'Available' && (
+                                            <button
+                                                onClick={() => handleActionClick(item)}
+                                                className={`text-[8px] font-extrabold w-[75px] py-1.5 rounded border border-gray-800 text-gray-900 text-center uppercase tracking-wider inline-block transition-colors 
+                                            ${item.status === 'In Use' ? 'hover:bg-[#A63228] hover:border-[#A63228] hover:text-white' :
+                                                item.status === 'Returned' ? 'hover:bg-gray-600 hover:border-gray-600 hover:text-white' :
+                                                    'hover:bg-[#ca8a04] hover:border-[#ca8a04] hover:text-white'
                                                 }`}
-                                        >
-                                            {item.status === 'Available' ? 'Check-Out' : item.status === 'In Use' ? 'Check-In' : item.status === 'Returned' ? 'View Log' : 'Repair Log'}
-                                        </button>
+                                            >
+                                                {item.status === 'In Use' ? 'Check-In' : item.status === 'Returned' ? 'View Log' : 'Repair Log'}
+                                            </button>
+                                        )}
                                         <button onClick={() => handleEditClick(item)} title="Edit" className="text-[8px] font-bold text-blue-400 hover:text-blue-600 transition-colors px-1">✎</button>
                                         <button onClick={() => item.ids.forEach(id => handleDeleteAsset(id))} className="text-[8px] font-bold text-gray-400 hover:text-red-600 transition-colors px-1">✕</button>
                                     </div>
@@ -630,118 +491,7 @@ export default function Assets() {
 
             {/* ═════════ MODALS (ENLARGED, NO ICONS) ═════════ */}
 
-            {modalState === 'BORROW_TOOLS' && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 transition-all">
-                    <div className="bg-white rounded-2xl w-full max-w-[500px] shadow-2xl relative max-h-[90vh] flex flex-col">
-                        <div className="p-6 border-b border-gray-100 flex justify-between items-center">
-                            <div>
-                                <h3 className="text-xl font-extrabold text-[#1a1a1a]">Borrow Tools</h3>
-                                <p className="text-sm text-gray-500 font-medium mt-1">Select tools and quantities to assign to a worker</p>
-                            </div>
-                            <button onClick={resetAndClose} className="text-2xl font-bold text-gray-400 hover:text-gray-700">&times;</button>
-                        </div>
-                        
-                        <form onSubmit={submitCheckOutMultiple} className="flex flex-col flex-1 overflow-hidden">
-                            <div className="p-6 border-b border-gray-100">
-                                <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-wider">Assign To Worker/Staff</label>
-                                <input type="text" name="user" value={formData.user} onChange={handleInputChange} required className="w-full bg-[#f4f1ee] border border-transparent rounded-xl px-4 py-3 text-sm font-medium focus:border-[#A63228] outline-none transition-colors" placeholder="Type name or ID here..." list="workers-list" autoComplete="off" />
-                            </div>
 
-                            <div className="p-6 overflow-y-auto flex-1" style={{ maxHeight: '45vh' }}>
-                                <div className="flex justify-between items-center mb-3">
-                                    <h4 className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest">Available Tools (Separated by Condition)</h4>
-                                    {availableGrouped.length > 0 && (
-                                        <label className="text-[9px] font-bold flex items-center gap-1 cursor-pointer">
-                                            <input
-                                                type="checkbox"
-                                                onChange={(e) => handleSelectAllGrouped(availableGrouped, e)}
-                                                checked={availableGrouped.length > 0 && Object.keys(borrowQuantities).length === availableGrouped.length}
-                                                className="accent-[#A63228]"
-                                            />
-                                            Select All
-                                        </label>
-                                    )}
-                                </div>
-                                {availableGrouped.length === 0 ? (
-                                    <p className="text-sm text-gray-500 italic py-4 text-center">No tools available for checkout.</p>
-                                ) : (
-                                    <div className="flex flex-col gap-4">
-                                        {['Good', 'Needs Repair', 'Broken'].filter(cond => availableByCondition[cond]).map((condition) => {
-                                            const groupList = Object.values(availableByCondition[condition]);
-                                            return (
-                                                <div key={condition} className="flex flex-col gap-2">
-                                                    <div className="flex items-center gap-2 pt-1 pb-1 border-b border-gray-100">
-                                                        <span className={`text-[9px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full ${
-                                                            condition === 'Good' ? 'bg-green-100 text-green-800 border border-green-200' :
-                                                            condition === 'Needs Repair' ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' :
-                                                            'bg-red-100 text-red-800 border border-red-200'
-                                                        }`}>
-                                                            {condition} Condition
-                                                        </span>
-                                                        <span className="text-[9px] text-gray-400 font-bold">({groupList.length} tool type(s))</span>
-                                                    </div>
-
-                                                    <div className="flex flex-col gap-2">
-                                                        {groupList.map((group) => {
-                                                            const isSelected = Boolean(borrowQuantities[group.key]);
-                                                            const selectedQty = borrowQuantities[group.key] || 1;
-                                                            return (
-                                                                <div
-                                                                    key={group.key}
-                                                                    className={`flex items-center justify-between p-2.5 rounded-xl border transition-all ${
-                                                                        isSelected ? 'bg-red-50/50 border-[#A63228]/30 shadow-sm' : 'bg-gray-50/60 border-gray-100 hover:border-gray-200'
-                                                                    }`}
-                                                                >
-                                                                    <label className="flex items-center gap-3 cursor-pointer flex-1 min-w-0 pr-2">
-                                                                        <input
-                                                                            type="checkbox"
-                                                                            className="accent-[#A63228] w-4 h-4 rounded"
-                                                                            checked={isSelected}
-                                                                            onChange={(e) => handleToggleGroupSelect(group.key, e.target.checked)}
-                                                                        />
-                                                                        <div className="flex flex-col min-w-0">
-                                                                            <span className="text-sm font-extrabold text-gray-900 truncate">{group.name}</span>
-                                                                            <div className="flex items-center gap-2 mt-0.5">
-                                                                                <span className="text-[10px] font-bold text-gray-500 bg-gray-200/70 rounded-full px-2 py-0.2">
-                                                                                    {group.maxQty} available
-                                                                                </span>
-                                                                            </div>
-                                                                        </div>
-                                                                    </label>
-
-                                                                    <div className="flex items-center gap-1.5 pl-2 border-l border-gray-200">
-                                                                        <span className="text-[9px] font-bold text-gray-400 uppercase">QTY:</span>
-                                                                        <input
-                                                                            type="number"
-                                                                            min="1"
-                                                                            max={group.maxQty}
-                                                                            value={isSelected ? selectedQty : 1}
-                                                                            disabled={!isSelected}
-                                                                            onChange={(e) => handleGroupQtyChange(group.key, e.target.value, group.maxQty)}
-                                                                            className={`w-14 text-center py-1 rounded-lg border text-xs font-extrabold outline-none transition-colors ${
-                                                                                isSelected ? 'bg-white border-[#A63228] text-gray-900 shadow-sm' : 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
-                                                                            }`}
-                                                                        />
-                                                                    </div>
-                                                                </div>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                )}
-                            </div>
-
-                            <div className="p-6 border-t border-gray-100 bg-gray-50 rounded-b-2xl flex gap-3">
-                                <button type="button" onClick={resetAndClose} className="flex-1 py-3 bg-white border border-[#A63228] text-[#A63228] rounded-xl text-sm font-extrabold hover:bg-red-50 transition-colors uppercase tracking-wider">Cancel</button>
-                                <button type="submit" disabled={totalBorrowCount === 0} className="flex-1 py-3 bg-[#E8C547] text-gray-900 rounded-xl text-sm font-extrabold hover:bg-[#d4b33d] transition-colors shadow-sm uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed">Borrow {totalBorrowCount} Tool(s)</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
 
             {modalState === 'EDIT' && selectedEquipment && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 transition-all">
@@ -785,33 +535,7 @@ export default function Assets() {
                 </div>
             )}
 
-            {modalState === 'CHECK_OUT' && selectedEquipment && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 transition-all">
-                    <div className="bg-white rounded-2xl w-full max-w-[480px] shadow-2xl relative">
-                        <div className="p-6 border-b border-gray-100 flex justify-between items-center">
-                            <div>
-                                <h3 className="text-xl font-extrabold text-[#1a1a1a]">Check-Out Tool</h3>
-                                <p className="text-sm text-gray-500 font-medium mt-1">Assigning <strong className="text-gray-900">{selectedEquipment.name}</strong> <span className="text-[#A63228]">({selectedEquipment.qty || 1} available)</span></p>
-                            </div>
-                            <button onClick={resetAndClose} className="text-2xl font-bold text-gray-400 hover:text-gray-700">&times;</button>
-                        </div>
-                        <form onSubmit={submitCheckOut} className="p-6 flex flex-col gap-5">
-                            <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-wider">Assign To Worker/Staff</label>
-                                <input type="text" name="user" value={formData.user} onChange={handleInputChange} required className="w-full bg-[#f4f1ee] border border-transparent rounded-xl px-4 py-3 text-sm font-medium focus:border-[#A63228] outline-none transition-colors" placeholder="Type name or ID here..." list="workers-list" autoComplete="off" />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-wider">Quantity to Borrow <span className="font-normal text-gray-400">(max {selectedEquipment.qty || 1})</span></label>
-                                <input type="number" name="borrowQty" min="1" max={selectedEquipment.qty || 1} value={formData.borrowQty} onChange={handleInputChange} required className="w-full bg-[#f4f1ee] border border-transparent rounded-xl px-4 py-3 text-sm font-medium focus:border-[#A63228] outline-none" />
-                            </div>
-                            <div className="flex gap-3 mt-2">
-                                <button type="button" onClick={resetAndClose} className="flex-1 py-3 bg-white border border-[#A63228] text-[#A63228] rounded-xl text-sm font-extrabold hover:bg-red-50 transition-colors uppercase tracking-wider">Cancel</button>
-                                <button type="submit" className="flex-1 py-3 bg-[#E8C547] text-gray-900 rounded-xl text-sm font-extrabold hover:bg-[#d4b33d] transition-colors shadow-sm uppercase tracking-wider">Confirm Check-Out</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
+
 
             {modalState === 'CHECK_IN' && selectedEquipment && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 transition-all">

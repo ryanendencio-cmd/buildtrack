@@ -7,7 +7,7 @@ export default function Materials() {
     const { id } = useParams();
     const navigate = useNavigate();
 
-    const [selectedDate, setSelectedDate] = useState('2026-09-05');
+    const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
 
     // ── FETCH PROJECTS FROM DATABASE ──
     const [dropdownProjects, setDropdownProjects] = useState([]);
