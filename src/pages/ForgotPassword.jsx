@@ -249,11 +249,21 @@ export default function ForgotPassword() {
           position: 'relative', overflow: 'hidden',
           display: 'flex', flexDirection: 'column', flexShrink: 0,
         }}>
-          <img src="/hero-bg.jpg" alt="" style={{
-            position: 'absolute', inset: 0,
-            width: '100%', height: '100%',
-            objectFit: 'cover', objectPosition: 'center', zIndex: 0,
-          }} />
+          {/* Local Cinematic Video Background */}
+          <video
+            autoPlay
+            loop
+            muted
+            playsInline
+            style={{
+              position: 'absolute', inset: 0,
+              width: '100%', height: '100%',
+              objectFit: 'cover', objectPosition: 'center', zIndex: 0,
+              opacity: 0.85
+            }}
+          >
+            <source src="/bg.mp4" type="video/mp4" />
+          </video>
 
           <div style={{
             position: 'absolute', inset: 0, zIndex: 1,

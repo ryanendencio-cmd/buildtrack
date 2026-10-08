@@ -142,15 +142,20 @@ function startServer() {
     }
 
     try {
-      if (String(targetStatus).toUpperCase() !== 'COMPLETED') {
+      const ts = String(targetStatus).toUpperCase()
+      if (ts === 'ONGOING' || ts === 'ACTIVE') {
         const activeProjects = await db.collection('projects')
           .where('status', '!=', 'COMPLETED')
           .get()
         
-        if (!activeProjects.empty) {
-          const activeProj = activeProjects.docs[0].data()
+        const activeProj = activeProjects.docs.find(d => {
+          const s = (d.data().status || '').toUpperCase()
+          return s === 'ONGOING' || s === 'ACTIVE'
+        })
+
+        if (activeProj) {
           return res.status(400).json({
-            error: `Cannot start a new project because there is currently an active project ("${activeProj.name}"). You must mark the current project as COMPLETED first.`
+            error: `Cannot start a new project as ONGOING because there is currently an active project ("${activeProj.data().name}"). You must mark the current project as COMPLETED first.`
           })
         }
       }
@@ -176,16 +181,21 @@ function startServer() {
     }
 
     try {
-      if (status && String(status).toUpperCase() !== 'COMPLETED') {
+      const ts = status ? String(status).toUpperCase() : null
+      if (ts === 'ONGOING' || ts === 'ACTIVE') {
         const otherActive = await db.collection('projects')
           .where('status', '!=', 'COMPLETED')
           .get()
         
-        const hasOtherActive = otherActive.docs.some(doc => doc.id !== req.params.id)
-        if (hasOtherActive) {
-          const activeProj = otherActive.docs.find(doc => doc.id !== req.params.id).data()
+        const activeProj = otherActive.docs.find(doc => {
+          if (doc.id === req.params.id) return false
+          const s = (doc.data().status || '').toUpperCase()
+          return s === 'ONGOING' || s === 'ACTIVE'
+        })
+        
+        if (activeProj) {
           return res.status(400).json({
-            error: `This project cannot be active because there is another ongoing project ("${activeProj.name}"). Only one active project is allowed at a time.`
+            error: `This project cannot be active because there is another ongoing project ("${activeProj.data().name}"). Only one active project is allowed at a time.`
           })
         }
       }

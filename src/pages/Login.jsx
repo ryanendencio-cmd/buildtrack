@@ -159,8 +159,16 @@ export default function Login() {
   const [mounted,      setMounted]      = useState(false)
   const navigate = useNavigate()
 
-  /* Trigger entrance animations after mount */
-  useEffect(() => { setMounted(true) }, [])
+  /* Trigger entrance animations after mount, setup remember me */
+  useEffect(() => { 
+    setMounted(true) 
+    
+    const savedEmail = localStorage.getItem('rememberedEmail')
+    if (savedEmail) {
+      setEmail(savedEmail)
+      setRememberMe(true)
+    }
+  }, [])
 
   async function handleLogin(e) {
     e.preventDefault()
@@ -177,6 +185,11 @@ export default function Login() {
       if (!res.ok) {
         setError(data.error || 'Invalid username or password.')
       } else {
+        if (rememberMe) {
+          localStorage.setItem('rememberedEmail', email)
+        } else {
+          localStorage.removeItem('rememberedEmail')
+        }
         localStorage.setItem('adminId', data.admin.id)
         localStorage.setItem('adminSession', JSON.stringify(data.admin))
         localStorage.setItem('adminToken', data.token)
@@ -208,16 +221,21 @@ export default function Login() {
             flexShrink: 0,
           }}
         >
-          {/* Background image */}
-          <img
-            src="/hero-bg.jpg"
-            alt=""
+          {/* Local Cinematic Video Background */}
+          <video
+            autoPlay
+            loop
+            muted
+            playsInline
             style={{
               position: 'absolute', inset: 0,
               width: '100%', height: '100%',
               objectFit: 'cover', objectPosition: 'center', zIndex: 0,
+              opacity: 0.85
             }}
-          />
+          >
+            <source src="/bg.mp4" type="video/mp4" />
+          </video>
 
           {/* Dark overlay */}
           <div style={{

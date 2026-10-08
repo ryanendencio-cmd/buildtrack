@@ -417,7 +417,7 @@ export default function Projects() {
 
                                 <div className="bg-[#f9fafb] p-3 rounded-lg border border-gray-200">
                                     <label className="block text-[8px] font-extrabold text-gray-700 uppercase mb-2">Location Details (Philippines)</label>
-                                    
+
                                     <PhilippineAddressSelector
                                         value={addressState}
                                         onChange={(newAddr) => setAddressState(newAddr)}

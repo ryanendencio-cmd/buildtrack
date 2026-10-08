@@ -20,10 +20,46 @@ export default function Hero() {
 
   return (
     <section className="hero-wrapper">
-      {/* Background image with overlay */}
+      <style>{`
+        @keyframes heroPulseLanding {
+          0%, 100% { opacity: 0.18; }
+          50%       { opacity: 0.28; }
+        }
+      `}</style>
+
+      {/* Background video with overlay */}
       <div className="hero-bg">
-        <img src="/hero-bg.jpg" alt="" className="hero-bg-img" />
-        <div className="hero-bg-overlay"></div>
+        <video
+          autoPlay
+          loop
+          muted
+          playsInline
+          className="hero-bg-img"
+          style={{ objectFit: 'cover', zIndex: 0 }}
+        >
+          <source src="/landing-bg.mp4" type="video/mp4" />
+        </video>
+
+        {/* Dark overlay (made more neutral to let video shine) */}
+        <div style={{
+          position: 'absolute', inset: 0, zIndex: 1,
+          background: 'linear-gradient(to bottom, rgba(10,10,10,0.65) 0%, rgba(10,10,10,0.4) 40%, rgba(10,10,10,0.7) 70%, rgba(10,10,10,0.9) 100%)',
+        }} />
+
+        {/* Subtle red tint vignette (toned down) */}
+        <div style={{
+          position: 'absolute', inset: 0, zIndex: 2,
+          background: 'linear-gradient(135deg, rgba(139,26,16,0.15) 0%, transparent 50%)',
+        }} />
+
+        {/* Animated radial glow (toned down) */}
+        <div style={{
+          position: 'absolute', top: '30%', left: '10%',
+          width: '320px', height: '320px', borderRadius: '50%',
+          background: 'radial-gradient(circle, rgba(139,26,16,0.12) 0%, transparent 70%)',
+          zIndex: 2,
+          animation: 'heroPulseLanding 4s ease-in-out infinite',
+        }} />
       </div>
 
       {/* Main hero content */}
