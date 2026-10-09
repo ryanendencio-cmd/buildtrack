@@ -18,13 +18,42 @@ export default function Materials() {
 
     const currentProjectId = id || (dropdownProjects[0]?.id ?? "1");
     const [materials, setMaterials] = useState([]);
+    const [expenses, setExpenses] = useState([]);
 
     useEffect(() => {
         if (!currentProjectId) return;
-        api.get(`/materials/${currentProjectId}`).then(data => setMaterials(data)).catch(console.error);
+        Promise.all([
+            api.get(`/materials/${currentProjectId}`).catch(() => []),
+            api.get(`/expenses/${currentProjectId}`).catch(() => [])
+        ]).then(([matData, expData]) => {
+            setMaterials(Array.isArray(matData) ? matData : []);
+            setExpenses(Array.isArray(expData) ? expData : []);
+        }).catch(console.error);
     }, [currentProjectId]);
 
-    const displayedMaterials = materials.filter(m => m.date === selectedDate);
+    const expensesMaterials = expenses
+        .filter(e => (e.category || '').toUpperCase() === 'MATERIALS')
+        .flatMap(e => (e.items || []).map((item, idx) => ({
+            id: `exp_${e.id}_${idx}`,
+            project_id: e.project_id,
+            date: e.date,
+            name: item.description,
+            qty: item.qty,
+            unit: item.unit || 'pcs',
+            cost: item.price,
+            remarks: 'From Add Expense'
+        })));
+
+    const combinedMaterials = [
+        ...materials.map(m => ({
+            ...m,
+            qty: m.qty || m.quantity || 0,
+            cost: m.cost || m.unit_cost || 0
+        })),
+        ...expensesMaterials
+    ];
+
+    const displayedMaterials = combinedMaterials.filter(m => m.date === selectedDate);
 
     const [modalState, setModalState] = useState('NONE');
     const [logDate, setLogDate] = useState(selectedDate);
@@ -102,8 +131,8 @@ export default function Materials() {
         setMaterialRows([{ name: '', qty: '', unit: 'Bags', cost: '', remarks: '' }]);
     };
 
-    const dailyCost = displayedMaterials.reduce((sum, m) => sum + Number(m.cost || 0), 0);
-    const totalProjectCost = materials.reduce((sum, m) => sum + Number(m.cost || 0), 0);
+    const dailyCost = displayedMaterials.reduce((sum, m) => sum + (Number(m.qty || 0) * Number(m.cost || 0)), 0);
+    const totalProjectCost = combinedMaterials.reduce((sum, m) => sum + (Number(m.qty || 0) * Number(m.cost || 0)), 0);
     const totalItemsLogged = displayedMaterials.length;
 
     const selectStyles = {
@@ -314,9 +343,9 @@ export default function Materials() {
                                             </div>
                                         </div>
 
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                                             <div>
-                                                <label className="block text-[9px] font-bold text-gray-600 mb-1 uppercase">EST. TOTAL COST (₱)</label>
+                                                <label className="block text-[9px] font-bold text-gray-600 mb-1 uppercase">UNIT COST (₱)</label>
                                                 <input
                                                     type="number"
                                                     min="0"
@@ -325,6 +354,15 @@ export default function Materials() {
                                                     required
                                                     placeholder="0.00"
                                                     className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-xs font-extrabold text-[#A63228] focus:border-[#A63228] outline-none"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-[9px] font-bold text-gray-600 mb-1 uppercase">SUBTOTAL (₱)</label>
+                                                <input
+                                                    type="text"
+                                                    disabled
+                                                    value={((parseFloat(row.qty) || 0) * (parseFloat(row.cost) || 0)).toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                                    className="w-full bg-red-50/50 border border-red-100 rounded-lg px-3 py-2 text-xs font-extrabold text-[#A63228] outline-none cursor-not-allowed"
                                                 />
                                             </div>
                                             <div>
@@ -354,7 +392,7 @@ export default function Materials() {
                                 <div className="text-left w-full sm:w-auto">
                                     <span className="block text-[9px] font-extrabold text-gray-400 uppercase tracking-wider">TOTAL DAILY MATERIAL COST</span>
                                     <span className="text-base font-extrabold text-[#A63228]">
-                                        ₱{materialRows.reduce((sum, r) => sum + (parseFloat(r.cost) || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                        ₱{materialRows.reduce((sum, r) => sum + ((parseFloat(r.qty) || 0) * (parseFloat(r.cost) || 0)), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                     </span>
                                 </div>
                                 <div className="flex gap-2 w-full sm:w-auto">

@@ -31,7 +31,7 @@ export default function Expenses() {
         date: '',
         time: '',
         category: 'Materials',
-        items: [{ qty: '', description: '', price: '' }],
+        items: [{ qty: '', unit: 'pcs', description: '', price: '' }],
         amount: '',
         cashTendered: '',
         change: ''
@@ -113,6 +113,30 @@ export default function Expenses() {
                 setAmountError('');
             }
         }
+        if (name === 'category') {
+            const defaultUnit = value === 'Manpower' ? 'days' : value === 'Equipment' ? 'days' : 'pcs';
+            if (isEdit) {
+                setEditFormData(prev => ({
+                    ...prev,
+                    [name]: value,
+                    items: prev.items ? prev.items.map(item => ({
+                        ...item,
+                        unit: item.description === '' && item.price === '' ? defaultUnit : item.unit
+                    })) : []
+                }));
+            } else {
+                setFormData(prev => ({
+                    ...prev,
+                    [name]: value,
+                    items: prev.items.map(item => ({
+                        ...item,
+                        unit: item.description === '' && item.price === '' ? defaultUnit : item.unit
+                    }))
+                }));
+            }
+            return;
+        }
+
         if (isEdit) {
             setEditFormData(prev => ({ ...prev, [name]: value }));
         } else {
@@ -126,7 +150,10 @@ export default function Expenses() {
         setFormData({ ...formData, items: newItems });
     };
 
-    const addNewItem = () => setFormData({ ...formData, items: [...formData.items, { qty: '', description: '', price: '' }] });
+    const addNewItem = () => {
+        const defaultUnit = formData.category === 'Manpower' ? 'days' : formData.category === 'Equipment' ? 'days' : 'pcs';
+        setFormData({ ...formData, items: [...formData.items, { qty: '', unit: defaultUnit, description: '', price: '' }] });
+    };
     const removeItem = (index) => setFormData({ ...formData, items: formData.items.filter((_, i) => i !== index) });
 
     const computedTotal = formData.items.reduce((sum, item) => {
@@ -146,6 +173,10 @@ export default function Expenses() {
         }
         if (amt <= 0) {
             setAmountError('Please add at least one item with qty and price.');
+            return;
+        }
+        if (!photoData) {
+            setAmountError('Please upload a receipt image. It is required as proof of purchase.');
             return;
         }
         setAmountError('');
@@ -303,7 +334,7 @@ export default function Expenses() {
         setAmountError('');
         setModalState('NONE');
         setFormData({
-            project: currentProjectData?.name, receiptNo: '', date: todayISO, time: '08:00', category: 'Materials', items: [{ qty: '', description: '', price: '' }], amount: '', cashTendered: '', change: ''
+            project: currentProjectData?.name, receiptNo: '', date: todayISO, time: '08:00', category: 'Materials', items: [{ qty: '', unit: 'pcs', description: '', price: '' }], amount: '', cashTendered: '', change: ''
         });
     };
 
@@ -1051,9 +1082,57 @@ export default function Expenses() {
                                         <label className="block text-[10px] font-extrabold text-gray-800 uppercase">ITEMS / LABOR LIST</label>
                                         <button type="button" onClick={addNewItem} className="bg-white border border-[#A63228] text-[#A63228] text-[10px] px-2 py-1 rounded-md font-bold hover:bg-red-50 flex items-center gap-1 shadow-sm transition-colors"><span>+</span> Add Item</button>
                                     </div>
+                                    <datalist id="materialsList">
+                                        {formData.category === 'Materials' && (
+                                            <>
+                                                <option value="Cement" />
+                                                <option value="Sand" />
+                                                <option value="Gravel" />
+                                                <option value="Steel Rebar" />
+                                                <option value="Plywood" />
+                                                <option value="Nails" />
+                                                <option value="Paint" />
+                                                <option value="Hollow Blocks" />
+                                                <option value="Lumber" />
+                                                <option value="PVC Pipe" />
+                                                <option value="Wire" />
+                                                <option value="Tiles" />
+                                            </>
+                                        )}
+                                        {formData.category === 'Manpower' && (
+                                            <>
+                                                <option value="Foreman" />
+                                                <option value="Mason" />
+                                                <option value="Carpenter" />
+                                                <option value="Welder" />
+                                                <option value="Steelman" />
+                                                <option value="Laborer" />
+                                                <option value="Painter" />
+                                                <option value="Electrician" />
+                                                <option value="Plumber" />
+                                                <option value="Helper" />
+                                            </>
+                                        )}
+                                        {formData.category === 'Equipment' && (
+                                            <>
+                                                <option value="Excavator" />
+                                                <option value="Backhoe" />
+                                                <option value="Concrete Mixer" />
+                                                <option value="Crane" />
+                                                <option value="Jackhammer" />
+                                                <option value="Scaffolding" />
+                                                <option value="Dump Truck" />
+                                                <option value="Generator" />
+                                                <option value="Welding Machine" />
+                                                <option value="Water Pump" />
+                                            </>
+                                        )}
+                                    </datalist>
+
                                     {/* Column headers */}
-                                    <div className="grid grid-cols-[50px_1fr_80px_72px_28px] gap-1.5 mb-1.5 px-0.5">
+                                    <div className="grid grid-cols-[55px_65px_1fr_80px_75px_28px] gap-1.5 mb-1.5 px-0.5">
                                         <span className="text-[8px] font-bold text-gray-400 uppercase">Qty</span>
+                                        <span className="text-[8px] font-bold text-gray-400 uppercase">Unit</span>
                                         <span className="text-[8px] font-bold text-gray-400 uppercase">Description</span>
                                         <span className="text-[8px] font-bold text-gray-400 uppercase">Unit Price</span>
                                         <span className="text-[8px] font-bold text-gray-400 uppercase text-right">Subtotal</span>
@@ -1063,26 +1142,46 @@ export default function Expenses() {
                                         {formData.items.map((item, idx) => {
                                             const subtotal = (parseFloat(item.qty) || 0) * (parseFloat(item.price) || 0);
                                             return (
-                                                <div key={idx} className="grid grid-cols-[50px_1fr_80px_72px_28px] gap-1.5 items-center">
+                                                <div key={idx} className="grid grid-cols-[55px_65px_1fr_80px_75px_28px] gap-1.5 items-center">
                                                     <input
                                                         type="number" min="0"
                                                         value={item.qty}
                                                         onChange={(e) => handleItemChange(idx, 'qty', e.target.value)}
-                                                        className="w-full bg-white border border-gray-300 rounded-lg px-2 py-2 text-xs font-medium focus:border-[#A63228] outline-none text-center"
+                                                        className="w-full bg-white border border-gray-300 rounded-lg px-1.5 py-2 text-[11px] font-medium focus:border-[#A63228] outline-none text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                                         placeholder="0"
                                                     />
+                                                    <select
+                                                        value={item.unit || 'pcs'}
+                                                        onChange={(e) => handleItemChange(idx, 'unit', e.target.value)}
+                                                        className="w-full bg-white border border-gray-300 rounded-lg px-1 py-2 text-[11px] font-medium focus:border-[#A63228] outline-none appearance-none text-center"
+                                                        style={{ backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3e%3cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3e%3c/svg%3e")`, backgroundPosition: 'right 0.2rem center', backgroundRepeat: 'no-repeat', backgroundSize: '0.6rem' }}
+                                                    >
+                                                        <option value="pcs">pcs</option>
+                                                        <option value="kg">kg</option>
+                                                        <option value="bags">bags</option>
+                                                        <option value="liters">liters</option>
+                                                        <option value="meters">meters</option>
+                                                        <option value="cu.m">cu.m</option>
+                                                        <option value="tons">tons</option>
+                                                        <option value="boxes">boxes</option>
+                                                        <option value="days">days</option>
+                                                        <option value="hours">hrs</option>
+                                                        <option value="pax">pax</option>
+                                                        <option value="trips">trips</option>
+                                                    </select>
                                                     <input
                                                         type="text"
+                                                        list="materialsList"
                                                         value={item.description}
                                                         onChange={(e) => handleItemChange(idx, 'description', e.target.value)}
-                                                        className="w-full bg-white border border-gray-300 rounded-lg px-2 py-2 text-xs font-medium focus:border-[#A63228] outline-none"
-                                                        placeholder={formData.category === 'Manpower' ? 'Name / Role' : 'Description'}
+                                                        className="w-full bg-white border border-gray-300 rounded-lg px-2 py-2 text-[11px] font-medium focus:border-[#A63228] outline-none"
+                                                        placeholder={formData.category === 'Manpower' ? 'Name / Role' : 'Item Description'}
                                                     />
                                                     <input
                                                         type="number" min="0" step="0.01"
                                                         value={item.price}
                                                         onChange={(e) => handleItemChange(idx, 'price', e.target.value)}
-                                                        className="w-full bg-white border border-gray-300 rounded-lg px-2 py-2 text-xs font-medium focus:border-[#A63228] outline-none"
+                                                        className="w-full bg-white border border-gray-300 rounded-lg px-2 py-2 text-[11px] font-medium focus:border-[#A63228] outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                                         placeholder="0.00"
                                                     />
                                                     <div className="text-right">
@@ -1118,9 +1217,9 @@ export default function Expenses() {
                                     </span>
                                 </div>
 
-                                {/* ── UPLOAD RECEIPT (OPTIONAL) ── */}
+                                {/* ── UPLOAD RECEIPT (REQUIRED) ── */}
                                 <div className="mt-1">
-                                    <label className="block text-[9px] font-bold text-gray-700 mb-1.5 uppercase">Upload Receipt <span className="text-gray-400 normal-case font-normal">(optional)</span></label>
+                                    <label className="block text-[9px] font-bold text-gray-700 mb-1.5 uppercase">Upload Receipt <span className="text-red-500">* Required</span></label>
                                     {photoData ? (
                                         <div className="relative w-full rounded-xl overflow-hidden border border-[#A63228]/30 bg-gray-50">
                                             <img src={photoData} alt="Receipt preview" className="w-full max-h-40 object-contain" />

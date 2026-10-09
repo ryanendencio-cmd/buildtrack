@@ -11,6 +11,11 @@ const isOngoingStatus = (statusStr) => {
     return s === 'ONGOING' || s === 'ACTIVE' || s === '';
 };
 
+const isUpcomingStatus = (statusStr) => {
+    const s = (statusStr || '').toUpperCase();
+    return s === 'UPCOMING' || s === 'STANDBY';
+};
+
 export default function Projects() {
     const [projects, setProjects] = useState([]);
 
@@ -24,6 +29,7 @@ export default function Projects() {
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('All');
     const [modalState, setModalState] = useState('NONE'); // NONE, ADD, EDIT, CONFIRM, SUCCESS, SUCCESS
+    const [deleteProjectId, setDeleteProjectId] = useState(null);
 
     const [addressState, setAddressState] = useState({
         regionCode: '',
@@ -91,18 +97,13 @@ export default function Projects() {
     const activeOngoingProject = projects.find(p => isOngoingStatus(p.status));
 
     const openAddModal = () => {
-        if (activeOngoingProject) {
-            alert(`Cannot add a new project yet.\n\nThere is currently an active project: "${activeOngoingProject.name}".\n\nOnly one project is allowed to be active at a time. You must finish and mark the current project as "COMPLETED" before starting a new one.`);
-            return;
-        }
-
         setFormData({
             id: null,
             title: '',
             contract: '',
             startDate: '',
             targetDate: '',
-            status: 'ONGOING'
+            status: activeOngoingProject ? 'UPCOMING' : 'ONGOING'
         });
         setAddressState({
             regionCode: '',
@@ -137,7 +138,7 @@ export default function Projects() {
             contract: String(proj.budget || ''),
             startDate: proj.start_date ? String(proj.start_date).slice(0, 10) : '',
             targetDate: proj.end_date ? String(proj.end_date).slice(0, 10) : '',
-            status: (proj.status || 'ONGOING').toUpperCase() === 'COMPLETED' ? 'COMPLETED' : 'ONGOING'
+            status: (proj.status || 'ONGOING').toUpperCase()
         });
 
         setDateError('');
@@ -236,9 +237,14 @@ export default function Projects() {
     };
 
     const handleDeleteProject = (id) => {
-        if (!window.confirm('Delete this project?')) return;
-        api.delete(`/projects/${id}`).then(() => {
-            setProjects(prev => prev.filter(p => p.id !== id));
+        setDeleteProjectId(id);
+    };
+
+    const confirmDelete = () => {
+        if (!deleteProjectId) return;
+        api.delete(`/projects/${deleteProjectId}`).then(() => {
+            setProjects(prev => prev.filter(p => p.id !== deleteProjectId));
+            setDeleteProjectId(null);
         }).catch(console.error);
     };
 
@@ -249,6 +255,8 @@ export default function Projects() {
         let matchStatus = true;
         if (statusFilter === 'Ongoing') {
             matchStatus = isOngoingStatus(p.status);
+        } else if (statusFilter === 'Upcoming') {
+            matchStatus = isUpcomingStatus(p.status);
         } else if (statusFilter === 'Completed') {
             matchStatus = (p.status || '').toUpperCase() === 'COMPLETED';
         }
@@ -257,6 +265,7 @@ export default function Projects() {
     });
 
     const ongoingCount = projects.filter(p => isOngoingStatus(p.status)).length;
+    const upcomingCount = projects.filter(p => isUpcomingStatus(p.status)).length;
     const completedCount = projects.filter(p => (p.status || '').toUpperCase() === 'COMPLETED').length;
     const totalBudget = projects.reduce((acc, p) => acc + Number(p.budget || 0), 0);
 
@@ -300,7 +309,7 @@ export default function Projects() {
                                 🔒 Currently Active Project: <span className="underline">{activeOngoingProject.name}</span>
                             </p>
                             <p className="text-[9px] text-amber-700 font-medium mt-0.5">
-                                Policy: Only 1 active project at a time. Finish first (mark as Completed) before starting a new project.
+                                Policy: Only 1 active project at a time. New projects will be added as "Upcoming / Standby".
                             </p>
                         </div>
                     </div>
@@ -324,7 +333,7 @@ export default function Projects() {
                 </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mb-3">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-3">
                 <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-center text-center">
                     <p className="text-[8px] font-bold text-gray-400 tracking-wider uppercase mb-0.5">TOTAL PROJECTS</p>
                     <h2 className="text-lg font-extrabold text-gray-900">{projects.length}</h2>
@@ -334,10 +343,14 @@ export default function Projects() {
                     <h2 className="text-lg font-extrabold text-[#2e7d32]">{ongoingCount}</h2>
                 </div>
                 <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-center text-center">
+                    <p className="text-[8px] font-bold text-[#d97706] tracking-wider uppercase mb-0.5">UPCOMING</p>
+                    <h2 className="text-lg font-extrabold text-[#d97706]">{upcomingCount}</h2>
+                </div>
+                <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-center text-center">
                     <p className="text-[8px] font-bold text-gray-400 tracking-wider uppercase mb-0.5">COMPLETED</p>
                     <h2 className="text-lg font-extrabold text-gray-900">{completedCount}</h2>
                 </div>
-                <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-center text-center">
+                <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-center text-center col-span-2 md:col-span-1">
                     <p className="text-[8px] font-bold text-[#A63228] tracking-wider uppercase mb-0.5">TOTAL CONTRACT VALUE</p>
                     <h2 className="text-lg font-extrabold text-[#A63228]">₱{totalBudget.toLocaleString()}</h2>
                 </div>
@@ -351,6 +364,7 @@ export default function Projects() {
                 <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="bg-[#f4f1ee] border border-transparent text-gray-700 pl-2.5 pr-6 py-1.5 rounded-lg text-[10px] font-bold outline-none appearance-none w-full sm:w-auto" style={selectStyles}>
                     <option value="All">All Statuses</option>
                     <option value="Ongoing">Ongoing</option>
+                    <option value="Upcoming">Upcoming</option>
                     <option value="Completed">Completed</option>
                 </select>
             </div>
@@ -369,18 +383,22 @@ export default function Projects() {
                                     <p className="text-[7px] font-bold text-gray-400 uppercase tracking-wider">Current Budget</p>
                                     <p className="text-[11px] font-extrabold text-[#A63228]">₱{Number(proj.budget || 0).toLocaleString()}</p>
                                 </div>
-                                <button type="button" onClick={() => setBudgetProject(proj)} className="text-[8px] font-bold bg-[#E8C547] text-gray-900 px-2 py-1 rounded-md hover:bg-[#d4b33d] transition-colors">
-                                    + Add Budget
-                                </button>
+                                {(proj.status || '').toUpperCase() !== 'COMPLETED' && (
+                                    <button type="button" onClick={() => setBudgetProject(proj)} className="text-[8px] font-bold bg-[#E8C547] text-gray-900 px-2 py-1 rounded-md hover:bg-[#d4b33d] transition-colors">
+                                        + Add Budget
+                                    </button>
+                                )}
                             </div>
                             <div className="mt-auto border-t border-gray-50 pt-2 flex justify-between items-center">
                                 <div className="flex items-center gap-1.5">
-                                    <span className={`text-[7px] font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider ${isOngoingStatus(proj.status) ? 'bg-[#fce8e6] text-[#A63228]' : 'bg-[#e6f4ea] text-[#2e7d32]'}`}>
-                                        {isOngoingStatus(proj.status) ? 'ONGOING' : 'COMPLETED'}
+                                    <span className={`text-[7px] font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider ${isOngoingStatus(proj.status) ? 'bg-[#fce8e6] text-[#A63228]' : isUpcomingStatus(proj.status) ? 'bg-[#fef3c7] text-[#d97706]' : 'bg-[#e6f4ea] text-[#2e7d32]'}`}>
+                                        {isOngoingStatus(proj.status) ? 'ONGOING' : isUpcomingStatus(proj.status) ? 'UPCOMING' : 'COMPLETED'}
                                     </span>
-                                    <button onClick={() => openEditModal(proj)} className="text-[7px] font-bold text-gray-600 hover:text-[#A63228] bg-gray-100 hover:bg-red-50 px-1.5 py-0.5 rounded transition-colors">
-                                        Edit
-                                    </button>
+                                    {(proj.status || '').toUpperCase() !== 'COMPLETED' && (
+                                        <button onClick={() => openEditModal(proj)} className="text-[7px] font-bold text-gray-600 hover:text-[#A63228] bg-gray-100 hover:bg-red-50 px-1.5 py-0.5 rounded transition-colors">
+                                            Edit
+                                        </button>
+                                    )}
                                     <button onClick={() => handleDeleteProject(proj.id)} className="text-[7px] font-bold text-gray-400 hover:text-red-600 transition-colors">
                                         Delete
                                     </button>
@@ -505,7 +523,8 @@ export default function Projects() {
                                             className="w-full bg-[#f4f1ee] rounded-md pl-2 pr-6 py-1.5 text-[10px] font-extrabold focus:border-[#A63228] outline-none appearance-none"
                                             style={selectStyles}
                                         >
-                                            <option value="ONGOING">ONGOING</option>
+                                            <option value="UPCOMING">UPCOMING (Standby)</option>
+                                            {(!activeOngoingProject || activeOngoingProject.id === formData.id) && <option value="ONGOING">ONGOING</option>}
                                             <option value="COMPLETED">COMPLETED</option>
                                         </select>
                                     </div>
@@ -568,6 +587,31 @@ export default function Projects() {
                         </div>
                         <h3 className="text-[11px] font-extrabold text-gray-900 mb-1">{formData.id ? 'Project Updated!' : 'Project Created!'}</h3>
                         <button onClick={() => setModalState('NONE')} className="mt-4 w-full py-2 bg-[#8B1A10] text-white rounded-lg text-[10px] font-bold hover:bg-[#72150d] transition-colors">Done</button>
+                    </div>
+                </div>
+            )}
+
+            {/* ── DELETE CONFIRMATION MODAL ── */}
+            {deleteProjectId && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl w-full max-w-[280px] overflow-hidden shadow-2xl animate-fade-in-up">
+                        <div className="p-6">
+                            <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>
+                            </div>
+                            <h3 className="text-[14px] font-extrabold text-center text-gray-900 mb-2">Delete Project?</h3>
+                            <p className="text-[10px] text-gray-500 text-center mb-6 leading-relaxed">
+                                Are you sure you want to delete this project? This action cannot be undone.
+                            </p>
+                            <div className="flex gap-2">
+                                <button type="button" onClick={() => setDeleteProjectId(null)} className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-[10px] font-bold rounded-xl transition-colors">
+                                    Cancel
+                                </button>
+                                <button type="button" onClick={confirmDelete} className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-[10px] font-bold rounded-xl shadow-md transition-all">
+                                    Yes, Delete
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}

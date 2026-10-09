@@ -83,6 +83,27 @@ export default function ProjectDetails() {
     const inUseAssets = assets.filter(a => a.status === 'In Use')
     const recentExpenses = [...expenses].slice(0, 3)
 
+    const expensesMaterials = expenses
+        .filter(e => (e.category || '').toUpperCase() === 'MATERIALS')
+        .flatMap(e => (e.items || []).map(item => ({
+            name: item.description,
+            quantity: item.qty,
+            unit: item.unit || 'pcs',
+            unit_cost: item.price
+        })));
+
+    const combinedMaterials = [
+        ...materials.map(m => ({
+            name: m.name,
+            quantity: m.qty || m.quantity || 0,
+            unit: m.unit || '',
+            unit_cost: m.cost || m.unit_cost || 0
+        })),
+        ...expensesMaterials
+    ];
+
+    const totalMaterialCost = combinedMaterials.reduce((s, m) => s + (Number(m.quantity || 0) * Number(m.unit_cost || 0)), 0);
+
     const formatDate = (d) => {
         if (!d) return '—'
         return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -99,9 +120,11 @@ export default function ProjectDetails() {
                     Back to Projects
                 </Link>
                 <div className="flex items-center gap-2">
-                    <button onClick={() => setShowAddBudget(true)} className="bg-[#E8C547] text-gray-900 px-3 py-1.5 rounded-lg font-bold text-[10px] shadow-sm hover:bg-[#d4b33d] transition-colors flex items-center gap-1.5">
-                        <span>+</span> Add Budget
-                    </button>
+                    {isOngoing && (
+                        <button onClick={() => setShowAddBudget(true)} className="bg-[#E8C547] text-gray-900 px-3 py-1.5 rounded-lg font-bold text-[10px] shadow-sm hover:bg-[#d4b33d] transition-colors flex items-center gap-1.5">
+                            <span>+</span> Add Budget
+                        </button>
+                    )}
                     {isOngoing && (
                         <button onClick={() => setCompleteModal(true)} className="bg-[#E8C547] text-gray-900 px-3 py-1.5 rounded-lg font-bold text-[10px] shadow-sm hover:bg-[#d4b33d] transition-colors flex items-center gap-1.5">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
@@ -182,7 +205,7 @@ export default function ProjectDetails() {
                             <h4 className="font-extrabold text-[11px] text-gray-900">Budget Additions</h4>
                             <span className="text-[9px] font-extrabold text-[#A63228]">₱{addedTotal.toLocaleString()}</span>
                         </div>
-                        <div className="flex flex-col gap-2">
+                        <div className="flex flex-col gap-2 max-h-40 overflow-y-auto pr-1 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-gray-200 [&::-webkit-scrollbar-thumb]:rounded-full">
                             {additions.map((entry) => (
                                 <div key={entry.id} className="flex justify-between items-center border-b border-gray-50 pb-1.5">
                                     <div className="flex flex-col">
@@ -213,9 +236,9 @@ export default function ProjectDetails() {
                     <div className="bg-white rounded-xl p-3.5 shadow-sm flex flex-col border border-gray-100">
                         <h4 className="font-extrabold text-[11px] text-gray-900 mb-2">Materials</h4>
                         <div className="flex flex-col gap-2 flex-1">
-                            {materials.length === 0 ? (
+                            {combinedMaterials.length === 0 ? (
                                 <p className="text-[9px] text-gray-400 italic">No materials logged.</p>
-                            ) : materials.slice(0, 3).map((mat, i) => (
+                            ) : combinedMaterials.slice(0, 3).map((mat, i) => (
                                 <div key={i} className="flex justify-between text-[9px] border-b border-gray-50 pb-1">
                                     <span className="text-gray-500 font-medium">{mat.name}</span>
                                     <strong className="text-gray-900">{mat.quantity} {mat.unit}</strong>
@@ -223,7 +246,7 @@ export default function ProjectDetails() {
                             ))}
                             <div className="flex justify-between text-[9px] pb-1">
                                 <span className="text-gray-500 font-medium">Total Material Cost</span>
-                                <strong className="text-[#A63228] font-extrabold">₱{materials.reduce((s, m) => s + (Number(m.quantity) * Number(m.unit_cost)), 0).toLocaleString()}</strong>
+                                <strong className="text-[#A63228] font-extrabold">₱{totalMaterialCost.toLocaleString()}</strong>
                             </div>
                         </div>
                         <Link to={`/materials/${id}`} className="text-[#A63228] text-[9px] font-bold text-right mt-2 hover:underline">View Material Log →</Link>

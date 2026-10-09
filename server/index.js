@@ -207,7 +207,24 @@ function startServer() {
         updateData.address_obj = address_obj
       }
 
-      await db.collection('projects').doc(req.params.id).update(updateData)
+      const projectRef = db.collection('projects').doc(req.params.id)
+      const currentDoc = await projectRef.get()
+      
+      if (currentDoc.exists && budget !== undefined) {
+        const currentBudget = Number(currentDoc.data().budget || 0)
+        const newBudget = Number(budget || 0)
+        if (newBudget > currentBudget) {
+          await db.collection('budget_additions').add({
+            project_id: req.params.id,
+            amount: Math.round((newBudget - currentBudget) * 100) / 100,
+            note: 'Budget modified from project settings',
+            date: new Date().toISOString().slice(0, 10),
+            created_at: FieldValue.serverTimestamp()
+          })
+        }
+      }
+
+      await projectRef.update(updateData)
       res.json({ success: true })
     } catch (err) {
       res.status(500).json({ error: err.message })
