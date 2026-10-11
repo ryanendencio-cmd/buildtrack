@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { api } from '../api'
@@ -28,17 +28,27 @@ export default function Assets() {
     }, []);
 
     const currentProjectId = id || (dropdownProjects[0]?.id ?? '1');
+    const currentProject = useMemo(() => {
+        return dropdownProjects.find(p => String(p.id) === String(currentProjectId)) || dropdownProjects[0] || { name: 'Construction Project' };
+    }, [dropdownProjects, currentProjectId]);
     const [equipment, setEquipment] = useState([]);
 
 
     const [borrowHistory, setBorrowHistory] = useState([]);
 
-    useEffect(() => {
+    const refreshAssets = () => {
         if (!currentProjectId) return;
         api.get(`/assets/${currentProjectId}`)
             .then(data => setEquipment(Array.isArray(data) ? data.map(e => ({ ...e, condition: e.condition || e.type || 'Good' })) : []))
             .catch(console.error);
         api.get(`/borrow-history/${currentProjectId}`).then(data => setBorrowHistory(Array.isArray(data) ? data : [])).catch(console.error);
+    };
+
+    // Live auto-refresh: syncs inventory, unreturned tools, and history automatically whenever changes occur
+    useEffect(() => {
+        refreshAssets();
+        const pollTimer = setInterval(refreshAssets, 3500);
+        return () => clearInterval(pollTimer);
     }, [currentProjectId]);
 
     const recordHistory = async (record) => {
@@ -59,6 +69,14 @@ export default function Assets() {
         }
     };
 
+    // ── FILTER STATES ──
+    const [searchItem, setSearchItem] = useState('');
+    const [filterItemSelect, setFilterItemSelect] = useState('All');
+    const [filterBorrower, setFilterBorrower] = useState('All');
+    const [filterStatus, setFilterStatus] = useState('All');
+    const [filterDatePreset, setFilterDatePreset] = useState('All'); // 'All', 'Today', 'This Week', 'This Month', 'Custom'
+    const [filterDateFrom, setFilterDateFrom] = useState('');
+    const [filterDateTo, setFilterDateTo] = useState('');
 
     const [formData, setFormData] = useState({
         name: '', status: 'Available', condition: 'Good', user: '', quantity: 1, borrowQty: 1
@@ -76,16 +94,95 @@ export default function Assets() {
     const handleActionClick = (item) => {
         if (item.status === 'Available') return;
         setSelectedEquipment(item);
-        setFormData({ name: '', status: item.status, condition: item.condition, user: '', quantity: 1, borrowQty: 1 });
+        setFormData({ name: item.name, status: item.status, condition: item.condition, user: item.borrower || item.assigned_to || item.user || '', quantity: item.qty || 1, borrowQty: 1 });
 
         if (item.status === 'In Use') setModalState('CHECK_IN');
         else if (item.status === 'Maintenance') setModalState('REPAIR');
+    };
+
+    const handleBorrowClick = (item) => {
+        setSelectedEquipment(item);
+        setFormData({
+            name: item.name,
+            status: 'In Use',
+            condition: item.condition || 'Good',
+            user: workers[0]?.name || '',
+            quantity: item.qty || 1,
+            borrowQty: 1
+        });
+        setModalState('BORROW');
+    };
+
+    const handleOpenBorrowModal = () => {
+        const availableItems = groupedEquipment.filter(g => g.status === 'Available');
+        if (availableItems.length === 0) {
+            alert('No available tools in inventory to borrow.');
+            return;
+        }
+        const item = availableItems[0];
+        setSelectedEquipment(item);
+        setFormData({
+            name: item.name,
+            status: 'In Use',
+            condition: item.condition || 'Good',
+            user: workers[0]?.name || '',
+            quantity: item.qty || 1,
+            borrowQty: 1
+        });
+        setModalState('BORROW');
     };
 
     const handleEditClick = (item) => {
         setSelectedEquipment(item);
         setFormData({ name: item.name, status: item.status, condition: item.condition, user: item.user || '', quantity: 1, borrowQty: 1 });
         setModalState('EDIT');
+    };
+
+    const submitBorrow = async (e) => {
+        e.preventDefault();
+        const borrowerName = (formData.user || '').trim();
+        if (!borrowerName) {
+            alert('Please select or enter the borrower name.');
+            return;
+        }
+        const maxQty = selectedEquipment.qty || (selectedEquipment.ids || []).length || 1;
+        const qty = Math.min(Math.max(parseInt(formData.borrowQty, 10) || 1, 1), maxQty);
+        const idsToProcess = (selectedEquipment.ids || [selectedEquipment.id]).slice(0, qty);
+        const nowIso = new Date().toISOString();
+
+        try {
+            await Promise.all(idsToProcess.map(id => {
+                const item = equipment.find(eq => eq.id === id);
+                return api.put(`/assets/${id}`, {
+                    ...item,
+                    status: 'In Use',
+                    assigned_to: borrowerName,
+                    user: borrowerName,
+                    borrow_at: nowIso,
+                    condition: formData.condition || item?.condition || 'Good'
+                });
+            }));
+
+            await recordHistory({
+                tool_name: selectedEquipment.name,
+                borrower_name: borrowerName,
+                quantity: qty,
+                action: 'Borrowed',
+                condition_status: formData.condition || 'Good',
+                date_time: nowIso
+            });
+
+            setEquipment(prev => prev.map(eq => idsToProcess.includes(eq.id)
+                ? { ...eq, status: 'In Use', assigned_to: borrowerName, user: borrowerName, borrow_at: nowIso, condition: formData.condition || eq.condition }
+                : eq
+            ));
+
+            setSuccessMsg(`${qty} ${selectedEquipment.name}(s) borrowed by ${borrowerName}.`);
+            setModalState('SUCCESS');
+        } catch (error) {
+            console.error('Error borrowing tool:', error);
+            alert('Failed to borrow tool: ' + (error.message || 'Server error'));
+        }
     };
 
     const submitEdit = async (e) => {
@@ -114,7 +211,6 @@ export default function Assets() {
         }
     };
 
-
     const submitCheckIn = async (e) => {
         e.preventDefault();
         const newStatus = formData.condition === 'Broken' || formData.condition === 'Needs Repair' ? 'Maintenance' : 'Available';
@@ -123,12 +219,21 @@ export default function Assets() {
         try {
             await Promise.all(idsToProcess.map(id => {
                 const item = equipment.find(eq => eq.id === id);
-                return api.put(`/assets/${id}`, { ...item, status: newStatus, assigned_to: null, type: formData.condition });
+                return api.put(`/assets/${id}`, {
+                    ...item,
+                    status: newStatus,
+                    assigned_to: null,
+                    user: '—',
+                    borrow_at: null,
+                    condition: formData.condition,
+                    type: formData.condition
+                });
             }));
 
+            const borrowerName = selectedEquipment.borrower || selectedEquipment.assigned_to || selectedEquipment.user || 'Site Worker';
             recordHistory({
                 tool_name: selectedEquipment.name,
-                borrower_name: selectedEquipment.assigned_to || selectedEquipment.user || 'Site Worker',
+                borrower_name: borrowerName,
                 quantity: qty,
                 action: 'Returned',
                 condition_status: formData.condition || 'Good',
@@ -136,13 +241,14 @@ export default function Assets() {
             });
 
             setEquipment(prev => prev.map(eq => idsToProcess.includes(eq.id)
-                ? { ...eq, status: newStatus, assigned_to: '—', condition: formData.condition }
+                ? { ...eq, status: newStatus, assigned_to: null, user: '—', borrow_at: null, condition: formData.condition }
                 : eq
             ));
             setSuccessMsg(`${qty} ${selectedEquipment.name}(s) returned and recorded.`);
             setModalState('SUCCESS');
         } catch (error) {
             console.error(error);
+            alert('Failed to return tool: ' + (error.message || 'Server error'));
         }
     };
 
@@ -236,21 +342,180 @@ export default function Assets() {
     const card1Count = returnedCount > 0 && availableCount === 0 ? returnedCount : availableCount;
     const card1Label = returnedCount > 0 && availableCount === 0 ? 'RETURNED' : 'AVAILABLE';
 
-    // Group equipment rows: same name + status + condition = one row with a qty count
-    const groupedEquipment = Object.values(
-        equipment.reduce((acc, item) => {
-            const cond = item.condition || item.type || 'Good';
-            const key = `${item.name}||${item.status}||${cond}`;
-            if (!acc[key]) {
-                acc[key] = { ...item, condition: cond, qty: 1, ids: [item.id] };
-            } else {
-                acc[key].qty += 1;
-                acc[key].ids.push(item.id);
-            }
-            return acc;
-        }, {})
-    );
+    // Group equipment rows: same name + status + condition (+ borrower if In Use) = one row with a qty count
+    const groupedEquipment = useMemo(() => {
+        return Object.values(
+            equipment.reduce((acc, item) => {
+                const cond = item.condition || item.type || 'Good';
+                const borrower = item.status === 'In Use' ? (item.assigned_to || item.user || 'Site Worker') : '—';
+                const key = `${item.name}||${item.status}||${cond}||${borrower}`;
+                if (!acc[key]) {
+                    acc[key] = { ...item, borrower, condition: cond, qty: 1, ids: [item.id] };
+                } else {
+                    acc[key].qty += 1;
+                    acc[key].ids.push(item.id);
+                }
+                return acc;
+            }, {})
+        );
+    }, [equipment]);
 
+    // Active borrowers (currently have unreturned tools)
+    const activeBorrowerNames = useMemo(() => {
+        const s = new Set();
+        equipment.filter(e => e.status === 'In Use').forEach(e => {
+            const b = e.assigned_to || e.user;
+            if (b && b !== '—' && b !== 'None') s.add(b.trim());
+        });
+        return s;
+    }, [equipment]);
+
+    // Unique list of all borrowers (active in use, borrow history, and registered workers)
+    const borrowerList = useMemo(() => {
+        const names = new Set();
+        equipment.forEach(e => {
+            const b = e.assigned_to || e.user;
+            if (b && b !== '—' && b !== 'None') names.add(b.trim());
+        });
+        borrowHistory.forEach(h => {
+            const b = h.borrower_name || h.assigned_to;
+            if (b && b !== '—' && b !== 'None') names.add(b.trim());
+        });
+        workers.forEach(w => {
+            if (w.name) names.add(w.name.trim());
+        });
+        return Array.from(names).sort((a, b) => a.localeCompare(b));
+    }, [equipment, borrowHistory, workers]);
+
+    // Unique list of all tool / item names
+    const uniqueItemNames = useMemo(() => {
+        const items = new Set();
+        equipment.forEach(e => { if (e.name) items.add(e.name.trim()); });
+        borrowHistory.forEach(h => { if (h.tool_name) items.add(h.tool_name.trim()); });
+        return Array.from(items).sort((a, b) => a.localeCompare(b));
+    }, [equipment, borrowHistory]);
+
+    // Date filter helper
+    const checkDateMatch = (rawDate) => {
+        if (filterDatePreset === 'All' && !filterDateFrom && !filterDateTo) return true;
+        if (!rawDate) return false;
+        const d = new Date(rawDate);
+        if (isNaN(d.getTime())) return false;
+
+        const now = new Date();
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+        const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
+        if (filterDatePreset === 'Today') {
+            return d >= todayStart && d <= todayEnd;
+        }
+        if (filterDatePreset === 'This Week') {
+            const startOfWeek = new Date(now);
+            startOfWeek.setDate(now.getDate() - now.getDay());
+            startOfWeek.setHours(0, 0, 0, 0);
+            return d >= startOfWeek && d <= now;
+        }
+        if (filterDatePreset === 'This Month') {
+            return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+        }
+        if (filterDatePreset === 'Custom' || filterDateFrom || filterDateTo) {
+            if (filterDateFrom) {
+                const f = new Date(filterDateFrom);
+                f.setHours(0, 0, 0, 0);
+                if (d < f) return false;
+            }
+            if (filterDateTo) {
+                const t = new Date(filterDateTo);
+                t.setHours(23, 59, 59, 999);
+                if (d > t) return false;
+            }
+            return true;
+        }
+        return true;
+    };
+
+    // Check if any filter is active
+    const isFilterActive = searchItem.trim() !== '' ||
+        filterItemSelect !== 'All' ||
+        filterBorrower !== 'All' ||
+        filterStatus !== 'All' ||
+        filterDatePreset !== 'All' ||
+        filterDateFrom !== '' ||
+        filterDateTo !== '';
+
+    const clearFilters = () => {
+        setSearchItem('');
+        setFilterItemSelect('All');
+        setFilterBorrower('All');
+        setFilterStatus('All');
+        setFilterDatePreset('All');
+        setFilterDateFrom('');
+        setFilterDateTo('');
+    };
+
+    // Filtered lists for each table
+    const filteredGroupedEquipment = useMemo(() => {
+        return groupedEquipment.filter(item => {
+            if (searchItem.trim()) {
+                const q = searchItem.toLowerCase().trim();
+                if (!item.name?.toLowerCase().includes(q)) return false;
+            }
+            if (filterItemSelect !== 'All') {
+                if (item.name?.toLowerCase() !== filterItemSelect.toLowerCase()) return false;
+            }
+            if (filterStatus !== 'All') {
+                if (item.status?.toLowerCase() !== filterStatus.toLowerCase()) return false;
+            }
+            if (filterBorrower !== 'All') {
+                const b = (item.borrower || item.assigned_to || item.user || '').toLowerCase();
+                if (b !== filterBorrower.toLowerCase()) return false;
+            }
+            if (filterDatePreset !== 'All' || filterDateFrom || filterDateTo) {
+                if (item.status === 'In Use') {
+                    if (!checkDateMatch(item.borrow_at || item.updated_at || item.created_at)) return false;
+                }
+            }
+            return true;
+        });
+    }, [groupedEquipment, searchItem, filterItemSelect, filterStatus, filterBorrower, filterDatePreset, filterDateFrom, filterDateTo]);
+
+    const filteredUnreturnedTools = useMemo(() => {
+        return unreturnedTools.filter(tool => {
+            if (!checkDateMatch(tool.borrow_at || tool.updated_at || tool.created_at)) {
+                return false;
+            }
+            const borrower = tool.borrower || tool.assigned_to || tool.user || '';
+            if (filterBorrower !== 'All' && borrower.toLowerCase() !== filterBorrower.toLowerCase()) {
+                return false;
+            }
+            if (searchItem.trim() && !tool.name?.toLowerCase().includes(searchItem.toLowerCase().trim())) {
+                return false;
+            }
+            if (filterItemSelect !== 'All' && tool.name?.toLowerCase() !== filterItemSelect.toLowerCase()) {
+                return false;
+            }
+            return true;
+        });
+    }, [unreturnedTools, filterBorrower, searchItem, filterItemSelect, filterDatePreset, filterDateFrom, filterDateTo]);
+
+    const filteredBorrowHistory = useMemo(() => {
+        return borrowHistory.filter(record => {
+            if (!checkDateMatch(record.date_time || record.created_at)) {
+                return false;
+            }
+            const borrower = record.borrower_name || record.assigned_to || '';
+            if (filterBorrower !== 'All' && borrower.toLowerCase() !== filterBorrower.toLowerCase()) {
+                return false;
+            }
+            if (searchItem.trim() && !record.tool_name?.toLowerCase().includes(searchItem.toLowerCase().trim())) {
+                return false;
+            }
+            if (filterItemSelect !== 'All' && record.tool_name?.toLowerCase() !== filterItemSelect.toLowerCase()) {
+                return false;
+            }
+            return true;
+        });
+    }, [borrowHistory, filterBorrower, searchItem, filterItemSelect, filterDatePreset, filterDateFrom, filterDateTo]);
 
     const selectStyles = {
         backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3e%3cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3e%3c/svg%3e")`,
@@ -273,7 +538,7 @@ export default function Assets() {
             <div className="mb-4">
                 <span className="text-[9px] font-bold text-[#A63228] tracking-widest uppercase">TOOLS MANAGEMENT</span>
                 <h1 className="text-xl font-extrabold text-gray-900 mt-0.5 tracking-tight">Tools Management</h1>
-                <p className="text-[10px] text-gray-500 mt-0.5">Track and monitor construction tools and equipment.</p>
+                <p className="text-[10px] text-gray-500 mt-0.5">Track, lend, and monitor construction tools and equipment.</p>
             </div>
 
             {/* ── ALIGNED PROJECT SELECTOR & BUTTONS ── */}
@@ -285,16 +550,43 @@ export default function Assets() {
                     </select>
                 </div>
 
-                <div className="flex items-center gap-2 w-full md:w-auto">
-                    <button onClick={handleRFIDScan} className="bg-white border border-[#A63228] text-[#A63228] w-[130px] h-8 rounded-lg font-bold text-[10px] shadow-sm hover:bg-red-50 transition-colors flex items-center justify-center">
-                        RFID Scan
-                    </button>
-                    <button onClick={() => setModalState('ADD')} className="bg-[#E8C547] border border-transparent text-gray-900 w-[115px] h-8 rounded-lg font-bold text-[10px] shadow-sm hover:bg-[#d4b33d] transition-colors flex items-center justify-center">
-                        Add Tools
+                <div className="flex items-center gap-2 w-full md:w-auto flex-wrap">
+                    <button onClick={handleOpenBorrowModal} className="bg-[#A63228] border border-[#A63228] text-white min-w-[110px] h-8 px-3.5 rounded-lg font-bold text-[10px] shadow-xs hover:bg-[#8B1A10] transition-colors flex items-center justify-center">
+                        Borrow Tool
                     </button>
                 </div>
             </div>
 
+            {/* ── ACTIVE ACKNOWLEDGMENT & STATUS BANNER ── */}
+            {unreturnedTools.length > 0 && (
+                <div className="bg-white border-l-4 border-l-[#A63228] border-y border-r border-gray-100 rounded-lg p-3 mb-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 shadow-xs">
+                    <div className="flex items-center gap-2.5">
+                        <span className="w-2.5 h-2.5 rounded-full bg-[#A63228] animate-pulse"></span>
+                        <div>
+                            <p className="text-[11px] font-extrabold text-gray-900">
+                                Active Notice: <span className="text-[#A63228]">{unreturnedTools.length} tool(s)</span> currently borrowed by workers.
+                            </p>
+                            <p className="text-[9px] text-gray-500">
+                                Live updates are enabled. Acknowledging directs to unreturned list and history log.
+                            </p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => {
+                                setFilterStatus('In Use');
+                                const el = document.getElementById('unreturned-tools-section');
+                                if (el) el.scrollIntoView({ behavior: 'smooth' });
+                            }}
+                            className="text-[9px] font-extrabold text-white bg-[#A63228] hover:bg-[#8B1A10] px-3 py-1.5 rounded-lg shadow-xs transition-colors cursor-pointer"
+                        >
+                            Acknowledge & View Borrowed
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* ── KPI METRICS ── */}
             <div className="flex gap-2 mb-3">
                 <div className="flex-1 bg-white rounded-lg p-2.5 text-center border border-gray-100 shadow-sm">
                     <h2 className="text-xl font-extrabold text-gray-900">{card1Count}</h2>
@@ -310,66 +602,221 @@ export default function Assets() {
                 </div>
             </div>
 
+            {/* ── FILTER & SEARCH CONTROLS ── */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-3 mb-3">
+                <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center flex-wrap">
+                        {/* Search Tool Name */}
+                        <div className="relative flex-1 min-w-[180px]">
+                            <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
+                                <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                </svg>
+                            </div>
+                            <input
+                                type="text"
+                                value={searchItem}
+                                onChange={(e) => setSearchItem(e.target.value)}
+                                placeholder="Search tool name..."
+                                className="w-full bg-[#f9fafb] border border-gray-200 rounded-lg pl-8 pr-7 py-1.5 text-[11px] font-medium text-gray-800 placeholder-gray-400 outline-none focus:border-[#A63228] transition-colors"
+                            />
+                            {searchItem && (
+                                <button
+                                    onClick={() => setSearchItem('')}
+                                    className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-gray-400 hover:text-gray-600 text-xs font-bold"
+                                    title="Clear item search"
+                                >
+                                    ✕
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Filter by Item Dropdown */}
+                        <div className="w-full sm:w-auto min-w-[130px]">
+                            <select
+                                value={filterItemSelect}
+                                onChange={(e) => setFilterItemSelect(e.target.value)}
+                                className="w-full bg-[#f9fafb] border border-gray-200 rounded-lg pl-2.5 pr-6 py-1.5 text-[10px] font-bold text-gray-700 outline-none appearance-none focus:border-[#A63228]"
+                                style={selectStyles}
+                            >
+                                <option value="All">All Items ({uniqueItemNames.length})</option>
+                                {uniqueItemNames.map(item => (
+                                    <option key={item} value={item}>{item}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {/* Filter by Borrower ("Kung Sino Humiram") Dropdown */}
+                        <div className="w-full sm:w-auto min-w-[150px]">
+                            <select
+                                value={filterBorrower}
+                                onChange={(e) => setFilterBorrower(e.target.value)}
+                                className="w-full bg-[#f9fafb] border border-gray-200 rounded-lg pl-2.5 pr-6 py-1.5 text-[10px] font-bold text-gray-700 outline-none appearance-none focus:border-[#A63228]"
+                                style={selectStyles}
+                            >
+                                <option value="All">All Borrowers</option>
+                                {borrowerList.map(name => {
+                                    const isActive = activeBorrowerNames.has(name);
+                                    return (
+                                        <option key={name} value={name}>
+                                            {name}{isActive ? ' (Active)' : ''}
+                                        </option>
+                                    );
+                                })}
+                            </select>
+                        </div>
+
+                        {/* Filter by Status Dropdown */}
+                        <div className="w-full sm:w-auto min-w-[120px]">
+                            <select
+                                value={filterStatus}
+                                onChange={(e) => setFilterStatus(e.target.value)}
+                                className="w-full bg-[#f9fafb] border border-gray-200 rounded-lg pl-2.5 pr-6 py-1.5 text-[10px] font-bold text-gray-700 outline-none appearance-none focus:border-[#A63228]"
+                                style={selectStyles}
+                            >
+                                <option value="All">All Statuses</option>
+                                <option value="Available">Available</option>
+                                <option value="In Use">In Use (Borrowed)</option>
+                                <option value="Maintenance">Maintenance</option>
+                            </select>
+                        </div>
+
+                        {/* Date Filter Preset Dropdown */}
+                        <div className="w-full sm:w-auto min-w-[130px]">
+                            <select
+                                value={filterDatePreset}
+                                onChange={(e) => setFilterDatePreset(e.target.value)}
+                                className="w-full bg-[#f9fafb] border border-gray-200 rounded-lg pl-2.5 pr-6 py-1.5 text-[10px] font-bold text-gray-700 outline-none appearance-none focus:border-[#A63228]"
+                                style={selectStyles}
+                            >
+                                <option value="All">All Dates</option>
+                                <option value="Today">Today</option>
+                                <option value="This Week">This Week</option>
+                                <option value="This Month">This Month</option>
+                                <option value="Custom">Custom Range...</option>
+                            </select>
+                        </div>
+
+                        {/* Custom Date Inputs if 'Custom' selected */}
+                        {filterDatePreset === 'Custom' && (
+                            <div className="flex items-center gap-1.5 w-full sm:w-auto">
+                                <input
+                                    type="date"
+                                    value={filterDateFrom}
+                                    onChange={(e) => setFilterDateFrom(e.target.value)}
+                                    title="From Date"
+                                    className="bg-[#f9fafb] border border-gray-200 rounded-lg px-2 py-1 text-[9px] font-bold text-gray-700 outline-none focus:border-[#A63228]"
+                                />
+                                <span className="text-[10px] text-gray-400 font-bold">to</span>
+                                <input
+                                    type="date"
+                                    value={filterDateTo}
+                                    onChange={(e) => setFilterDateTo(e.target.value)}
+                                    title="To Date"
+                                    className="bg-[#f9fafb] border border-gray-200 rounded-lg px-2 py-1 text-[9px] font-bold text-gray-700 outline-none focus:border-[#A63228]"
+                                />
+                            </div>
+                        )}
+                </div>
+            </div>
+
+            {/* ── EQUIPMENT INVENTORY ── */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-3 mb-3 overflow-x-auto">
-                <h3 className="text-[9px] font-extrabold text-gray-900 tracking-wider uppercase mb-2 pl-2">EQUIPMENT INVENTORY</h3>
-                <table className="w-full text-left border-collapse min-w-[700px]">
+                <div className="flex justify-between items-center mb-2 pl-2 pr-2">
+                    <h3 className="text-[9px] font-extrabold text-gray-900 tracking-wider uppercase">EQUIPMENT INVENTORY</h3>
+                    {filterBorrower !== 'All' && (
+                        <span className="text-[8px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+                            Filtered Borrower: <strong className="text-gray-900">{filterBorrower}</strong>
+                        </span>
+                    )}
+                </div>
+                <table className="w-full text-left border-collapse min-w-[750px]">
                     <thead>
                         <tr>
-                            <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[25%] uppercase tracking-wider pl-2">EQUIPMENT</th>
-                            <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[10%] uppercase tracking-wider text-center">QTY</th>
-                            <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[20%] uppercase tracking-wider">STATUS</th>
-                            <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[20%] uppercase tracking-wider">CONDITION</th>
-                            <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[25%] uppercase tracking-wider text-center pr-2">ACTION</th>
+                            <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[22%] uppercase tracking-wider pl-2">EQUIPMENT</th>
+                            <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[8%] uppercase tracking-wider text-center">QTY</th>
+                            <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[16%] uppercase tracking-wider">STATUS</th>
+                            <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[18%] uppercase tracking-wider">BORROWER</th>
+                            <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[16%] uppercase tracking-wider">CONDITION</th>
+                            <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[20%] uppercase tracking-wider text-center pr-2">ACTION</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {groupedEquipment.length > 0 ? groupedEquipment.map((item) => (
-                            <tr key={`${item.name}-${item.status}-${item.condition}`}>
+                        {filteredGroupedEquipment.length > 0 ? filteredGroupedEquipment.map((item) => (
+                            <tr key={`${item.name}-${item.status}-${item.condition}-${item.borrower || 'none'}`}>
                                 <td className="py-2.5 text-[10px] font-extrabold text-gray-900 border-b border-gray-50 pl-2">{item.name}</td>
                                 <td className="py-2.5 border-b border-gray-50 text-center">
                                     <span className="text-[10px] font-extrabold text-gray-900 bg-gray-100 rounded-full px-2 py-0.5">{item.qty}</span>
                                 </td>
                                 <td className="py-2.5 border-b border-gray-50">
-                                    <span className="text-[10px] font-bold text-gray-900 tracking-wide">{item.status}</span>
+                                    <span className={`text-[10px] font-bold tracking-wide ${item.status === 'In Use' ? 'text-[#A63228]' :
+                                        item.status === 'Available' ? 'text-green-700' :
+                                            'text-yellow-700'
+                                        }`}>{item.status}</span>
                                 </td>
                                 <td className="py-2.5 border-b border-gray-50">
-                                    <span className={`text-[8px] font-bold rounded-full px-2 py-0.5 ${
-                                        item.condition === 'Good' ? 'bg-green-50 text-green-700' :
+                                    {item.status === 'In Use' ? (
+                                        <span className="text-[9px] font-semibold text-gray-900 bg-red-50/70 border border-red-100 rounded px-1.5 py-0.5 inline-block max-w-[140px] truncate" title={item.borrower}>
+                                            {item.borrower}
+                                        </span>
+                                    ) : (
+                                        <span className="text-[9px] text-gray-400 italic">—</span>
+                                    )}
+                                </td>
+                                <td className="py-2.5 border-b border-gray-50">
+                                    <span className={`text-[8px] font-bold rounded-full px-2 py-0.5 ${item.condition === 'Good' ? 'bg-green-50 text-green-700' :
                                         item.condition === 'Needs Repair' ? 'bg-yellow-50 text-yellow-700' :
-                                        'bg-red-50 text-red-700'
-                                    }`}>{item.condition || 'Good'}</span>
+                                            'bg-red-50 text-red-700'
+                                        }`}>{item.condition || 'Good'}</span>
                                 </td>
                                 <td className="py-2.5 border-b border-gray-50 text-center pr-2">
                                     <div className="flex items-center justify-center gap-1">
-                                        {item.status !== 'Available' && (
+                                        {item.status === 'Available' ? (
+                                            <button
+                                                onClick={() => handleBorrowClick(item)}
+                                                className="text-[8px] font-extrabold w-[75px] py-1.5 rounded border border-[#A63228] text-[#A63228] hover:bg-[#A63228] hover:text-white uppercase tracking-wider inline-block transition-colors"
+                                            >
+                                                Borrow
+                                            </button>
+                                        ) : (
                                             <button
                                                 onClick={() => handleActionClick(item)}
                                                 className={`text-[8px] font-extrabold w-[75px] py-1.5 rounded border border-gray-800 text-gray-900 text-center uppercase tracking-wider inline-block transition-colors 
                                             ${item.status === 'In Use' ? 'hover:bg-[#A63228] hover:border-[#A63228] hover:text-white' :
-                                                item.status === 'Returned' ? 'hover:bg-gray-600 hover:border-gray-600 hover:text-white' :
-                                                    'hover:bg-[#ca8a04] hover:border-[#ca8a04] hover:text-white'
-                                                }`}
+                                                        item.status === 'Returned' ? 'hover:bg-gray-600 hover:border-gray-600 hover:text-white' :
+                                                            'hover:bg-[#ca8a04] hover:border-[#ca8a04] hover:text-white'
+                                                    }`}
                                             >
                                                 {item.status === 'In Use' ? 'Return' : item.status === 'Returned' ? 'View Log' : 'Repair Log'}
                                             </button>
                                         )}
                                         <button onClick={() => handleEditClick(item)} title="Edit" className="text-[8px] font-bold text-blue-400 hover:text-blue-600 transition-colors px-1">✎</button>
-                                        <button onClick={() => item.ids.forEach(id => handleDeleteAsset(id))} className="text-[8px] font-bold text-gray-400 hover:text-red-600 transition-colors px-1">✕</button>
+                                        <button onClick={() => item.ids.forEach(id => handleDeleteAsset(id))} title="Delete" className="text-[8px] font-bold text-gray-400 hover:text-red-600 transition-colors px-1">✕</button>
                                     </div>
                                 </td>
                             </tr>
                         )) : (
-                            <tr><td colSpan="5" className="py-8 text-center text-xs text-gray-400 italic">No equipment logged for this project.</td></tr>
+                            <tr><td colSpan="6" className="py-8 text-center text-xs text-gray-400 italic">{isFilterActive ? 'No equipment matching the selected filter criteria.' : 'No equipment logged for this project.'}</td></tr>
                         )}
                     </tbody>
                 </table>
             </div>
 
-            <div className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 mb-4 overflow-x-auto">
-                <h3 className="text-[9px] font-extrabold text-[#A63228] tracking-wider uppercase mb-0.5">UNRETURNED TOOLS</h3>
-                <p className="text-[8px] text-gray-500 mb-2.5">Tools currently in use and not returned.</p>
-                {unreturnedTools.length === 0 ? (
-                    <p className="text-[9px] text-gray-400 italic">All tools returned.</p>
+            <div id="unreturned-tools-section" className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 mb-4 overflow-x-auto">
+                <div className="flex justify-between items-center mb-0.5">
+                    <h3 className="text-[9px] font-extrabold text-[#A63228] tracking-wider uppercase">UNRETURNED TOOLS</h3>
+                    {filterBorrower !== 'All' && (
+                        <span className="text-[8px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+                            Borrower: <strong className="text-[#A63228]">{filterBorrower}</strong>
+                        </span>
+                    )}
+                </div>
+                <p className="text-[8px] text-gray-500 mb-2.5">
+                    {filterBorrower !== 'All' ? `Tools currently borrowed by ${filterBorrower}.` : 'Tools currently in use and not returned.'}
+                </p>
+                {filteredUnreturnedTools.length === 0 ? (
+                    <p className="text-[9px] text-gray-400 italic py-2">
+                        {isFilterActive ? 'No unreturned tools match the active filters.' : 'All tools returned.'}
+                    </p>
                 ) : (
                     <table className="w-full text-left border-collapse min-w-[600px]">
                         <thead>
@@ -384,8 +831,8 @@ export default function Assets() {
                         </thead>
                         <tbody>
                             {Object.values(
-                                unreturnedTools.reduce((acc, tool) => {
-                                    const borrower = tool.user || tool.assigned_to || 'Site Worker';
+                                filteredUnreturnedTools.reduce((acc, tool) => {
+                                    const borrower = tool.borrower || tool.user || tool.assigned_to || 'Site Worker';
                                     const condition = tool.condition || tool.type || 'Good';
                                     const key = `${tool.name}||${borrower}||${condition}`;
                                     if (!acc[key]) {
@@ -410,11 +857,10 @@ export default function Assets() {
                                             <span className="text-[10px] font-extrabold text-gray-900 bg-gray-100 rounded-full px-2 py-0.5">{tool.qty}</span>
                                         </td>
                                         <td className="py-2.5 border-b border-gray-50">
-                                            <span className={`text-[8px] font-bold rounded-full px-2 py-0.5 ${
-                                                cond === 'Good' ? 'bg-green-50 text-green-700' :
+                                            <span className={`text-[8px] font-bold rounded-full px-2 py-0.5 ${cond === 'Good' ? 'bg-green-50 text-green-700' :
                                                 cond === 'Needs Repair' ? 'bg-yellow-50 text-yellow-700' :
-                                                'bg-red-50 text-red-700'
-                                            }`}>{cond}</span>
+                                                    'bg-red-50 text-red-700'
+                                                }`}>{cond}</span>
                                         </td>
                                         <td className="py-2.5 text-[9px] text-gray-600 border-b border-gray-50">{dateStr}</td>
                                         <td className="py-2.5 text-[9px] text-gray-600 border-b border-gray-50">{timeStr}</td>
@@ -426,19 +872,37 @@ export default function Assets() {
                 )}
             </div>
 
-            {/* ── BORROWING HISTORY ── */}
+            {/* ── TOOLS BORROWING & RETURN HISTORY LIST ── */}
             <div className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 mb-6 overflow-x-auto">
-                <div className="flex justify-between items-center mb-2.5">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-2.5 gap-2">
                     <div>
-                        <h3 className="text-[9px] font-extrabold text-gray-900 tracking-wider uppercase mb-0.5">BORROWING HISTORY</h3>
-                        <p className="text-[8px] text-gray-500">History log of all tool borrowings and returns for this project.</p>
+                        <div className="flex items-center gap-2">
+                            <h3 className="text-[9px] font-extrabold text-gray-900 tracking-wider uppercase">TOOLS BORROWING & RETURN HISTORY LIST</h3>
+                            {filterDatePreset !== 'All' && (
+                                <span className="text-[8px] font-bold text-[#A63228] bg-red-50 border border-red-200 px-1.5 py-0.2 rounded">
+                                    {filterDatePreset}
+                                </span>
+                            )}
+                        </div>
+                        <p className="text-[8px] text-gray-500 mt-0.5">
+                            {filterBorrower !== 'All' ? `History movements for borrower: ${filterBorrower}.` : 'Complete chronological audit log of tool loans, checkouts, and returns.'}
+                        </p>
                     </div>
-                    <span className="text-[9px] font-bold text-gray-500 bg-gray-100 rounded-full px-2.5 py-0.5">
-                        {borrowHistory.length} Record(s)
-                    </span>
+                    <div className="flex items-center gap-2 flex-wrap">
+                        {filterBorrower !== 'All' && (
+                            <span className="text-[8px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+                                Borrower: <strong className="text-gray-900">{filterBorrower}</strong>
+                            </span>
+                        )}
+                        <span className="text-[9px] font-bold text-gray-600 bg-gray-100 rounded-full px-2.5 py-0.5">
+                            {filteredBorrowHistory.length} Record(s)
+                        </span>
+                    </div>
                 </div>
-                {borrowHistory.length === 0 ? (
-                    <p className="text-[9px] text-gray-400 italic py-3">No borrowing history recorded yet.</p>
+                {filteredBorrowHistory.length === 0 ? (
+                    <p className="text-[9px] text-gray-400 italic py-4 text-center">
+                        {isFilterActive ? 'No borrowing history matches the active filter criteria.' : 'No borrowing history recorded yet.'}
+                    </p>
                 ) : (
                     <table className="w-full text-left border-collapse min-w-[650px]">
                         <thead>
@@ -453,31 +917,29 @@ export default function Assets() {
                             </tr>
                         </thead>
                         <tbody>
-                            {borrowHistory.map((item, idx) => {
+                            {filteredBorrowHistory.map((item, idx) => {
                                 const dt = item.date_time ? new Date(item.date_time) : (item.created_at ? new Date(item.created_at) : null);
                                 const dateStr = dt && !isNaN(dt) ? dt.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
                                 const timeStr = dt && !isNaN(dt) ? dt.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', hour12: true }) : '—';
                                 const isBorrow = item.action === 'Check-Out' || item.action === 'Borrowed' || item.action === 'Borrow';
                                 return (
                                     <tr key={item.id || idx}>
-                                         <td className="py-2.5 text-[10px] font-extrabold text-gray-900 border-b border-gray-50">{item.tool_name}</td>
-                                         <td className="py-2.5 text-[9px] font-medium text-gray-800 border-b border-gray-50">{item.borrower_name || item.assigned_to || '—'}</td>
-                                         <td className="py-2.5 border-b border-gray-50 text-center">
-                                             <span className="text-[10px] font-extrabold text-gray-900 bg-gray-100 rounded-full px-2 py-0.5">{item.quantity || 1}</span>
-                                         </td>
-                                         <td className="py-2.5 border-b border-gray-50 text-center">
-                                             <span className={`text-[8px] font-bold rounded-full px-2 py-0.5 ${
-                                                 isBorrow ? 'bg-red-50 text-[#A63228] border border-red-200' : 'bg-green-50 text-green-700 border border-green-200'
-                                             }`}>
-                                                 {isBorrow ? 'Borrowed' : (item.action === 'Check-In' || item.action === 'Returned' || item.action === 'Return' ? 'Returned' : item.action)}
-                                             </span>
-                                         </td>
+                                        <td className="py-2.5 text-[10px] font-extrabold text-gray-900 border-b border-gray-50">{item.tool_name}</td>
+                                        <td className="py-2.5 text-[9px] font-medium text-gray-800 border-b border-gray-50">{item.borrower_name || item.assigned_to || '—'}</td>
+                                        <td className="py-2.5 border-b border-gray-50 text-center">
+                                            <span className="text-[10px] font-extrabold text-gray-900 bg-gray-100 rounded-full px-2 py-0.5">{item.quantity || 1}</span>
+                                        </td>
+                                        <td className="py-2.5 border-b border-gray-50 text-center">
+                                            <span className={`text-[8px] font-bold rounded-full px-2 py-0.5 ${isBorrow ? 'bg-red-50 text-[#A63228] border border-red-200' : 'bg-green-50 text-green-700 border border-green-200'
+                                                }`}>
+                                                {isBorrow ? 'Borrowed' : (item.action === 'Check-In' || item.action === 'Returned' || item.action === 'Return' ? 'Returned' : item.action)}
+                                            </span>
+                                        </td>
                                         <td className="py-2.5 border-b border-gray-50">
-                                            <span className={`text-[8px] font-bold rounded-full px-2 py-0.5 ${
-                                                item.condition_status === 'Good' ? 'bg-green-50 text-green-700' :
+                                            <span className={`text-[8px] font-bold rounded-full px-2 py-0.5 ${item.condition_status === 'Good' ? 'bg-green-50 text-green-700' :
                                                 item.condition_status === 'Needs Repair' ? 'bg-yellow-50 text-yellow-700' :
-                                                'bg-red-50 text-red-700'
-                                            }`}>{item.condition_status || 'Good'}</span>
+                                                    'bg-red-50 text-red-700'
+                                                }`}>{item.condition_status || 'Good'}</span>
                                         </td>
                                         <td className="py-2.5 text-[9px] text-gray-600 border-b border-gray-50">{dateStr}</td>
                                         <td className="py-2.5 text-[9px] text-gray-600 border-b border-gray-50">{timeStr}</td>
@@ -491,7 +953,119 @@ export default function Assets() {
 
             {/* ═════════ MODALS (ENLARGED, NO ICONS) ═════════ */}
 
+            {modalState === 'BORROW' && selectedEquipment && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 transition-all">
+                    <div className="bg-white rounded-2xl w-full max-w-[480px] shadow-2xl relative">
+                        <div className="p-6 border-b border-gray-100 flex justify-between items-center">
+                            <div>
+                                <h3 className="text-xl font-extrabold text-[#1a1a1a]">Borrow Tool</h3>
+                                <p className="text-sm text-gray-500 font-medium mt-1">
+                                    Lending <strong className="text-gray-900">{selectedEquipment.name}</strong> to a field worker
+                                </p>
+                            </div>
+                            <button onClick={resetAndClose} className="text-2xl font-bold text-gray-400 hover:text-gray-700">&times;</button>
+                        </div>
+                        <form onSubmit={submitBorrow} className="p-6 flex flex-col gap-5">
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-wider">Select Tool</label>
+                                <select
+                                    value={selectedEquipment.name}
+                                    onChange={(e) => {
+                                        const found = groupedEquipment.find(g => g.name === e.target.value && g.status === 'Available');
+                                        if (found) {
+                                            setSelectedEquipment(found);
+                                            setFormData(prev => ({ ...prev, name: found.name, quantity: found.qty || 1, borrowQty: 1 }));
+                                        }
+                                    }}
+                                    className="w-full bg-[#f4f1ee] border border-transparent rounded-xl pl-4 pr-8 py-3 text-sm font-medium outline-none appearance-none"
+                                    style={selectStyles}
+                                >
+                                    {groupedEquipment.filter(g => g.status === 'Available').map(g => (
+                                        <option key={g.name} value={g.name}>
+                                            {g.name} ({g.qty} available)
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
 
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-wider">
+                                        Quantity <span className="font-normal text-gray-400">(max {selectedEquipment.qty || 1})</span>
+                                    </label>
+                                    <input
+                                        type="number"
+                                        name="borrowQty"
+                                        min="1"
+                                        max={selectedEquipment.qty || 1}
+                                        value={formData.borrowQty}
+                                        onChange={handleInputChange}
+                                        required
+                                        className="w-full bg-[#f4f1ee] border border-transparent rounded-xl px-4 py-3 text-sm font-medium focus:border-[#A63228] outline-none"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-wider">Tool Condition</label>
+                                    <select
+                                        name="condition"
+                                        value={formData.condition}
+                                        onChange={handleInputChange}
+                                        className="w-full bg-[#f4f1ee] border border-transparent rounded-xl pl-4 pr-8 py-3 text-sm font-medium outline-none appearance-none"
+                                        style={selectStyles}
+                                    >
+                                        <option value="Good">Good</option>
+                                        <option value="Needs Repair">Needs Repair</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-wider">Borrower / Worker Name</label>
+                                <input
+                                    type="text"
+                                    name="user"
+                                    list="workers-list"
+                                    value={formData.user}
+                                    onChange={handleInputChange}
+                                    required
+                                    placeholder="Select or enter worker name..."
+                                    className="w-full bg-[#f4f1ee] border border-transparent rounded-xl px-4 py-3 text-sm font-medium focus:border-[#A63228] outline-none"
+                                />
+                                {workers.length > 0 && (
+                                    <div className="flex flex-wrap gap-1.5 mt-2 max-h-24 overflow-y-auto">
+                                        {workers.slice(0, 6).map(w => (
+                                            <button
+                                                key={w.id}
+                                                type="button"
+                                                onClick={() => setFormData(prev => ({ ...prev, user: w.name }))}
+                                                className={`text-[10px] font-bold px-2 py-1 rounded-md transition-colors ${formData.user === w.name ? 'bg-[#A63228] text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                                            >
+                                                {w.name}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="flex gap-3 mt-2">
+                                <button
+                                    type="button"
+                                    onClick={resetAndClose}
+                                    className="flex-1 py-3 bg-white border border-[#A63228] text-[#A63228] rounded-xl text-sm font-extrabold hover:bg-red-50 transition-colors uppercase tracking-wider"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="flex-1 py-3 bg-[#8B1A10] text-white rounded-xl text-sm font-extrabold hover:bg-[#72150d] transition-colors shadow-sm uppercase tracking-wider"
+                                >
+                                    Confirm Borrow
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
 
             {modalState === 'EDIT' && selectedEquipment && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 transition-all">

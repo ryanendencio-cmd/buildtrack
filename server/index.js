@@ -84,19 +84,24 @@ function startServer() {
     }
   })
   app.post('/api/schedules', async (req, res) => {
-    const { title, schedule_date, assigned_to, status, notes } = req.body
+    const { title, schedule_date, assigned_to, status, notes, category, schedule_time, supplier_name, check_no, amount } = req.body
     const link = scheduleLink(req.body)
     try {
       const newSchedule = {
         project_id: link.projectId, expense_id: link.expenseId, link_type: link.type,
         title, schedule_date, assigned_to: assigned_to || null, status: status || 'Scheduled', notes: notes || null,
+        category: category || 'General',
+        schedule_time: schedule_time || '09:00',
+        supplier_name: supplier_name || null,
+        check_no: check_no || null,
+        amount: amount ? Number(amount) : null,
         created_at: FieldValue.serverTimestamp()
       }
       const docRef = await db.collection('schedules').add(newSchedule)
       recordNotification({
         type: 'Schedule',
         title: `New Schedule: ${title}`,
-        message: `Schedule "${title}" was set for date ${schedule_date}${assigned_to ? ` [Assigned: ${assigned_to}]` : ''}.`,
+        message: `Schedule "${title}" was set for date ${schedule_date}${assigned_to ? ` [Assigned: ${assigned_to}]` : ''}${category ? ` (${category})` : ''}.`,
         severity: 'Medium',
         action: 'schedule_created'
       }).catch(() => {})
@@ -106,7 +111,7 @@ function startServer() {
         description: `New schedule "${title}" was created for date ${schedule_date}${assigned_to ? ` [Assigned: ${assigned_to}]` : ''}.`,
         target_id: docRef.id,
         target_name: title,
-        details: { schedule_date, assigned_to, status, notes },
+        details: { schedule_date, assigned_to, status, notes, category, supplier_name, check_no, amount },
         req
       }).catch(() => {})
       res.json({ id: docRef.id, ...req.body, link_type: link.type, project_id: link.projectId, expense_id: link.expenseId })
@@ -115,12 +120,17 @@ function startServer() {
     }
   })
   app.put('/api/schedules/:id', async (req, res) => {
-    const { title, schedule_date, assigned_to, status, notes } = req.body
+    const { title, schedule_date, assigned_to, status, notes, category, schedule_time, supplier_name, check_no, amount } = req.body
     const link = scheduleLink(req.body)
     try {
       await db.collection('schedules').doc(req.params.id).update({
         project_id: link.projectId, expense_id: link.expenseId, link_type: link.type,
-        title, schedule_date, assigned_to: assigned_to || null, status, notes: notes || null
+        title, schedule_date, assigned_to: assigned_to || null, status, notes: notes || null,
+        category: category || 'General',
+        schedule_time: schedule_time || '09:00',
+        supplier_name: supplier_name || null,
+        check_no: check_no || null,
+        amount: amount ? Number(amount) : null
       })
       recordNotification({
         type: 'Schedule',
@@ -135,7 +145,7 @@ function startServer() {
         description: `Schedule "${title}" was updated (Status: ${status || 'Updated'}, Date: ${schedule_date}).`,
         target_id: req.params.id,
         target_name: title,
-        details: { schedule_date, assigned_to, status, notes },
+        details: { schedule_date, assigned_to, status, notes, category, supplier_name, check_no, amount },
         req
       }).catch(() => {})
       res.json({ success: true })
@@ -382,6 +392,7 @@ function startServer() {
     const year = new Date().getFullYear()
     try {
       const snapshot = await db.collection('expenses').get()
+      const mSnapshot = await db.collection('materials').get()
       const months = Array(12).fill(0)
       
       snapshot.docs.forEach(doc => {
@@ -390,6 +401,16 @@ function startServer() {
           const d = new Date(data.date)
           if (d.getFullYear() === year) {
             months[d.getMonth()] += Number(data.amount || 0)
+          }
+        }
+      })
+
+      mSnapshot.docs.forEach(doc => {
+        const data = doc.data()
+        if (data.date) {
+          const d = new Date(data.date)
+          if (d.getFullYear() === year) {
+            months[d.getMonth()] += (Number(data.qty || data.quantity || 0) * Number(data.cost || data.unit_cost || 0))
           }
         }
       })
@@ -407,18 +428,29 @@ function startServer() {
       
       const eSnap = await db.collection('expenses').get()
       const expenses = eSnap.docs.map(d => d.data())
-      const totalSpent = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0)
+      const totalExpensesSpent = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0)
+
+      const mSnap = await db.collection('materials').get()
+      const materials = mSnap.docs.map(d => d.data())
+      const totalMaterialsCost = materials.reduce((sum, m) => sum + (Number(m.qty || m.quantity || 0) * Number(m.cost || m.unit_cost || 0)), 0)
+
+      const totalSpent = totalExpensesSpent + totalMaterialsCost
       
       const catMap = {}
       expenses.forEach(e => {
         const cat = e.category || 'Uncategorized'
         catMap[cat] = (catMap[cat] || 0) + Number(e.amount || 0)
       })
+      if (totalMaterialsCost > 0) {
+        catMap['Materials'] = (catMap['Materials'] || 0) + totalMaterialsCost
+      }
       const categories = Object.keys(catMap).map(category => ({ category, total: catMap[category] }))
 
       res.json({
         totalBudget,
         totalSpent,
+        totalExpensesOnly: totalExpensesSpent,
+        totalMaterialsOnly: totalMaterialsCost,
         remaining: totalBudget - totalSpent,
         percent: totalBudget > 0 ? Math.round((totalSpent / totalBudget) * 100) : 0,
         categories
@@ -432,12 +464,69 @@ function startServer() {
   app.get('/api/expenses/summary', async (req, res) => {
     try {
       const snapshot = await db.collection('expenses').orderBy('created_at', 'desc').get()
-      const expenses = snapshot.docs.map(d => d.data())
+      const expenses = snapshot.docs.map(d => ({ id: d.id, ...d.data() }))
       
-      const total = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0)
-      const recent = expenses.slice(0, 5).map(e => ({ category: e.category, amount: e.amount, date: e.date }))
+      const mSnap = await db.collection('materials').get()
+      const materials = mSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+      const totalMaterialsCost = materials.reduce((sum, m) => sum + (Number(m.qty || m.quantity || 0) * Number(m.cost || m.unit_cost || 0)), 0)
+
+      const totalExpensesOnly = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0)
+      const total = totalExpensesOnly + totalMaterialsCost
+
+      const getTime = (doc) => {
+        if (doc.created_at) {
+          if (typeof doc.created_at.toMillis === 'function') return doc.created_at.toMillis()
+          if (doc.created_at._seconds) return doc.created_at._seconds * 1000
+          if (doc.created_at.seconds) return doc.created_at.seconds * 1000
+          const d = new Date(doc.created_at)
+          if (!isNaN(d.getTime())) return d.getTime()
+        }
+        if (doc.date) {
+          const d = new Date(doc.date)
+          if (!isNaN(d.getTime())) return d.getTime()
+        }
+        return 0
+      }
+
+      const formattedExpenses = expenses.map(e => ({
+        id: e.id,
+        type: 'expense',
+        category: e.category || 'Expense',
+        description: e.category || 'Expense Receipt',
+        amount: Number(e.amount || 0),
+        date: e.date,
+        timestamp: getTime(e)
+      }))
+
+      const formattedMaterials = materials.map(m => {
+        const qty = Number(m.qty || m.quantity || 0)
+        const cost = Number(m.cost || m.unit_cost || 0)
+        const totalItemCost = qty * cost
+        const unitStr = m.unit ? ` ${m.unit}` : ''
+        return {
+          id: m.id,
+          type: 'material',
+          category: 'Materials',
+          name: m.name || 'Material Item',
+          description: m.name ? `${m.name} (${qty}${unitStr})` : 'Material Usage Log',
+          qty: m.qty || m.quantity,
+          unit: m.unit,
+          unit_cost: cost,
+          amount: totalItemCost,
+          date: m.date,
+          timestamp: getTime(m)
+        }
+      })
+
+      const recent = [...formattedExpenses, ...formattedMaterials]
+        .sort((a, b) => {
+          const dateComp = (b.date || '').localeCompare(a.date || '')
+          if (dateComp !== 0) return dateComp
+          return (b.timestamp || 0) - (a.timestamp || 0)
+        })
+        .slice(0, 20)
       
-      res.json({ total, recent })
+      res.json({ total, totalExpensesOnly, totalMaterialsCost, recent })
     } catch (err) {
       res.status(500).json({ error: err.message })
     }
@@ -1214,6 +1303,9 @@ function startServer() {
         }
       })
 
+      // Exclude Cash Advance logs
+      results = results.filter(log => log.module !== 'Cash Advance' && !String(log.action || '').startsWith('CASH_ADVANCE'))
+
       // Sort descending by timestamp
       results.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
 
@@ -1277,13 +1369,14 @@ function startServer() {
   app.get('/api/audit-logs/stats', async (req, res) => {
     try {
       const snap = await db.collection('audit_logs').get()
-      const logs = snap.docs.map(doc => doc.data())
+      const rawLogs = snap.docs.map(doc => doc.data())
+      const logs = rawLogs.filter(l => l.module !== 'Cash Advance' && !String(l.action || '').startsWith('CASH_ADVANCE'))
       const todayStart = new Date().setHours(0, 0, 0, 0)
 
       const total = logs.length
       const todayCount = logs.filter(l => (l.timestamp || 0) >= todayStart).length
       const authCount = logs.filter(l => l.module === 'Authentication').length
-      const financialCount = logs.filter(l => ['Expenses', 'Cash Advance', 'Projects'].includes(l.module)).length
+      const financialCount = logs.filter(l => ['Expenses', 'Projects'].includes(l.module)).length
       const workforceCount = logs.filter(l => ['Workers', 'Attendance', 'Tools', 'Materials'].includes(l.module)).length
 
       res.json({ total, todayCount, authCount, financialCount, workforceCount })
@@ -2077,6 +2170,8 @@ function startServer() {
       const actionVerb = action === 'Returned' ? 'returned' : 'borrowed'
       recordNotification({
         type: 'Tools',
+        project_id: pid || rawPid || null,
+        link: pid || rawPid ? `/assets/${pid || rawPid}` : '/assets',
         title: `Tool ${action || 'Transaction'}: ${borrower_name}`,
         message: `${borrower_name} ${actionVerb} ${quantity || 1} "${tool_name}" (Condition: ${condition_status || 'Good'}).`,
         severity: 'Medium',
@@ -2104,6 +2199,17 @@ function startServer() {
   app.post('/api/borrow-history/:project_id', handleCreateBorrowHistory)
 
   // ── MATERIALS ──
+  app.get('/api/materials', async (req, res) => {
+    try {
+      const snapshot = await db.collection('materials').get()
+      const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+      results.sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+      res.json(results)
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
   app.get('/api/materials/:project_id', async (req, res) => {
     try {
       const pid = await resolveProjectId(req.params.project_id)
@@ -2257,6 +2363,75 @@ function startServer() {
     }
   })
 
+  // Helper: Sync cash advance deduction with project expenses
+  async function syncCashAdvanceExpense(caId, caData, isApproved) {
+    try {
+      const existingSnap = await db.collection('expenses')
+        .where('cash_advance_id', '==', caId)
+        .get()
+
+      if (isApproved) {
+        const pid = caData.project_id || null
+        let projectName = 'Project Site'
+        if (pid) {
+          const pDoc = await db.collection('projects').doc(pid).get()
+          if (pDoc.exists) projectName = pDoc.data().name || projectName
+        }
+        const workerName = caData.workerName || caData.name || 'Worker'
+        const amount = Number(caData.amount || 0)
+        const reason = caData.reason || 'Cash Advance'
+        const date = caData.date ? String(caData.date).slice(0, 10) : new Date().toISOString().slice(0, 10)
+
+        const expensePayload = {
+          project_id: pid,
+          project: projectName,
+          category: 'Manpower',
+          amount: amount,
+          receipt_no: `CA-${caId.slice(0, 6).toUpperCase()}`,
+          date: date,
+          time: new Date().toTimeString().split(' ')[0].substring(0, 5),
+          items: [{
+            qty: 1,
+            unit: 'adv',
+            description: `Cash Advance: ${workerName} (${reason})`,
+            price: amount,
+            category: 'Manpower'
+          }],
+          cash_tendered: amount,
+          change: 0,
+          cash_advance_id: caId,
+          is_cash_advance: true,
+          created_at: FieldValue.serverTimestamp()
+        }
+
+        if (existingSnap.empty) {
+          const expRef = await db.collection('expenses').add(expensePayload)
+          await db.collection('cash_advances').doc(caId).update({
+            expense_id: expRef.id,
+            deducted_from_budget: true
+          })
+        } else {
+          await existingSnap.docs[0].ref.update(expensePayload)
+          await db.collection('cash_advances').doc(caId).update({
+            expense_id: existingSnap.docs[0].id,
+            deducted_from_budget: true
+          })
+        }
+      } else {
+        // If rejected or cancelled, remove linked expense to restore project budget
+        for (const doc of existingSnap.docs) {
+          await doc.ref.delete()
+        }
+        await db.collection('cash_advances').doc(caId).update({
+          expense_id: null,
+          deducted_from_budget: false
+        })
+      }
+    } catch (err) {
+      console.error('Error syncing cash advance with project expenses:', err)
+    }
+  }
+
   app.put('/api/cash-advances/:id/approve', async (req, res) => {
     const { status } = req.body // 'Approved' or 'Rejected'
     if (!['Approved', 'Rejected'].includes(status)) {
@@ -2264,18 +2439,35 @@ function startServer() {
     }
     try {
       const caDoc = await db.collection('cash_advances').doc(req.params.id).get()
-      const caData = caDoc.exists ? caDoc.data() : null
+      if (!caDoc.exists) return res.status(404).json({ error: 'Cash advance not found.' })
+      const caData = caDoc.data()
       await db.collection('cash_advances').doc(req.params.id).update({ status })
-      recordAuditLog({
-        action: status === 'Approved' ? 'CASH_ADVANCE_APPROVED' : 'CASH_ADVANCE_REJECTED',
-        module: 'Cash Advance',
-        description: `Admin ${status.toLowerCase()} cash advance request of ₱${Number(caData?.amount || 0).toLocaleString()} for "${caData?.workerName || caData?.name || 'Worker'}".`,
-        target_id: req.params.id,
-        target_name: caData?.workerName || caData?.name,
-        details: { status, amount: caData?.amount, reason: caData?.reason },
-        req
-      }).catch(() => {})
+
+      // Deduct from or restore project budget in expenses
+      await syncCashAdvanceExpense(req.params.id, { ...caData, status }, status === 'Approved')
+
       res.json({ success: true, status })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  app.delete('/api/cash-advances/:id', async (req, res) => {
+    try {
+      const caDoc = await db.collection('cash_advances').doc(req.params.id).get()
+      if (!caDoc.exists) return res.status(404).json({ error: 'Cash advance record not found.' })
+      const caData = caDoc.data()
+
+      // Delete linked expense if any so project budget is restored
+      const existingSnap = await db.collection('expenses')
+        .where('cash_advance_id', '==', req.params.id)
+        .get()
+      for (const doc of existingSnap.docs) {
+        await doc.ref.delete()
+      }
+
+      await db.collection('cash_advances').doc(req.params.id).delete()
+      res.json({ success: true })
     } catch (err) {
       res.status(500).json({ error: err.message })
     }
@@ -2303,44 +2495,91 @@ function startServer() {
   app.post('/api/cash-advances', async (req, res) => {
     const { project_id, workerName, workerId, amount, date, reason, status } = req.body
     const cleanDate = date ? String(date).slice(0, 10) : new Date().toISOString().slice(0, 10)
+    const numAmount = parseFloat(amount || 0)
+
+    if (!numAmount || numAmount <= 0) {
+      return res.status(400).json({ error: 'Please enter a valid cash advance amount greater than 0.' })
+    }
     
     try {
       const pid = await resolveProjectId(project_id)
+
+      // Project Remaining Budget Check
+      if (pid) {
+        const pDoc = await db.collection('projects').doc(pid).get()
+        if (pDoc.exists) {
+          const pBudget = Number(pDoc.data().budget || 0)
+          if (pBudget > 0) {
+            const expSnap = await db.collection('expenses').where('project_id', '==', pid).get()
+            const currentSpent = expSnap.docs.reduce((s, d) => s + Number(d.data().amount || 0), 0)
+            const remainingBudget = pBudget - currentSpent
+            if (numAmount > remainingBudget) {
+              return res.status(400).json({
+                error: `Requested advance (₱${numAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}) exceeds remaining project budget (₱${remainingBudget.toLocaleString('en-PH', { minimumFractionDigits: 2 })}).`
+              })
+            }
+          }
+        }
+      }
+
+      // Worker Limit Check
+      if (workerId) {
+        const wDoc = await db.collection('workers').doc(workerId).get()
+        if (wDoc.exists) {
+          const wData = wDoc.data()
+          const dailyRate = Number(wData.daily_rate || 600)
+          const baseCap = Math.min(dailyRate * 6, 5000)
+
+          const caSnap = await db.collection('cash_advances')
+            .where('worker_id', '==', workerId)
+            .where('status', '==', 'Approved')
+            .get()
+          const undeducted = caSnap.docs
+            .map(d => d.data())
+            .filter(ca => !ca.is_deducted)
+            .reduce((s, ca) => s + Number(ca.amount || 0), 0)
+
+          const availableLimit = Math.max(0, baseCap - undeducted)
+          if (numAmount > availableLimit) {
+            return res.status(400).json({
+              error: `Amount exceeds worker advance limit. Worker has ₱${availableLimit.toLocaleString('en-PH', { minimumFractionDigits: 2 })} available (Daily rate: ₱${dailyRate}/day, base limit: ₱${baseCap.toLocaleString()}, active advances: ₱${undeducted.toLocaleString()}).`
+            })
+          }
+        }
+      }
+
+      const finalStatus = status || 'Approved'
+
       const resolveAndInsert = async (name) => {
         try {
           const newAdvance = {
             project_id: pid || project_id || null,
             worker_id: workerId || null,
             workerName: name,
-            amount,
+            amount: numAmount,
             date: cleanDate,
-            reason,
-            status: status || 'Pending',
+            reason: reason || 'Cash Advance',
+            status: finalStatus,
             created_at: FieldValue.serverTimestamp()
           }
           const docRef = await db.collection('cash_advances').add(newAdvance)
+
+          // If approved (default), deduct immediately from project budget by syncing into expenses
+          if (finalStatus === 'Approved') {
+            await syncCashAdvanceExpense(docRef.id, newAdvance, true)
+          }
+
           recordNotification({
             type: 'Staff & Workers',
-            title: `Cash Advance Request: ${name}`,
-            message: `${name} submitted a request for Cash Advance of ₱${Number(amount || 0).toLocaleString()}${reason ? ` (Reason: "${reason}")` : ''}.`,
+            title: `Cash Advance: ${name}`,
+            message: `Recorded Cash Advance of ₱${numAmount.toLocaleString()}${reason ? ` (Reason: "${reason}")` : ''} for ${name}. Deducted from project budget.`,
             severity: 'Medium',
             actor_name: name,
             actor_role: 'Worker',
-            action: 'cash_advance_request'
+            action: 'cash_advance_logged'
           }).catch(() => {})
-          recordAuditLog({
-            action: 'CASH_ADVANCE_REQUESTED',
-            module: 'Cash Advance',
-            description: `${name} submitted a request for Cash Advance of ₱${Number(amount || 0).toLocaleString()}${reason ? ` (Reason: "${reason}")` : ''}.`,
-            actor_name: name,
-            actor_role: 'Worker',
-            actor_id: workerId || null,
-            target_id: docRef.id,
-            target_name: name,
-            details: { amount, reason, date: cleanDate },
-            req
-          }).catch(() => {})
-          res.json({ id: docRef.id, ...req.body, project_id: pid || project_id || null, workerName: name, date: cleanDate })
+
+          res.json({ id: docRef.id, ...newAdvance, date: cleanDate })
         } catch (err) {
           res.status(500).json({ error: err.message })
         }

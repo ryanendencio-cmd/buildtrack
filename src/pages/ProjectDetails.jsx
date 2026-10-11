@@ -18,6 +18,7 @@ export default function ProjectDetails() {
     const [completeModal, setCompleteModal] = useState(false)
     const [successModal, setSuccessModal] = useState(false)
     const [showAddBudget, setShowAddBudget] = useState(false)
+    const [showUnreceiptedList, setShowUnreceiptedList] = useState(false)
 
     useEffect(() => {
         if (!id) return
@@ -104,12 +105,41 @@ export default function ProjectDetails() {
 
     const totalMaterialCost = combinedMaterials.reduce((s, m) => s + (Number(m.quantity || 0) * Number(m.unit_cost || 0)), 0);
 
+    // Materials logged via Materials Management (not from expense receipts) — these are "unreceipted"
+    const unreceiptedMaterials = materials // `materials` state = only manually logged ones from Materials module
+    const unreceiptedTotal = unreceiptedMaterials.reduce((s, m) => s + (Number(m.qty || m.quantity || 0) * Number(m.cost || m.unit_cost || 0)), 0)
+
     const formatDate = (d) => {
         if (!d) return '—'
         return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
     }
 
     const isOngoing = (project.status || '').toUpperCase() !== 'COMPLETED'
+
+    // ── BUDGET BREAKDOWN ──
+    // Materials from Materials Management (direct logs)
+    const materialsCost = materials.reduce((s, m) => s + (Number(m.qty || m.quantity || 0) * Number(m.cost || m.unit_cost || 0)), 0)
+
+    // Expenses breakdown by category
+    const expensesByCategory = {
+        Materials: 0,
+        Manpower: 0,
+        Equipment: 0,
+        Other: 0
+    }
+    expenses.forEach(e => {
+        const cat = (e.category || 'Other')
+        if (cat === 'Materials') expensesByCategory.Materials += Number(e.amount || 0)
+        else if (cat === 'Manpower') expensesByCategory.Manpower += Number(e.amount || 0)
+        else if (cat === 'Equipment') expensesByCategory.Equipment += Number(e.amount || 0)
+        else expensesByCategory.Other += Number(e.amount || 0)
+    })
+
+    // Total cost = materials logged + all expense receipts
+    const totalCombinedCost = materialsCost + totalSpent
+    const remainingBudget = budget - totalCombinedCost
+    const usedPercent = budget > 0 ? Math.min(Math.round((totalCombinedCost / budget) * 100), 100) : 0
+    const isOverBudget = remainingBudget < 0
 
     return (
         <AdminLayout>
@@ -177,50 +207,86 @@ export default function ProjectDetails() {
             <div>
                 <h3 className="text-[9px] font-extrabold text-[#A63228] tracking-widest uppercase mb-1.5">PROJECT MONITORING</h3>
 
-                {/* BUDGET CARD */}
-                <div className="bg-gradient-to-r from-[#5a0f0a] via-[#7B1F16] to-[#4a0c08] rounded-xl shadow-sm p-3 text-white mb-3">
-                    <div className="flex justify-between items-center mb-1">
-                        <p className="text-[8px] font-bold text-white/70 tracking-widest uppercase">BUDGET PROGRESS</p>
-                        <span className="text-[9px] font-medium text-white/90">Actual vs Target</span>
+                {/* ── MAIN BUDGET CARD ── */}
+                <div className={`rounded-xl shadow-sm p-4 text-white mb-3 ${isOverBudget ? 'bg-gradient-to-r from-[#7a0000] via-[#a00000] to-[#5a0000]' : 'bg-gradient-to-r from-[#5a0f0a] via-[#7B1F16] to-[#4a0c08]'}`}>
+                    <div className="flex justify-between items-center mb-2">
+                        <p className="text-[8px] font-bold text-white/70 tracking-widest uppercase">BUDGET OVERVIEW</p>
+                        <span className={`text-[8px] font-extrabold px-2 py-0.5 rounded-full ${isOverBudget ? 'bg-red-300/30 text-red-200' : 'bg-white/10 text-white/80'}`}>
+                            {isOverBudget ? '⚠ OVER BUDGET' : `${usedPercent}% USED`}
+                        </span>
                     </div>
-                    <div className="flex items-center justify-between mb-2">
-                        <h2 className="text-lg md:text-xl font-extrabold">₱{totalSpent.toLocaleString()}</h2>
-                        <span className="text-[9px] font-bold text-white/40 italic px-2">VS</span>
-                        <h2 className="text-base md:text-lg font-extrabold">₱{budget.toLocaleString()}</h2>
-                    </div>
-                    <div className="mt-1">
-                        <div className="w-full bg-white/20 rounded-full h-1 mb-1 overflow-hidden">
-                            <div className="bg-[#E8C547] h-full rounded-full transition-all" style={{ width: `${percent}%` }}></div>
+
+                    {/* Top row: Total Cost vs Contract */}
+                    <div className="flex items-end justify-between mb-3">
+                        <div>
+                            <p className="text-[8px] text-white/50 font-medium mb-0.5">Total Cost Incurred</p>
+                            <h2 className={`text-xl font-extrabold ${isOverBudget ? 'text-red-300' : ''}`}>₱{totalCombinedCost.toLocaleString()}</h2>
                         </div>
-                        <div className="flex justify-between text-[8px] font-medium">
-                            <span className="text-[#E8C547] font-bold">{percent}% USED</span>
-                            <span className="text-white/80">Remaining: <strong className="text-[#E8C547]">₱{remaining.toLocaleString()}</strong></span>
+                        <div className="text-right">
+                            <p className="text-[8px] text-white/50 font-medium mb-0.5">Contract Budget</p>
+                            <h2 className="text-base font-extrabold text-white/80">₱{budget.toLocaleString()}</h2>
+                        </div>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="w-full bg-white/20 rounded-full h-1.5 mb-1.5 overflow-hidden">
+                        <div
+                            className={`h-full rounded-full transition-all ${isOverBudget ? 'bg-red-400' : 'bg-[#E8C547]'}`}
+                            style={{ width: `${usedPercent}%` }}
+                        />
+                    </div>
+
+                    {/* Remaining */}
+                    <div className="flex justify-between items-center text-[8px] font-medium mb-3">
+                        <span className="text-white/60">{usedPercent}% of budget used</span>
+                        <span className={`font-bold ${isOverBudget ? 'text-red-300' : 'text-[#E8C547]'}`}>
+                            {isOverBudget ? `Over by ₱${Math.abs(remainingBudget).toLocaleString()}` : `Remaining: ₱${remainingBudget.toLocaleString()}`}
+                        </span>
+                    </div>
+
+                    {/* ── COST BREAKDOWN ROW ── */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 pt-2.5 border-t border-white/10">
+                        {/* Materials from Materials Management */}
+                        <div className="bg-white/10 rounded-lg p-2">
+                            <div className="flex items-center gap-1 mb-1">
+                                <div className="w-1.5 h-1.5 rounded-full bg-[#E8C547]" />
+                                <p className="text-[7.5px] font-bold text-white/60 uppercase tracking-wide">Materials Used</p>
+                            </div>
+                            <p className="text-[11px] font-extrabold text-white">₱{materialsCost.toLocaleString()}</p>
+                            <p className="text-[7px] text-white/40 mt-0.5">{materials.length} item{materials.length !== 1 ? 's' : ''} logged</p>
+                        </div>
+                        {/* Materials from Expenses */}
+                        <div className="bg-white/10 rounded-lg p-2">
+                            <div className="flex items-center gap-1 mb-1">
+                                <div className="w-1.5 h-1.5 rounded-full bg-orange-400" />
+                                <p className="text-[7.5px] font-bold text-white/60 uppercase tracking-wide">Material Receipts</p>
+                            </div>
+                            <p className="text-[11px] font-extrabold text-white">₱{expensesByCategory.Materials.toLocaleString()}</p>
+                            <p className="text-[7px] text-white/40 mt-0.5">from receipts/expenses</p>
+                        </div>
+                        {/* Manpower */}
+                        <div className="bg-white/10 rounded-lg p-2">
+                            <div className="flex items-center gap-1 mb-1">
+                                <div className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+                                <p className="text-[7.5px] font-bold text-white/60 uppercase tracking-wide">Manpower</p>
+                            </div>
+                            <p className="text-[11px] font-extrabold text-white">₱{expensesByCategory.Manpower.toLocaleString()}</p>
+                            <p className="text-[7px] text-white/40 mt-0.5">labor expenses</p>
+                        </div>
+                        {/* Equipment + Other */}
+                        <div className="bg-white/10 rounded-lg p-2">
+                            <div className="flex items-center gap-1 mb-1">
+                                <div className="w-1.5 h-1.5 rounded-full bg-purple-400" />
+                                <p className="text-[7.5px] font-bold text-white/60 uppercase tracking-wide">Equipment & Other</p>
+                            </div>
+                            <p className="text-[11px] font-extrabold text-white">₱{(expensesByCategory.Equipment + expensesByCategory.Other).toLocaleString()}</p>
+                            <p className="text-[7px] text-white/40 mt-0.5">equipment + misc</p>
                         </div>
                     </div>
                 </div>
 
-                {additions.length > 0 && (
-                    <div className="bg-white rounded-xl p-3.5 shadow-sm border border-gray-100 mb-3">
-                        <div className="flex justify-between items-center mb-2">
-                            <h4 className="font-extrabold text-[11px] text-gray-900">Budget Additions</h4>
-                            <span className="text-[9px] font-extrabold text-[#A63228]">₱{addedTotal.toLocaleString()}</span>
-                        </div>
-                        <div className="flex flex-col gap-2 max-h-40 overflow-y-auto pr-1 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-gray-200 [&::-webkit-scrollbar-thumb]:rounded-full">
-                            {additions.map((entry) => (
-                                <div key={entry.id} className="flex justify-between items-center border-b border-gray-50 pb-1.5">
-                                    <div className="flex flex-col">
-                                        <strong className="text-[9px] text-gray-900">{entry.note || 'Additional budget'}</strong>
-                                        <span className="text-[8px] text-gray-400">{formatDate(entry.date)}</span>
-                                    </div>
-                                    <strong className="text-[10px] text-[#A63228]">+₱{Number(entry.amount).toLocaleString()}</strong>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
-
-                {/* 2x2 GRID */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pb-8">
+                {/* ── 2x2 GRID ── */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
                     {/* MANPOWER */}
                     <div className="bg-white rounded-xl p-3.5 shadow-sm flex flex-col border border-gray-100">
                         <h4 className="font-extrabold text-[11px] text-gray-900 mb-2">Manpower</h4>
@@ -234,19 +300,30 @@ export default function ProjectDetails() {
 
                     {/* MATERIALS */}
                     <div className="bg-white rounded-xl p-3.5 shadow-sm flex flex-col border border-gray-100">
-                        <h4 className="font-extrabold text-[11px] text-gray-900 mb-2">Materials</h4>
+                        <div className="flex justify-between items-center mb-2">
+                            <h4 className="font-extrabold text-[11px] text-gray-900">Materials</h4>
+                            <span className="text-[8px] font-bold text-[#A63228] bg-red-50 px-1.5 py-0.5 rounded">
+                                Total: ₱{materialsCost.toLocaleString()}
+                            </span>
+                        </div>
                         <div className="flex flex-col gap-2 flex-1">
-                            {combinedMaterials.length === 0 ? (
-                                <p className="text-[9px] text-gray-400 italic">No materials logged.</p>
-                            ) : combinedMaterials.slice(0, 3).map((mat, i) => (
+                            {materials.length === 0 ? (
+                                <p className="text-[9px] text-gray-400 italic">No materials logged yet.</p>
+                            ) : materials.slice(0, 3).map((mat, i) => (
                                 <div key={i} className="flex justify-between text-[9px] border-b border-gray-50 pb-1">
                                     <span className="text-gray-500 font-medium">{mat.name}</span>
-                                    <strong className="text-gray-900">{mat.quantity} {mat.unit}</strong>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-gray-700">{mat.qty || mat.quantity} {mat.unit}</span>
+                                        <strong className="text-[#A63228] font-bold">₱{(Number(mat.qty || mat.quantity || 0) * Number(mat.cost || mat.unit_cost || 0)).toLocaleString()}</strong>
+                                    </div>
                                 </div>
                             ))}
-                            <div className="flex justify-between text-[9px] pb-1">
-                                <span className="text-gray-500 font-medium">Total Material Cost</span>
-                                <strong className="text-[#A63228] font-extrabold">₱{totalMaterialCost.toLocaleString()}</strong>
+                            {materials.length > 3 && (
+                                <p className="text-[8px] text-gray-400 italic">+{materials.length - 3} more items...</p>
+                            )}
+                            <div className="flex justify-between text-[9px] pt-1 border-t border-gray-100">
+                                <span className="text-gray-500 font-medium">Budget Impact</span>
+                                <strong className="text-[#A63228] font-extrabold">- ₱{materialsCost.toLocaleString()}</strong>
                             </div>
                         </div>
                         <Link to={`/materials/${id}`} className="text-[#A63228] text-[9px] font-bold text-right mt-2 hover:underline">View Material Log →</Link>
@@ -271,7 +348,12 @@ export default function ProjectDetails() {
 
                     {/* RECEIPTS */}
                     <div className="bg-white rounded-xl p-3.5 shadow-sm flex flex-col border border-gray-100">
-                        <h4 className="font-extrabold text-[11px] text-gray-900 mb-2">Recent Receipts</h4>
+                        <div className="flex justify-between items-center mb-2">
+                            <h4 className="font-extrabold text-[11px] text-gray-900">Recent Receipts</h4>
+                            <span className="text-[8px] font-bold text-[#A63228] bg-red-50 px-1.5 py-0.5 rounded">
+                                Total: ₱{totalSpent.toLocaleString()}
+                            </span>
+                        </div>
                         <div className="flex flex-col gap-2 flex-1">
                             {recentExpenses.length === 0 ? (
                                 <p className="text-[9px] text-gray-400 italic">No expenses logged.</p>
@@ -288,6 +370,32 @@ export default function ProjectDetails() {
                         <Link to={`/expenses/${id}`} className="text-[#A63228] text-[9px] font-bold text-right mt-2 hover:underline">View All Receipts →</Link>
                     </div>
                 </div>
+
+                {/* ── BUDGET ADDITIONS ── */}
+                {additions.length > 0 && (
+                    <div className="bg-white rounded-xl p-3.5 shadow-sm border border-gray-100 mb-8">
+                        <div className="flex justify-between items-center mb-2.5 pb-2 border-b border-gray-100">
+                            <div>
+                                <h4 className="font-extrabold text-[11px] text-gray-900 uppercase tracking-wide">Budget Additions & Audit History</h4>
+                                <span className="text-[8px] text-gray-400 font-medium">{additions.length} budget addition record(s)</span>
+                            </div>
+                            <span className="text-[10px] font-extrabold text-[#A63228] bg-red-50 border border-red-100 px-2 py-0.5 rounded-md">
+                                Total Added: ₱{addedTotal.toLocaleString()}
+                            </span>
+                        </div>
+                        <div className="flex flex-col gap-2 max-h-48 overflow-y-auto pr-1 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-gray-200 [&::-webkit-scrollbar-thumb]:rounded-full">
+                            {additions.map((entry) => (
+                                <div key={entry.id} className="flex justify-between items-center border-b border-gray-50 pb-2 hover:bg-gray-50/50 px-1 rounded transition-colors">
+                                    <div className="flex flex-col">
+                                        <strong className="text-[9.5px] text-gray-900 font-bold">{entry.note || 'Additional budget'}</strong>
+                                        <span className="text-[8px] text-gray-400">{formatDate(entry.date)}</span>
+                                    </div>
+                                    <strong className="text-[10px] text-[#A63228] font-extrabold">+₱{Number(entry.amount).toLocaleString()}</strong>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
             </div>
 
             {showAddBudget && (

@@ -18,12 +18,10 @@ import Footer from './components/Footer'
 import Login from './pages/Login'
 import ForgotPassword from './pages/ForgotPassword'
 import NewPassword from './pages/NewPassword'
-import SuccessReset from './pages/SuccessReset'
 import Dashboard from './pages/Dashboard'
 import Projects from './pages/Projects'
 import Expenses from './pages/Expenses'
 import ProjectDetails from './pages/ProjectDetails'
-import MaterialLog from './pages/MaterialLog'
 import Attendance from './pages/Attendance'
 import Assets from './pages/Assets'
 import Materials from './pages/Materials'
@@ -53,7 +51,6 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password/:token" element={<NewPassword />} />
-        <Route path="/success" element={<SuccessReset />} />
 
         {/* Admin Routes — protected */}
         <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
@@ -72,7 +69,6 @@ export default function App() {
 
         <Route path="/materials" element={<PrivateRoute><Materials /></PrivateRoute>} />
         <Route path="/materials/:id" element={<PrivateRoute><Materials /></PrivateRoute>} />
-        <Route path="/material-log/:id" element={<PrivateRoute><MaterialLog /></PrivateRoute>} />
 
         <Route path="/workers" element={<PrivateRoute><Workers /></PrivateRoute>} />
         <Route path="/cash-advance" element={<PrivateRoute><CashAdvance /></PrivateRoute>} />

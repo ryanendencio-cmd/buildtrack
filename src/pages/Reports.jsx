@@ -89,10 +89,14 @@ export default function Reports() {
             id: r.id,
             cols: [r.date, r.worker_name, r.role || '—', r.status, `₱${Number(r.daily_rate || 0).toLocaleString()}`]
         }));
-        if (reportType === 'Materials') return reportData.rows.map(r => ({
-            id: r.id,
-            cols: [r.project_name || '—', r.name, r.quantity, r.unit, `₱${Number(r.unit_cost).toLocaleString()}`, `₱${(Number(r.quantity) * Number(r.unit_cost)).toLocaleString()}`]
-        }));
+        if (reportType === 'Materials') return reportData.rows.map(r => {
+            const q = Number(r.qty ?? r.quantity ?? 0);
+            const c = Number(r.cost ?? r.unit_cost ?? 0);
+            return {
+                id: r.id,
+                cols: [r.project_name || '—', r.name, q, r.unit || 'pcs', `₱${c.toLocaleString()}`, `₱${(q * c).toLocaleString()}`]
+            };
+        });
         if (reportType === 'Assets') return reportData.rows.map(r => ({
             id: r.id,
             cols: [r.project_name || '—', r.name, r.type || '—', r.assigned_to || '—', r.status]

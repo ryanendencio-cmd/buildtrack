@@ -3,52 +3,87 @@ import AdminLayout from '../components/AdminLayout'
 import { api } from '../api'
 
 const blank = (dateStr) => ({
-  link_type: 'General',
   project_id: '',
-  expense_id: '',
   title: '',
+  category: 'Supplier Check / Payment Due',
   schedule_date: dateStr || new Date().toISOString().slice(0, 10),
-  assigned_to: '',
+  schedule_time: '09:00',
+  supplier_name: '',
+  check_no: '',
+  amount: '',
   status: 'Scheduled',
-  notes: ''
+  notes: '',
+  syncGoogleCalendar: true
 })
-
-const linkTypeOf = (it) => {
-  if (it?.link_type === 'Project' || it?.link_type === 'Transaction') return it.link_type
-  if (it?.expense_id) return 'Transaction'
-  if (it?.project_id) return 'Project'
-  return 'General'
-}
 
 const pad = n => String(n).padStart(2, '0')
 const toKey = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
+const makeGoogleCalendarUrl = (it) => {
+  const title = it.title || (it.category === 'Supplier Check / Payment Due' ? 'Supplier Check Payment Due' : 'Material Delivery')
+  const rawDate = (it.schedule_date || '').slice(0, 10)
+  if (!rawDate) return '#'
+  const cleanDate = rawDate.replace(/-/g, '')
+  const time = it.schedule_time || '09:00'
+  const [hh, mm] = (time || '09:00').split(':').map(n => String(n || '00').padStart(2, '0'))
+  const startIso = `${cleanDate}T${hh}${mm}00`
+  const endHh = String((parseInt(hh, 10) + 1) % 24).padStart(2, '0')
+  const endIso = `${cleanDate}T${endHh}${mm}00`
+
+  let details = ''
+  if (it.category) details += `Category: ${it.category}\n`
+  if (it.supplier_name) details += `Supplier: ${it.supplier_name}\n`
+  if (it.check_no) details += `Check / Ref #: ${it.check_no}\n`
+  if (it.amount) details += `Amount: PHP ${Number(it.amount).toLocaleString()}\n`
+  if (it.notes) details += `\nNotes: ${it.notes}\n`
+  details += `\n[BuildTrack S-CON Automated Monitoring & Alarm Reminder]`
+
+  const params = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: title,
+    dates: `${startIso}/${endIso}`,
+    details: details
+  })
+  return `https://calendar.google.com/calendar/render?${params.toString()}`
+}
+
 export default function Schedules() {
   const [items, setItems] = useState([])
   const [projects, setProjects] = useState([])
-  const [expenses, setExpenses] = useState([])
   const [form, setForm] = useState(blank())
   const [editId, setEditId] = useState(null)
   const [open, setOpen] = useState(false)
   const [cursor, setCursor] = useState(() => { const d = new Date(); d.setDate(1); return d })
   const [dayModal, setDayModal] = useState(null)
-  const [linkFilter, setLinkFilter] = useState('All')
+  const [categoryFilter, setCategoryFilter] = useState('All')
 
   const load = () => api.get('/schedules').then(setItems).catch(console.error)
   useEffect(() => {
     load()
     api.get('/projects').then(setProjects).catch(console.error)
-    api.get('/expenses').then(setExpenses).catch(console.error)
   }, [])
 
-  const change = e => setForm(p => ({ ...p, [e.target.name]: e.target.value }))
+  const change = e => {
+    const { name, value } = e.target
+    setForm(p => ({ ...p, [name]: value }))
+  }
 
   const show = (item, dateStr) => {
     setEditId(item?.id || null)
     setForm(item
-      ? { ...blank(), ...item, link_type: linkTypeOf(item), project_id: item.project_id ? String(item.project_id) : '', expense_id: item.expense_id ? String(item.expense_id) : '' }
+      ? {
+          ...blank(),
+          ...item,
+          project_id: item.project_id ? String(item.project_id) : '',
+          category: item.category || 'Supplier Check / Payment Due',
+          schedule_time: item.schedule_time || '09:00',
+          supplier_name: item.supplier_name || '',
+          check_no: item.check_no || '',
+          amount: item.amount || '',
+          syncGoogleCalendar: true
+        }
       : blank(dateStr))
     setOpen(true)
   }
@@ -56,31 +91,36 @@ export default function Schedules() {
   const save = e => {
     e.preventDefault()
     const payload = { ...form }
-    delete payload.start_time
-    delete payload.end_time
+    const shouldSync = form.syncGoogleCalendar
+
     const req = editId ? api.put(`/schedules/${editId}`, payload) : api.post('/schedules', payload)
-    req.then(() => { setOpen(false); load() }).catch(err => alert(err.message))
+    req.then(() => {
+      setOpen(false)
+      load()
+      if (shouldSync) {
+        const calUrl = makeGoogleCalendarUrl(payload)
+        window.open(calUrl, '_blank')
+      }
+    }).catch(err => alert(err.message))
   }
 
   const remove = id => {
-    if (window.confirm('Delete this schedule?')) {
+    if (window.confirm('Are you sure you want to delete this schedule?')) {
       api.delete(`/schedules/${id}`).then(load).catch(console.error)
     }
   }
 
-  const color = s => s === 'Completed' ? 'bg-green-100 text-green-700'
-    : s === 'Cancelled' ? 'bg-red-100 text-red-700'
-      : s === 'In Progress' ? 'bg-blue-100 text-blue-700'
-        : 'bg-yellow-100 text-yellow-700'
-
-  const dotColor = s => s === 'Completed' ? 'bg-green-500'
-    : s === 'Cancelled' ? 'bg-red-500'
-      : s === 'In Progress' ? 'bg-blue-500'
-        : 'bg-yellow-500'
+  const color = s => s === 'Completed' ? 'bg-green-50 text-green-700 border-green-200'
+    : s === 'Cancelled' ? 'bg-red-50 text-red-700 border-red-200'
+      : s === 'In Progress' ? 'bg-blue-50 text-blue-700 border-blue-200'
+        : 'bg-amber-50 text-amber-800 border-amber-200'
 
   const itemsByDate = useMemo(() => {
     const map = {}
-    const visible = linkFilter === 'All' ? items : items.filter(it => linkTypeOf(it) === linkFilter)
+    const visible = items.filter(it => {
+      if (categoryFilter === 'All') return true
+      return it.category === categoryFilter
+    })
     visible.forEach(it => {
       const key = (it.schedule_date || '').slice(0, 10)
       if (!map[key]) map[key] = []
@@ -88,23 +128,7 @@ export default function Schedules() {
     })
     Object.values(map).forEach(arr => arr.sort((a, b) => (a.title || '').localeCompare(b.title || '')))
     return map
-  }, [items, linkFilter])
-
-  const linkLabel = it => {
-    const type = linkTypeOf(it)
-    if (type === 'Project') return it.project_name || 'Project'
-    if (type === 'Transaction') {
-      const receipt = it.expense_receipt ? `#${it.expense_receipt}` : (it.expense_id ? `#${it.expense_id}` : '')
-      return ['Txn', receipt, it.expense_category].filter(Boolean).join(' ')
-    }
-    return 'General'
-  }
-
-  const expenseLabel = exp => {
-    const receipt = exp.receipt_no ? `#${exp.receipt_no}` : `#${exp.id}`
-    const amount = Number(exp.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    return `${receipt} · ${exp.category || 'Expense'} · ₱${amount}${exp.project ? ` · ${exp.project}` : ''}`
-  }
+  }, [items, categoryFilter])
 
   // Build weeks: each row is an array of 7 Date|null cells (Sun..Sat)
   const weeks = useMemo(() => {
@@ -130,50 +154,68 @@ export default function Schedules() {
 
   return (
     <AdminLayout>
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-4 gap-2">
-        <div>
-          <span className="text-[9px] font-bold text-[#A63228] tracking-widest">PLANNING</span>
-          <h1 className="text-lg font-extrabold text-gray-900">Schedule Management</h1>
-          <p className="text-[10px] text-gray-500">Plan activities for projects, transactions, or general reminders.</p>
-        </div>
-        <button onClick={() => show()} className="bg-[#E8C547] px-3 py-2 rounded-lg text-[10px] font-bold hover:bg-[#d4b33d] transition-colors">
-          + Add Schedule
-        </button>
+      {/* Top Header */}
+      <div className="mb-3">
+        <span className="text-[9px] font-bold text-[#A63228] tracking-widest uppercase">MONITORING & PLANNING</span>
+        <h1 className="text-lg font-extrabold text-gray-900">Schedule Management</h1>
+        <p className="text-[10px] text-gray-500">Click any date on the calendar to log material deliveries, supplier check due dates, or project milestones.</p>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-        {/* Toolbar */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 p-3 border-b border-gray-100">
-          <div className="flex items-center gap-2">
-            <button onClick={() => shiftMonth(-1)} className="w-7 h-7 flex items-center justify-center rounded-md border border-gray-200 text-gray-500 hover:bg-gray-50 text-xs font-bold">‹</button>
-            <h2 className="text-sm font-extrabold text-gray-900 w-36 text-center">{monthLabel}</h2>
-            <button onClick={() => shiftMonth(1)} className="w-7 h-7 flex items-center justify-center rounded-md border border-gray-200 text-gray-500 hover:bg-gray-50 text-xs font-bold">›</button>
-            <button onClick={goToday} className="ml-1 px-2 py-1 rounded-md border border-gray-200 text-[9px] font-bold text-gray-600 hover:bg-gray-50">Today</button>
+      {/* Google Calendar Push Notification Feature Banner */}
+      <div className="bg-gradient-to-r from-red-50/80 via-amber-50/70 to-white border border-amber-200/80 rounded-xl px-3.5 py-2.5 mb-3.5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 shadow-xs">
+        <div className="flex items-center gap-2.5">
+          <div className="w-6 h-6 rounded-md bg-[#A63228]/10 text-[#A63228] flex items-center justify-center shrink-0">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
           </div>
-          <div className="flex items-center gap-2.5 flex-wrap">
-            {['All', 'Project', 'Transaction', 'General'].map(t => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setLinkFilter(t)}
-                className={`px-2 py-1 rounded-md text-[8px] font-bold border ${linkFilter === t ? 'bg-[#A63228] text-white border-[#A63228]' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
-              >{t}</button>
-            ))}
-            {['Scheduled', 'In Progress', 'Completed', 'Cancelled'].map(s => (
-              <span key={s} className="flex items-center gap-1 text-[8px] font-bold text-gray-500">
-                <span className={`w-1.5 h-1.5 rounded-full ${dotColor(s)}`}></span>{s}
-              </span>
-            ))}
+          <p className="text-[9.5px] text-gray-700">
+            <strong className="text-gray-900 font-extrabold mr-1">Google Calendar Sync Active:</strong>
+            Schedules can automatically trigger Google Calendar events and mobile push alarms prior to due dates.
+          </p>
+        </div>
+        <span className="text-[8px] font-bold text-[#2e7d32] bg-green-50 border border-green-200 px-2 py-0.5 rounded-full shrink-0 flex items-center gap-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+          Mobile Push Ready
+        </span>
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden mb-6">
+        {/* Toolbar */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2.5 p-3 border-b border-gray-100">
+          <div className="flex items-center gap-2">
+            <button onClick={() => shiftMonth(-1)} className="w-7 h-7 flex items-center justify-center rounded-md border border-gray-200 text-gray-500 hover:bg-gray-50 text-xs font-bold" title="Previous Month">‹</button>
+            <h2 className="text-sm font-extrabold text-gray-900 w-36 text-center">{monthLabel}</h2>
+            <button onClick={() => shiftMonth(1)} className="w-7 h-7 flex items-center justify-center rounded-md border border-gray-200 text-gray-500 hover:bg-gray-50 text-xs font-bold" title="Next Month">›</button>
+            <button onClick={goToday} className="ml-1 px-2.5 py-1 rounded-md border border-gray-200 text-[9px] font-bold text-gray-600 hover:bg-gray-50">Today</button>
+          </div>
+
+          {/* Filter Tabs */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg">
+              {[
+                { label: 'All Schedules', val: 'All' },
+                { label: 'Check Due Dates', val: 'Supplier Check / Payment Due' },
+                { label: 'Material Deliveries', val: 'Material Delivery from Supplier' }
+              ].map(tab => (
+                <button
+                  key={tab.val}
+                  type="button"
+                  onClick={() => setCategoryFilter(tab.val)}
+                  className={`px-2.5 py-1 rounded-md text-[8.5px] font-bold transition-colors ${categoryFilter === tab.val ? 'bg-white text-[#A63228] shadow-xs' : 'text-gray-500 hover:text-gray-800'}`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
-        {/* Calendar TABLE: columns = Sunday..Saturday, rows = week dates */}
+        {/* Calendar TABLE */}
         <div className="overflow-x-auto">
           <table className="w-full border-collapse table-fixed min-w-[720px]">
             <thead>
-              <tr className="bg-gray-50/60">
+              <tr className="bg-gray-50/70">
                 {WEEKDAYS.map(w => (
-                  <th key={w} className="w-[14.28%] p-2 text-center text-[8px] font-extrabold text-gray-400 tracking-wider border border-gray-100">
+                  <th key={w} className="w-[14.28%] p-2 text-center text-[8px] font-extrabold text-gray-400 tracking-wider border border-gray-100 uppercase">
                     {w}
                   </th>
                 ))}
@@ -190,25 +232,35 @@ export default function Schedules() {
                       <td
                         key={key}
                         onClick={() => date && show(null, key)}
-                        className={`align-top border border-gray-100 p-1.5 h-24 ${date ? 'cursor-pointer hover:bg-gray-50/50 transition-colors' : 'bg-gray-50/30'}`}
+                        className={`align-top border border-gray-100 p-1.5 h-24 transition-colors ${date ? 'cursor-pointer hover:bg-amber-50/30 group' : 'bg-gray-50/30'}`}
+                        title={date ? `Click to add schedule for ${key}` : ''}
                       >
                         {date && (
                           <>
-                            <div className="flex justify-end">
-                              <span className={`text-[9px] font-bold w-5 h-5 flex items-center justify-center rounded-full ${isToday ? 'bg-[#A63228] text-white' : 'text-gray-500'}`}>
+                            <div className="flex justify-between items-center mb-1">
+                              {dayItems.some(it => it.category === 'Supplier Check / Payment Due') ? (
+                                <span className="text-[6.5px] font-extrabold text-amber-800 bg-amber-100 border border-amber-200 px-1 py-0.2 rounded uppercase tracking-wider">
+                                  Check Due
+                                </span>
+                              ) : <span className="text-[8px] font-bold text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity">+ Add</span>}
+                              <span className={`text-[9px] font-bold w-5 h-5 flex items-center justify-center rounded-full ${isToday ? 'bg-[#A63228] text-white shadow-xs' : 'text-gray-500'}`}>
                                 {date.getDate()}
                               </span>
                             </div>
-                            <div className="flex flex-col gap-0.5 mt-0.5">
+                            <div className="flex flex-col gap-0.5">
                               {dayItems.slice(0, MAX_VISIBLE).map(it => (
                                 <button
                                   key={it.id}
                                   onClick={(e) => { e.stopPropagation(); show(it) }}
-                                  className={`text-left px-1 py-0.5 rounded text-[7px] font-bold truncate ${color(it.status)}`}
-                                  title={`${it.title} · ${linkLabel(it)}`}
+                                  className={`text-left px-1.5 py-1 rounded text-[7px] font-bold truncate border flex flex-col ${color(it.status)} hover:shadow-xs transition-all`}
+                                  title={`${it.title} · ${it.supplier_name || ''}`}
                                 >
-                                  {it.title}
-                                  <span className="block font-medium opacity-80 truncate">{linkLabel(it)}</span>
+                                  <div className="truncate font-semibold">{it.title}</div>
+                                  {it.supplier_name && (
+                                    <span className="font-medium opacity-80 truncate text-[6.5px]">
+                                      {it.supplier_name} {it.amount ? `· ₱${Number(it.amount).toLocaleString()}` : ''}
+                                    </span>
+                                  )}
                                 </button>
                               ))}
                               {dayItems.length > MAX_VISIBLE && (
@@ -232,90 +284,282 @@ export default function Schedules() {
         </div>
       </div>
 
-      {/* Day detail modal (when a day has more items than fit) */}
+      {/* Day detail modal */}
       {dayModal && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setDayModal(null)}>
-          <div className="bg-white rounded-xl w-full max-w-sm p-4 shadow-2xl" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-3">
-              <h3 className="text-sm font-extrabold text-gray-900">{dayModal}</h3>
-              <button onClick={() => setDayModal(null)} className="text-gray-400 hover:text-gray-700">✕</button>
+          <div className="bg-white rounded-xl w-full max-w-md p-4 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-3 pb-2 border-b border-gray-100">
+              <div>
+                <h3 className="text-sm font-extrabold text-gray-900">{dayModal}</h3>
+                <p className="text-[9px] text-gray-500">Scheduled events for this date</p>
+              </div>
+              <button onClick={() => setDayModal(null)} className="text-gray-400 hover:text-gray-700 text-sm font-bold">✕</button>
             </div>
-            <div className="flex flex-col gap-1.5 max-h-72 overflow-y-auto">
+            <div className="flex flex-col gap-2 max-h-80 overflow-y-auto">
               {(itemsByDate[dayModal] || []).map(it => (
-                <button
+                <div
                   key={it.id}
-                  onClick={() => { setDayModal(null); show(it) }}
-                  className="text-left p-2 rounded-lg border border-gray-100 hover:bg-gray-50"
+                  className="p-2.5 rounded-lg border border-gray-100 hover:bg-gray-50 flex justify-between items-start gap-2 bg-[#f9fafb]"
                 >
-                  <p className="text-[10px] font-bold text-gray-900">{it.title}</p>
-                  <p className="text-[9px] text-gray-500">{it.assigned_to || 'Unassigned'}</p>
-                  <p className="text-[8px] font-bold text-[#A63228] mt-0.5">{linkLabel(it)}</p>
-                  <span className={`inline-block mt-1 px-1.5 py-0.5 rounded-full text-[7px] font-bold ${color(it.status)}`}>{it.status}</span>
-                </button>
+                  <div className="flex-1 cursor-pointer" onClick={() => { setDayModal(null); show(it) }}>
+                    <p className="text-[10px] font-extrabold text-gray-900">{it.title}</p>
+                    {it.supplier_name && <p className="text-[8.5px] font-bold text-[#A63228] mt-0.5">Supplier: {it.supplier_name} {it.amount ? `(₱${Number(it.amount).toLocaleString()})` : ''}</p>}
+                    {it.check_no && <p className="text-[8px] text-gray-500">Check #: {it.check_no}</p>}
+                    <span className={`inline-block mt-1 px-1.5 py-0.5 rounded-full text-[7px] font-bold border ${color(it.status)}`}>{it.status}</span>
+                  </div>
+                  <a
+                    href={makeGoogleCalendarUrl(it)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="shrink-0 bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 text-[8px] font-extrabold px-2 py-1 rounded flex items-center gap-1 transition-colors"
+                    title="Add to Google Calendar"
+                  >
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                    Google Cal
+                  </a>
+                </div>
               ))}
             </div>
+            <button
+              onClick={() => { setDayModal(null); show(null, dayModal) }}
+              className="mt-3 w-full bg-[#E8C547] text-gray-900 py-1.5 rounded-lg text-[10px] font-bold hover:bg-[#d4b33d]"
+            >
+              + Add Schedule for this Date
+            </button>
           </div>
         </div>
       )}
 
       {/* Add / Edit schedule modal */}
       {open && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <form onSubmit={save} className="bg-white rounded-xl w-full max-w-md p-4 shadow-2xl">
-            <div className="flex justify-between mb-3">
-              <h2 className="text-sm font-extrabold">{editId ? 'Edit Schedule' : 'Add Schedule'}</h2>
-              <button type="button" onClick={() => setOpen(false)}>✕</button>
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 overflow-y-auto">
+          <form onSubmit={save} className="bg-white rounded-xl w-full max-w-md p-5 shadow-2xl my-6">
+            <div className="flex justify-between items-start mb-3 pb-2 border-b border-gray-100">
+              <div>
+                <h2 className="text-sm font-extrabold text-gray-900">{editId ? 'Edit Schedule' : 'Schedule Details'}</h2>
+                <p className="text-[9px] text-gray-500">Configure delivery or check payment monitoring.</p>
+              </div>
+              <button type="button" onClick={() => setOpen(false)} className="text-gray-400 hover:text-gray-700 font-bold">✕</button>
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <label className="col-span-2 text-[9px] font-bold">ACTIVITY
-                <input required name="title" value={form.title} onChange={change} className="mt-1 w-full bg-[#f4f1ee] rounded p-2 text-xs" />
-              </label>
-              <label className="col-span-2 text-[9px] font-bold">LINK TO
-                <select name="link_type" value={form.link_type || 'General'} onChange={change} className="mt-1 w-full bg-[#f4f1ee] rounded p-2 text-xs">
-                  <option value="General">General (no project / transaction)</option>
-                  <option value="Project">Project</option>
-                  <option value="Transaction">Transaction (expense)</option>
+
+            <div className="flex flex-col gap-2.5">
+              {/* Category */}
+              <div>
+                <label className="text-[9px] font-bold text-gray-700 block mb-1">
+                  SCHEDULE TYPE
+                </label>
+                <select
+                  name="category"
+                  value={form.category || 'Supplier Check / Payment Due'}
+                  onChange={(e) => {
+                    const val = e.target.value
+                    setForm(p => ({
+                      ...p,
+                      category: val,
+                      title: (!p.title || p.title === 'Check Payment Due to Supplier' || p.title === 'Material Delivery from Supplier')
+                        ? (val === 'Supplier Check / Payment Due' ? 'Check Payment Due to Supplier' : val === 'Material Delivery from Supplier' ? 'Material Delivery from Supplier' : '')
+                        : p.title
+                    }))
+                  }}
+                  className="w-full bg-[#f4f1ee] border border-gray-200 rounded-lg p-2 text-xs font-semibold outline-none focus:border-[#A63228]"
+                >
+                  <option value="Supplier Check / Payment Due">Supplier Check / Payment Due</option>
+                  <option value="Material Delivery from Supplier">Material Delivery from Supplier</option>
+                  <option value="General Activity">General Milestone / Task</option>
                 </select>
-              </label>
-              {form.link_type === 'Project' && (
-                <label className="col-span-2 text-[9px] font-bold">PROJECT
-                  <select required name="project_id" value={form.project_id} onChange={change} className="mt-1 w-full bg-[#f4f1ee] rounded p-2 text-xs">
-                    <option value="">Select project</option>
-                    {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
+              </div>
+
+              {/* Title */}
+              <div>
+                <label className="text-[9px] font-bold text-gray-700 block mb-1">
+                  TITLE / DESCRIPTION
                 </label>
-              )}
-              {form.link_type === 'Transaction' && (
-                <label className="col-span-2 text-[9px] font-bold">TRANSACTION
-                  <select required name="expense_id" value={form.expense_id} onChange={change} className="mt-1 w-full bg-[#f4f1ee] rounded p-2 text-xs">
-                    <option value="">Select transaction</option>
-                    {expenses.map(exp => <option key={exp.id} value={exp.id}>{expenseLabel(exp)}</option>)}
-                  </select>
+                <input
+                  required
+                  name="title"
+                  placeholder="e.g. Cement Delivery / Payment to Supplier"
+                  value={form.title}
+                  onChange={change}
+                  className="w-full bg-[#f4f1ee] border border-gray-200 rounded-lg p-2 text-xs outline-none focus:border-[#A63228]"
+                />
+              </div>
+
+              {/* Project */}
+              <div>
+                <label className="text-[9px] font-bold text-gray-700 block mb-1">
+                  PROJECT (OPTIONAL)
                 </label>
+                <select
+                  name="project_id"
+                  value={form.project_id || ''}
+                  onChange={change}
+                  className="w-full bg-[#f4f1ee] border border-gray-200 rounded-lg p-2 text-xs font-medium outline-none focus:border-[#A63228]"
+                >
+                  <option value="">General (No specific project)</option>
+                  {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </div>
+
+              {/* Fields for Supplier Check */}
+              {form.category === 'Supplier Check / Payment Due' && (
+                <div className="bg-amber-50/70 border border-amber-200 rounded-xl p-2.5 grid grid-cols-2 gap-2">
+                  <div className="col-span-2">
+                    <label className="text-[8px] font-bold text-amber-900 block mb-0.5">SUPPLIER NAME</label>
+                    <input
+                      name="supplier_name"
+                      placeholder="e.g. ABC Hardware Supply"
+                      value={form.supplier_name || ''}
+                      onChange={change}
+                      className="w-full bg-white border border-amber-200 rounded p-1.5 text-[10px]"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[8px] font-bold text-amber-900 block mb-0.5">CHECK / REF NO.</label>
+                    <input
+                      name="check_no"
+                      placeholder="CHK-12345"
+                      value={form.check_no || ''}
+                      onChange={change}
+                      className="w-full bg-white border border-amber-200 rounded p-1.5 text-[10px]"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[8px] font-bold text-amber-900 block mb-0.5">AMOUNT (PHP)</label>
+                    <input
+                      type="number"
+                      name="amount"
+                      placeholder="25000"
+                      value={form.amount || ''}
+                      onChange={change}
+                      className="w-full bg-white border border-amber-200 rounded p-1.5 text-[10px]"
+                    />
+                  </div>
+                </div>
               )}
-              <label className="text-[9px] font-bold">DATE
-                <input required type="date" name="schedule_date" value={form.schedule_date?.slice(0, 10)} onChange={change} className="mt-1 w-full bg-[#f4f1ee] rounded p-2 text-xs" />
-              </label>
-              <label className="text-[9px] font-bold">STATUS
-                <select name="status" value={form.status} onChange={change} className="mt-1 w-full bg-[#f4f1ee] rounded p-2 text-xs">
+
+              {/* Fields for Material Delivery */}
+              {form.category === 'Material Delivery from Supplier' && (
+                <div className="bg-blue-50/70 border border-blue-200 rounded-xl p-2.5 grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[8px] font-bold text-blue-900 block mb-0.5">SUPPLIER</label>
+                    <input
+                      name="supplier_name"
+                      placeholder="e.g. Solid Cement Supply"
+                      value={form.supplier_name || ''}
+                      onChange={change}
+                      className="w-full bg-white border border-blue-200 rounded p-1.5 text-[10px]"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[8px] font-bold text-blue-900 block mb-0.5">DRIVER / CONTACT</label>
+                    <input
+                      name="check_no"
+                      placeholder="0917-123-4567"
+                      value={form.check_no || ''}
+                      onChange={change}
+                      className="w-full bg-white border border-blue-200 rounded p-1.5 text-[10px]"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Date & Time */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[9px] font-bold text-gray-700 block mb-1">DUE DATE</label>
+                  <input
+                    required
+                    type="date"
+                    name="schedule_date"
+                    value={form.schedule_date?.slice(0, 10)}
+                    onChange={change}
+                    className="w-full bg-[#f4f1ee] border border-gray-200 rounded-lg p-2 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="text-[9px] font-bold text-gray-700 block mb-1">TIME</label>
+                  <input
+                    type="time"
+                    name="schedule_time"
+                    value={form.schedule_time || '09:00'}
+                    onChange={change}
+                    className="w-full bg-[#f4f1ee] border border-gray-200 rounded-lg p-2 text-xs"
+                  />
+                </div>
+              </div>
+
+              {/* Status */}
+              <div>
+                <label className="text-[9px] font-bold text-gray-700 block mb-1">STATUS</label>
+                <select
+                  name="status"
+                  value={form.status}
+                  onChange={change}
+                  className="w-full bg-[#f4f1ee] border border-gray-200 rounded-lg p-2 text-xs"
+                >
                   {['Scheduled', 'In Progress', 'Completed', 'Cancelled'].map(x => <option key={x}>{x}</option>)}
                 </select>
-              </label>
-              <label className="col-span-2 text-[9px] font-bold">ASSIGNED TO
-                <input name="assigned_to" value={form.assigned_to || ''} onChange={change} className="mt-1 w-full bg-[#f4f1ee] rounded p-2 text-xs" />
-              </label>
-              <label className="col-span-2 text-[9px] font-bold">NOTES
-                <textarea name="notes" value={form.notes || ''} onChange={change} className="mt-1 w-full bg-[#f4f1ee] rounded p-2 text-xs" rows="2" />
-              </label>
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className="text-[9px] font-bold text-gray-700 block mb-1">NOTES (OPTIONAL)</label>
+                <textarea
+                  name="notes"
+                  placeholder="Additional instructions or notes..."
+                  value={form.notes || ''}
+                  onChange={change}
+                  className="w-full bg-[#f4f1ee] border border-gray-200 rounded-lg p-2 text-xs"
+                  rows="2"
+                />
+              </div>
+
+              {/* Google Calendar push notification checkbox */}
+              <div className="bg-gradient-to-r from-amber-50 to-orange-50/50 border border-amber-300 rounded-xl p-2.5 flex items-start gap-2.5 mt-0.5">
+                <input
+                  type="checkbox"
+                  id="syncGoogleCalendar"
+                  name="syncGoogleCalendar"
+                  checked={form.syncGoogleCalendar ?? true}
+                  onChange={e => setForm(p => ({ ...p, syncGoogleCalendar: e.target.checked }))}
+                  className="mt-0.5 accent-[#A63228] w-4 h-4 cursor-pointer rounded"
+                />
+                <label htmlFor="syncGoogleCalendar" className="text-[9px] text-gray-800 cursor-pointer flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <strong className="text-gray-900 font-extrabold text-[9.5px]">
+                      Sync with Google Calendar on Save
+                    </strong>
+                    <span className="bg-[#2e7d32] text-white text-[7px] font-extrabold px-1.5 py-0.2 rounded-full uppercase tracking-wider">
+                      Push Alarm
+                    </span>
+                  </div>
+                  <p className="text-gray-600 text-[8.5px] leading-tight mt-0.5">
+                    Automatically opens in Google Calendar to enable mobile notifications and alarms prior to the scheduled date.
+                  </p>
+                </label>
+              </div>
             </div>
-            <div className="flex gap-2 mt-4">
+
+            {/* Actions */}
+            <div className="flex items-center gap-2 mt-4 pt-3 border-t border-gray-100">
               {editId && (
-                <button type="button" onClick={() => { setOpen(false); remove(editId) }} className="px-3 py-2 rounded-lg text-xs font-bold text-red-600 border border-red-200 hover:bg-red-50">
+                <button type="button" onClick={() => { setOpen(false); remove(editId) }} className="px-3 py-2 rounded-lg text-xs font-bold text-red-600 border border-red-200 hover:bg-red-50 transition-colors">
                   Delete
                 </button>
               )}
-              <button className="flex-1 bg-[#E8C547] py-2 rounded-lg text-xs font-bold hover:bg-[#d4b33d] transition-colors">
-                Save Schedule
+              {editId && (
+                <a
+                  href={makeGoogleCalendarUrl(form)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="py-2 px-3 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors flex items-center gap-1.5"
+                >
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                  Open in Google Cal ↗
+                </a>
+              )}
+              <button type="submit" className="flex-1 bg-[#E8C547] py-2 rounded-lg text-xs font-extrabold hover:bg-[#d4b33d] transition-colors shadow-xs">
+                {editId ? 'Update Schedule' : 'Save & Sync Schedule'}
               </button>
             </div>
           </form>

@@ -83,7 +83,7 @@ export default function AdminLayout({ children }) {
     },
     {
       name: 'Expenses Management', path: '/expenses',
-      icon: (<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>)
+      icon: (<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><text x="2" y="19" fontSize="18" fontWeight="bold" stroke="none" fill="currentColor">₱</text></svg>)
     },
     {
       name: 'Workers Management', path: '/workers',
@@ -120,10 +120,6 @@ export default function AdminLayout({ children }) {
     {
       name: 'Reports', path: '/reports',
       icon: (<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>)
-    },
-    {
-      name: 'Audit Logs', path: '/audit-logs',
-      icon: (<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>)
     },
   ];
 

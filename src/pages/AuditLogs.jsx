@@ -151,7 +151,6 @@ export default function AuditLogs() {
       case 'Authentication':
         return 'bg-amber-50 text-amber-800 border-amber-200';
       case 'Expenses':
-      case 'Cash Advance':
         return 'bg-emerald-50 text-emerald-800 border-emerald-200';
       case 'Projects':
         return 'bg-blue-50 text-blue-800 border-blue-200';
@@ -330,7 +329,6 @@ export default function AuditLogs() {
               <option value="Expenses">Expenses Management</option>
               <option value="Workers">Workers Management</option>
               <option value="Attendance">Attendance & Non-Working</option>
-              <option value="Cash Advance">Cash Advance Management</option>
               <option value="Materials">Materials Management</option>
               <option value="Tools">Tools Management</option>
               <option value="Schedules">Schedule Management</option>
