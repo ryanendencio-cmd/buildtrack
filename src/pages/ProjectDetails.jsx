@@ -88,7 +88,7 @@ export default function ProjectDetails() {
         .flatMap(e => (e.items || []).map(item => ({
             name: item.description,
             quantity: item.qty,
-            unit: item.unit || 'pcs',
+            unit: item.unit || 'pc/s',
             unit_cost: item.price
         })));
 
@@ -264,7 +264,7 @@ export default function ProjectDetails() {
                                     <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-sm uppercase tracking-wide ${a.status === 'In Use' ? 'bg-[#fce8e6] text-[#A63228]' : a.status === 'Maintenance' ? 'bg-yellow-50 text-yellow-700' : 'bg-[#e6f4ea] text-[#2e7d32]'}`}>{a.status}</span>
                                 </div>
                             ))}
-                            <div className="flex justify-between items-center text-[9px] pb-1"><span className="text-gray-500 font-medium">Checked out currently</span><strong className="text-gray-900">{inUseAssets.length} tools</strong></div>
+                            <div className="flex justify-between items-center text-[9px] pb-1"><span className="text-gray-500 font-medium">Currently borrowed</span><strong className="text-gray-900">{inUseAssets.length} tools</strong></div>
                         </div>
                         <Link to={`/assets/${id}`} className="text-[#A63228] text-[9px] font-bold text-right mt-2 hover:underline">View Assets →</Link>
                     </div>

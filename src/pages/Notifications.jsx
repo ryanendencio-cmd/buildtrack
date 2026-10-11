@@ -4,12 +4,17 @@ import { useNotifications } from '../context/useNotifications'
 
 export default function Notifications() {
     const [filter, setFilter] = useState('All')
+    const [sortOrder, setSortOrder] = useState('Newest First')
     const { notifications, markAsRead, markAllAsRead, unreadCount } = useNotifications()
 
     const filteredNotifs = notifications.filter(n => {
         if (filter === 'Unread') return !n.read
         if (filter !== 'All') return n.type === filter
         return true
+    }).sort((a, b) => {
+        const timeA = a.timestamp || new Date(a.date || 0).getTime() || 0
+        const timeB = b.timestamp || new Date(b.date || 0).getTime() || 0
+        return sortOrder === 'Newest First' ? timeB - timeA : timeA - timeB
     })
 
     const selectStyles = {
@@ -19,18 +24,20 @@ export default function Notifications() {
         backgroundSize: '0.8rem 0.8rem'
     }
 
+    const categories = ['All', 'Unread', 'Schedule', 'Staff & Workers', 'Budget', 'Tools', 'Expenses']
+
     return (
         <AdminLayout>
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-4 gap-2">
                 <div>
-                    <span className="text-[9px] font-bold text-[#A63228] tracking-widest uppercase">UPDATES</span>
+                    <span className="text-[9px] font-bold text-[#A63228] tracking-widest uppercase">UPDATES & LOGS</span>
                     <div className="flex items-center gap-2 mt-0.5">
-                        <h1 className="text-xl font-extrabold text-[#1a1a1a] tracking-tight">System Alerts</h1>
+                        <h1 className="text-xl font-extrabold text-[#1a1a1a] tracking-tight">System Alerts & Notifications</h1>
                         {unreadCount > 0 && (
                             <span className="bg-[#A63228] text-white text-[9px] font-extrabold px-2 py-0.5 rounded-full shadow-sm">{unreadCount} New</span>
                         )}
                     </div>
-                    <p className="text-[10px] text-gray-500 mt-0.5">Monitor budget warnings, overdue tools, and expense alerts.</p>
+                    <p className="text-[10px] text-gray-500 mt-0.5">Monitor upcoming schedule warnings (3 days remaining), staff and worker actions, budgets, and tools.</p>
                 </div>
                 <button
                     onClick={markAllAsRead}
@@ -43,7 +50,7 @@ export default function Notifications() {
 
             <div className="bg-white rounded-t-xl shadow-sm border border-gray-100 border-b-0 p-3 flex flex-col sm:flex-row justify-between gap-2">
                 <div className="flex gap-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
-                    {['All', 'Unread', 'Budget', 'Tools', 'Expenses'].map(cat => (
+                    {categories.map(cat => (
                         <button
                             key={cat}
                             onClick={() => setFilter(cat)}
@@ -53,15 +60,20 @@ export default function Notifications() {
                         </button>
                     ))}
                 </div>
-                <select className="bg-[#f4f1ee] border border-transparent text-gray-700 pl-3 pr-8 py-1.5 rounded-md text-[9px] font-bold outline-none appearance-none w-full sm:w-auto" style={selectStyles}>
-                    <option>Newest First</option>
-                    <option>Oldest First</option>
+                <select
+                    value={sortOrder}
+                    onChange={(e) => setSortOrder(e.target.value)}
+                    className="bg-[#f4f1ee] border border-transparent text-gray-700 pl-3 pr-8 py-1.5 rounded-md text-[9px] font-bold outline-none appearance-none w-full sm:w-auto"
+                    style={selectStyles}
+                >
+                    <option value="Newest First">Newest First</option>
+                    <option value="Oldest First">Oldest First</option>
                 </select>
             </div>
 
             <div className="bg-white rounded-b-xl shadow-sm border border-gray-100 p-2 mb-6 min-h-[400px]">
                 {filteredNotifs.length > 0 ? (
-                    <div className="flex flex-col gap-1">
+                    <div className="flex flex-col gap-1.5">
                         {filteredNotifs.map(notif => (
                             <div
                                 key={notif.id}
@@ -69,31 +81,48 @@ export default function Notifications() {
                                     ? 'bg-white border-l-gray-300 border-y border-r border-transparent hover:bg-gray-50'
                                     : notif.severity === 'High'
                                         ? 'bg-[#fce8e6]/50 border-l-[#A63228] border-y border-r border-red-50'
-                                        : 'bg-yellow-50/50 border-l-[#ca8a04] border-y border-r border-yellow-50'
+                                        : notif.type === 'Schedule'
+                                            ? 'bg-amber-50/60 border-l-amber-500 border-y border-r border-amber-100'
+                                            : notif.type === 'Staff & Workers'
+                                                ? 'bg-blue-50/50 border-l-blue-600 border-y border-r border-blue-100'
+                                                : 'bg-yellow-50/50 border-l-[#ca8a04] border-y border-r border-yellow-50'
                                     }`}
                             >
-                                <div className="flex flex-col">
-                                    <div className="flex items-center gap-2 mb-1">
+                                <div className="flex flex-col flex-1 pr-2">
+                                    <div className="flex flex-wrap items-center gap-2 mb-1">
                                         <h4 className={`text-[11px] font-extrabold ${notif.read ? 'text-gray-700' : 'text-gray-900'}`}>{notif.title}</h4>
                                         <span className={`text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-sm ${
-                                            notif.type === 'Budget' ? 'bg-red-50 text-[#A63228]' :
-                                            notif.type === 'Tools' ? 'bg-orange-50 text-[#ca8a04]' :
-                                            notif.type === 'Expenses' ? 'bg-green-50 text-[#2e7d32]' :
+                                            notif.type === 'Schedule' ? 'bg-amber-100 text-amber-900 border border-amber-300 font-extrabold' :
+                                            notif.type === 'Staff & Workers' ? 'bg-blue-100 text-blue-900 border border-blue-300 font-extrabold' :
+                                            notif.type === 'Budget' ? 'bg-red-50 text-[#A63228] border border-red-200' :
+                                            notif.type === 'Tools' ? 'bg-orange-50 text-[#ca8a04] border border-orange-200' :
+                                            notif.type === 'Expenses' ? 'bg-green-50 text-[#2e7d32] border border-green-200' :
                                             'bg-gray-100 text-gray-500'
                                         }`}>
                                             {notif.type}
                                         </span>
+                                        {notif.severity === 'High' && (
+                                            <span className="text-[7px] font-extrabold uppercase px-1 py-0.2 rounded bg-red-600 text-white">HIGH ALERT</span>
+                                        )}
                                     </div>
-                                    <p className={`text-[10px] leading-relaxed mb-2 ${notif.read ? 'text-gray-500' : 'text-gray-800'}`}>
+                                    <p className={`text-[10px] leading-relaxed mb-2 ${notif.read ? 'text-gray-500' : 'text-gray-800 font-medium'}`}>
                                         {notif.message}
                                     </p>
-                                    <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">{notif.date}</span>
+                                    <div className="flex flex-wrap items-center gap-2 text-[8px] font-bold text-gray-400">
+                                        <span className="uppercase tracking-widest">{notif.date}</span>
+                                        {notif.time && <span>• {notif.time}</span>}
+                                        {notif.actor_name && (
+                                            <span className="bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded font-bold">
+                                                👤 {notif.actor_name} {notif.actor_role ? `(${notif.actor_role})` : ''}
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
 
                                 {!notif.read && (
                                     <button
                                         onClick={() => markAsRead(notif.id)}
-                                        className="text-[9px] font-bold text-gray-500 bg-white border border-gray-200 px-3 py-1.5 rounded hover:bg-gray-50 transition-colors shrink-0 ml-4"
+                                        className="text-[9px] font-bold text-gray-600 bg-white border border-gray-200 px-3 py-1.5 rounded hover:bg-gray-50 transition-colors shrink-0 ml-2"
                                     >
                                         Acknowledge
                                     </button>
@@ -107,7 +136,7 @@ export default function Notifications() {
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-gray-300"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
                         </div>
                         <h4 className="text-xs font-extrabold text-gray-900 mb-1">No Alerts Found</h4>
-                        <p className="text-[10px] text-gray-500">You're all caught up! There are no {filter !== 'All' ? filter.toLowerCase() : ''} notifications.</p>
+                        <p className="text-[10px] text-gray-500">No active alerts for {filter !== 'All' ? `the "${filter}" category` : 'this category'}.</p>
                     </div>
                 )}
             </div>

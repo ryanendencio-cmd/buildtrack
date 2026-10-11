@@ -130,7 +130,7 @@ export default function Assets() {
                 tool_name: selectedEquipment.name,
                 borrower_name: selectedEquipment.assigned_to || selectedEquipment.user || 'Site Worker',
                 quantity: qty,
-                action: 'Check-In',
+                action: 'Returned',
                 condition_status: formData.condition || 'Good',
                 date_time: new Date().toISOString()
             });
@@ -139,7 +139,7 @@ export default function Assets() {
                 ? { ...eq, status: newStatus, assigned_to: '—', condition: formData.condition }
                 : eq
             ));
-            setSuccessMsg(`${qty} ${selectedEquipment.name}(s) checked in and recorded.`);
+            setSuccessMsg(`${qty} ${selectedEquipment.name}(s) returned and recorded.`);
             setModalState('SUCCESS');
         } catch (error) {
             console.error(error);
@@ -180,13 +180,13 @@ export default function Assets() {
                     tool_name: targetItem.name,
                     borrower_name: targetItem.assigned_to || targetItem.user || 'RFID User',
                     quantity: 1,
-                    action: 'Check-In',
+                    action: 'Returned',
                     condition_status: targetItem.condition || 'Good',
                     date_time: new Date().toISOString()
                 });
 
                 setEquipment(updated);
-                setSuccessMsg(`RFID read. ${targetItem.name} checked in.`);
+                setSuccessMsg(`RFID read. ${targetItem.name} returned.`);
                 setModalState('SUCCESS');
             } else {
                 setModalState('NONE');
@@ -350,7 +350,7 @@ export default function Assets() {
                                                     'hover:bg-[#ca8a04] hover:border-[#ca8a04] hover:text-white'
                                                 }`}
                                             >
-                                                {item.status === 'In Use' ? 'Check-In' : item.status === 'Returned' ? 'View Log' : 'Repair Log'}
+                                                {item.status === 'In Use' ? 'Return' : item.status === 'Returned' ? 'View Log' : 'Repair Log'}
                                             </button>
                                         )}
                                         <button onClick={() => handleEditClick(item)} title="Edit" className="text-[8px] font-bold text-blue-400 hover:text-blue-600 transition-colors px-1">✎</button>
@@ -431,7 +431,7 @@ export default function Assets() {
                 <div className="flex justify-between items-center mb-2.5">
                     <div>
                         <h3 className="text-[9px] font-extrabold text-gray-900 tracking-wider uppercase mb-0.5">BORROWING HISTORY</h3>
-                        <p className="text-[8px] text-gray-500">History log of all tool check-outs and check-ins for this project.</p>
+                        <p className="text-[8px] text-gray-500">History log of all tool borrowings and returns for this project.</p>
                     </div>
                     <span className="text-[9px] font-bold text-gray-500 bg-gray-100 rounded-full px-2.5 py-0.5">
                         {borrowHistory.length} Record(s)
@@ -457,21 +457,21 @@ export default function Assets() {
                                 const dt = item.date_time ? new Date(item.date_time) : (item.created_at ? new Date(item.created_at) : null);
                                 const dateStr = dt && !isNaN(dt) ? dt.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
                                 const timeStr = dt && !isNaN(dt) ? dt.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', hour12: true }) : '—';
-                                const isCheckOut = item.action === 'Check-Out';
+                                const isBorrow = item.action === 'Check-Out' || item.action === 'Borrowed' || item.action === 'Borrow';
                                 return (
                                     <tr key={item.id || idx}>
-                                        <td className="py-2.5 text-[10px] font-extrabold text-gray-900 border-b border-gray-50">{item.tool_name}</td>
-                                        <td className="py-2.5 text-[9px] font-medium text-gray-800 border-b border-gray-50">{item.borrower_name || item.assigned_to || '—'}</td>
-                                        <td className="py-2.5 border-b border-gray-50 text-center">
-                                            <span className="text-[10px] font-extrabold text-gray-900 bg-gray-100 rounded-full px-2 py-0.5">{item.quantity || 1}</span>
-                                        </td>
-                                        <td className="py-2.5 border-b border-gray-50 text-center">
-                                            <span className={`text-[8px] font-bold rounded-full px-2 py-0.5 ${
-                                                isCheckOut ? 'bg-red-50 text-[#A63228] border border-red-200' : 'bg-green-50 text-green-700 border border-green-200'
-                                            }`}>
-                                                {item.action}
-                                            </span>
-                                        </td>
+                                         <td className="py-2.5 text-[10px] font-extrabold text-gray-900 border-b border-gray-50">{item.tool_name}</td>
+                                         <td className="py-2.5 text-[9px] font-medium text-gray-800 border-b border-gray-50">{item.borrower_name || item.assigned_to || '—'}</td>
+                                         <td className="py-2.5 border-b border-gray-50 text-center">
+                                             <span className="text-[10px] font-extrabold text-gray-900 bg-gray-100 rounded-full px-2 py-0.5">{item.quantity || 1}</span>
+                                         </td>
+                                         <td className="py-2.5 border-b border-gray-50 text-center">
+                                             <span className={`text-[8px] font-bold rounded-full px-2 py-0.5 ${
+                                                 isBorrow ? 'bg-red-50 text-[#A63228] border border-red-200' : 'bg-green-50 text-green-700 border border-green-200'
+                                             }`}>
+                                                 {isBorrow ? 'Borrowed' : (item.action === 'Check-In' || item.action === 'Returned' || item.action === 'Return' ? 'Returned' : item.action)}
+                                             </span>
+                                         </td>
                                         <td className="py-2.5 border-b border-gray-50">
                                             <span className={`text-[8px] font-bold rounded-full px-2 py-0.5 ${
                                                 item.condition_status === 'Good' ? 'bg-green-50 text-green-700' :
@@ -542,7 +542,7 @@ export default function Assets() {
                     <div className="bg-white rounded-2xl w-full max-w-[480px] shadow-2xl relative">
                         <div className="p-6 border-b border-gray-100 flex justify-between items-center">
                             <div>
-                                <h3 className="text-xl font-extrabold text-[#1a1a1a]">Check-In Tool</h3>
+                                <h3 className="text-xl font-extrabold text-[#1a1a1a]">Return Tool</h3>
                                 <p className="text-sm text-gray-500 font-medium mt-1">Returning <strong className="text-gray-900">{selectedEquipment.name}</strong> <span className="text-[#A63228]">({selectedEquipment.qty || 1} in use)</span></p>
                             </div>
                             <button onClick={resetAndClose} className="text-2xl font-bold text-gray-400 hover:text-gray-700">&times;</button>
@@ -562,7 +562,7 @@ export default function Assets() {
                             </div>
                             <div className="flex gap-3 mt-2">
                                 <button type="button" onClick={resetAndClose} className="flex-1 py-3 bg-white border border-[#A63228] text-[#A63228] rounded-xl text-sm font-extrabold hover:bg-red-50 transition-colors uppercase tracking-wider">Cancel</button>
-                                <button type="submit" className="flex-1 py-3 bg-[#8B1A10] text-white rounded-xl text-sm font-extrabold hover:bg-[#72150d] transition-colors shadow-sm uppercase tracking-wider">Confirm Check-In</button>
+                                <button type="submit" className="flex-1 py-3 bg-[#8B1A10] text-white rounded-xl text-sm font-extrabold hover:bg-[#72150d] transition-colors shadow-sm uppercase tracking-wider">Confirm Return</button>
                             </div>
                         </form>
                     </div>
@@ -575,7 +575,7 @@ export default function Assets() {
                         <div className="p-8 flex flex-col items-center">
                             <h3 className="text-2xl font-extrabold text-[#1a1a1a] mb-3">Mark as Repaired</h3>
                             <p className="text-sm text-gray-500 mb-8 leading-relaxed">
-                                Confirm that the <strong className="text-gray-900">{selectedEquipment.name}</strong> is fully repaired and ready to be checked out again.
+                                Confirm that the <strong className="text-gray-900">{selectedEquipment.name}</strong> is fully repaired and ready to be borrowed again.
                             </p>
                             <div className="flex gap-3 w-full">
                                 <button onClick={resetAndClose} className="flex-1 py-3 bg-white border border-gray-300 text-gray-700 rounded-xl text-sm font-extrabold hover:bg-gray-50 transition-colors uppercase tracking-wider">Cancel</button>

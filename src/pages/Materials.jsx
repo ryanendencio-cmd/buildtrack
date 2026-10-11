@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { api } from '../api'
+import { CONSTRUCTION_MATERIALS, getUnitsForMaterial, resolveStandardMaterial } from '../constants/materials'
 
 export default function Materials() {
     const { id } = useParams();
@@ -39,9 +40,9 @@ export default function Materials() {
             date: e.date,
             name: item.description,
             qty: item.qty,
-            unit: item.unit || 'pcs',
+            unit: item.unit || 'pc/s',
             cost: item.price,
-            remarks: 'From Add Expense'
+            remarks: item.remarks || 'From Add Expense'
         })));
 
     const combinedMaterials = [
@@ -58,7 +59,7 @@ export default function Materials() {
     const [modalState, setModalState] = useState('NONE');
     const [logDate, setLogDate] = useState(selectedDate);
     const [materialRows, setMaterialRows] = useState([
-        { name: '', qty: '', unit: 'Bags', cost: '', remarks: '' }
+        { name: '', qty: '', unit: '', cost: '', remarks: '', isCustom: false, baseMaterial: '' }
     ]);
     const [successMsg, setSuccessMsg] = useState('');
 
@@ -66,18 +67,55 @@ export default function Materials() {
 
     const handleRowChange = (index, field, value) => {
         let val = value;
-        if (field === 'name' && val.length > 0) {
+        if (field === 'name' && val.length > 0 && typeof val === 'string') {
             val = val.charAt(0).toUpperCase() + val.slice(1);
         }
         setMaterialRows(prev => {
             const updated = [...prev];
-            updated[index] = { ...updated[index], [field]: val };
+            const currentRow = { ...updated[index], [field]: val };
+            if (field === 'name') {
+                if (!currentRow.isCustom) {
+                    currentRow.baseMaterial = val;
+                }
+                const validUnits = getUnitsForMaterial(val);
+                if (!validUnits.includes(currentRow.unit)) {
+                    currentRow.unit = validUnits[0] || 'pc/s';
+                }
+            }
+            updated[index] = currentRow;
+            return updated;
+        });
+    };
+
+    const handleToggleCustom = (index) => {
+        setMaterialRows(prev => {
+            const updated = [...prev];
+            const currentRow = { ...updated[index] };
+            const nextIsCustom = !currentRow.isCustom;
+            if (nextIsCustom) {
+                currentRow.isCustom = true;
+                if (!currentRow.baseMaterial && currentRow.name) {
+                    currentRow.baseMaterial = currentRow.name;
+                }
+            } else {
+                const standard = resolveStandardMaterial(currentRow.name, currentRow.baseMaterial);
+                currentRow.isCustom = false;
+                if (standard) {
+                    currentRow.name = standard;
+                    currentRow.baseMaterial = standard;
+                    const validUnits = getUnitsForMaterial(standard);
+                    if (!validUnits.includes(currentRow.unit)) {
+                        currentRow.unit = validUnits[0] || 'pc/s';
+                    }
+                }
+            }
+            updated[index] = currentRow;
             return updated;
         });
     };
 
     const handleAddRow = () => {
-        setMaterialRows(prev => [...prev, { name: '', qty: '', unit: 'Bags', cost: '', remarks: '' }]);
+        setMaterialRows(prev => [...prev, { name: '', qty: '', unit: '', cost: '', remarks: '', isCustom: false, baseMaterial: '' }]);
     };
 
     const handleRemoveRow = (index) => {
@@ -112,7 +150,7 @@ export default function Materials() {
             setSelectedDate(logDate);
             setSuccessMsg(`${newMaterials.length} material usage item(s) logged for ${logDate}.`);
             setModalState('SUCCESS');
-            setMaterialRows([{ name: '', qty: '', unit: 'Bags', cost: '', remarks: '' }]);
+            setMaterialRows([{ name: '', qty: '', unit: '', cost: '', remarks: '', isCustom: false, baseMaterial: '' }]);
         } catch (err) {
             console.error(err);
             alert('Failed to save material usage. Check server connection.');
@@ -128,7 +166,7 @@ export default function Materials() {
 
     const resetAndClose = () => {
         setModalState('NONE');
-        setMaterialRows([{ name: '', qty: '', unit: 'Bags', cost: '', remarks: '' }]);
+        setMaterialRows([{ name: '', qty: '', unit: '', cost: '', remarks: '', isCustom: false, baseMaterial: '' }]);
     };
 
     const dailyCost = displayedMaterials.reduce((sum, m) => sum + (Number(m.qty || 0) * Number(m.cost || 0)), 0);
@@ -150,7 +188,7 @@ export default function Materials() {
                     <h1 className="text-lg font-extrabold text-gray-900 mt-0.5 tracking-tight">Material Management</h1>
                     <p className="text-[10px] text-gray-500 mt-0.5">Track daily usage of construction consumables.</p>
                 </div>
-                <button onClick={() => { setLogDate(selectedDate); setMaterialRows([{ name: '', qty: '', unit: 'Bags', cost: '', remarks: '' }]); setModalState('ADD'); }} className="bg-[#E8C547] border border-transparent text-gray-900 px-4 py-1.5 rounded-lg font-bold text-[10px] shadow-sm hover:bg-[#d4b33d] transition-colors flex items-center justify-center gap-1.5 w-full md:w-auto">
+                <button onClick={() => { setLogDate(selectedDate); setMaterialRows([{ name: '', qty: '', unit: '', cost: '', remarks: '', isCustom: false, baseMaterial: '' }]); setModalState('ADD'); }} className="bg-[#E8C547] border border-transparent text-gray-900 px-4 py-1.5 rounded-lg font-bold text-[10px] shadow-sm hover:bg-[#d4b33d] transition-colors flex items-center justify-center gap-1.5 w-full md:w-auto">
                     <span>+</span> Log Material Usage
                 </button>
             </div>
@@ -230,21 +268,9 @@ export default function Materials() {
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 transition-all">
                     <div className="bg-white rounded-2xl w-full max-w-[620px] shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
                         <datalist id="common-materials">
-                            <option value="Portland Cement" />
-                            <option value="Hollow Blocks (4 inch)" />
-                            <option value="Hollow Blocks (6 inch)" />
-                            <option value="Rebar (10mm x 6m)" />
-                            <option value="Rebar (12mm x 6m)" />
-                            <option value="Washed Sand" />
-                            <option value="Gravel (G1)" />
-                            <option value="Tie Wire (#16)" />
-                            <option value="Common Nails (2 inch)" />
-                            <option value="Common Nails (3 inch)" />
-                            <option value="Marine Plywood (1/2 inch)" />
-                            <option value="Latex Paint (White)" />
-                            <option value="Quick Drying Enamel" />
-                            <option value="PVC Pipe (2 inch)" />
-                            <option value="PVC Pipe (4 inch)" />
+                            {CONSTRUCTION_MATERIALS.map(m => (
+                                <option key={m.name} value={m.name} />
+                            ))}
                         </datalist>
 
                         <div className="flex justify-between items-center p-5 border-b border-gray-100 shrink-0">
@@ -295,24 +321,55 @@ export default function Materials() {
 
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                                             <div>
-                                                <label className="block text-[9px] font-bold text-gray-600 mb-1 uppercase">MATERIAL NAME</label>
-                                                <input
-                                                    type="text"
-                                                    list="common-materials"
-                                                    value={row.name}
-                                                    onChange={(e) => handleRowChange(idx, 'name', e.target.value)}
-                                                    required
-                                                    placeholder="e.g. Portland Cement"
-                                                    className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-xs font-medium focus:border-[#A63228] outline-none"
-                                                />
+                                                <div className="flex justify-between items-center mb-1">
+                                                    <label className="block text-[9px] font-bold text-gray-600 uppercase">MATERIAL NAME</label>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleToggleCustom(idx)}
+                                                        className="text-[9px] text-[#A63228] hover:underline font-bold"
+                                                    >
+                                                        {row.isCustom ? "← Select standard" : "+ Type custom"}
+                                                    </button>
+                                                </div>
+                                                {row.isCustom ? (
+                                                    <input
+                                                        type="text"
+                                                        list="common-materials"
+                                                        value={row.name}
+                                                        onChange={(e) => handleRowChange(idx, 'name', e.target.value)}
+                                                        required
+                                                        placeholder="Type custom material name"
+                                                        className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-xs font-medium focus:border-[#A63228] outline-none"
+                                                    />
+                                                ) : (
+                                                    <select
+                                                        value={row.name}
+                                                        onChange={(e) => {
+                                                            if (e.target.value === '__CUSTOM__') {
+                                                                handleToggleCustom(idx);
+                                                            } else {
+                                                                handleRowChange(idx, 'name', e.target.value);
+                                                            }
+                                                        }}
+                                                        required
+                                                        className="w-full bg-white border border-gray-200 rounded-lg pl-2.5 pr-6 py-2 text-xs font-medium focus:border-[#A63228] outline-none appearance-none"
+                                                        style={selectStyles}
+                                                    >
+                                                        <option value="" disabled>-- Select Material --</option>
+                                                        {CONSTRUCTION_MATERIALS.map(m => (
+                                                            <option key={m.name} value={m.name}>{m.name}</option>
+                                                        ))}
+                                                        <option value="__CUSTOM__">✏️ Other / Type Custom Material...</option>
+                                                    </select>
+                                                )}
                                             </div>
                                             <div className="grid grid-cols-2 gap-2">
                                                 <div>
                                                     <label className="block text-[9px] font-bold text-gray-600 mb-1 uppercase">QTY USED</label>
                                                     <input
                                                         type="number"
-                                                        step="0.1"
-                                                        min="0.1"
+                                                        step="0.01"
+                                                        min="0.01"
                                                         value={row.qty}
                                                         onChange={(e) => handleRowChange(idx, 'qty', e.target.value)}
                                                         required
@@ -325,19 +382,17 @@ export default function Materials() {
                                                     <select
                                                         value={row.unit}
                                                         onChange={(e) => handleRowChange(idx, 'unit', e.target.value)}
+                                                        required
                                                         className="w-full bg-white border border-gray-200 rounded-lg pl-2.5 pr-6 py-2 text-xs font-medium focus:border-[#A63228] outline-none appearance-none"
                                                         style={selectStyles}
                                                     >
-                                                        <option value="Bags">Bags</option>
-                                                        <option value="Pcs">Pcs</option>
-                                                        <option value="Kgs">Kgs</option>
-                                                        <option value="Liters">Liters</option>
-                                                        <option value="Gals">Gals</option>
-                                                        <option value="Pails">Pails</option>
-                                                        <option value="Cu.m">Cu.m</option>
-                                                        <option value="Truckloads">Truckloads</option>
-                                                        <option value="Meters">Meters</option>
-                                                        <option value="Sets">Sets</option>
+                                                        {!row.name ? (
+                                                            <option value="" disabled>Select material first</option>
+                                                        ) : (
+                                                            getUnitsForMaterial(row.name).map(u => (
+                                                                <option key={u} value={u}>{u}</option>
+                                                            ))
+                                                        )}
                                                     </select>
                                                 </div>
                                             </div>

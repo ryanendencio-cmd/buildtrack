@@ -1,6 +1,7 @@
 import React from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useNotifications } from '../context/useNotifications'
+import { api } from '../api'
 
 export default function AdminLayout({ children }) {
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(true);
@@ -44,14 +45,31 @@ export default function AdminLayout({ children }) {
     setShowLogoutModal(true);
   };
 
-  const confirmLogout = () => {
-    localStorage.removeItem('user');
-    localStorage.removeItem('adminId');
-    localStorage.removeItem('adminSession');
-    localStorage.removeItem('adminToken');
-    localStorage.removeItem('adminProfile');
-    sessionStorage.clear();
-    navigate('/login');
+  const confirmLogout = async () => {
+    try {
+      const adminId = localStorage.getItem('adminId');
+      const session = JSON.parse(localStorage.getItem('adminSession') || '{}');
+      const savedProfile = JSON.parse(localStorage.getItem('adminProfile') || '{}');
+      const name = session.fullName || session.name || session.username || savedProfile.name || adminProfile.name || 'Administrator';
+      const role = session.role || savedProfile.role || adminProfile.role || 'Administrator';
+
+      await api.post('/logout', {
+        userId: adminId,
+        name,
+        role,
+        client: 'Web Admin App'
+      }).catch(() => {});
+    } catch {
+      // Continue logout even if request fails
+    } finally {
+      localStorage.removeItem('user');
+      localStorage.removeItem('adminId');
+      localStorage.removeItem('adminSession');
+      localStorage.removeItem('adminToken');
+      localStorage.removeItem('adminProfile');
+      sessionStorage.clear();
+      navigate('/login');
+    }
   };
 
   const navItems = [
@@ -70,6 +88,10 @@ export default function AdminLayout({ children }) {
     {
       name: 'Workers Management', path: '/workers',
       icon: (<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>)
+    },
+    {
+      name: 'Workers Salary', path: '/salary',
+      icon: (<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line><circle cx="12" cy="15" r="2"></circle></svg>)
     },
     {
       name: 'Attendance Management', path: '/attendance',
@@ -98,6 +120,10 @@ export default function AdminLayout({ children }) {
     {
       name: 'Reports', path: '/reports',
       icon: (<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>)
+    },
+    {
+      name: 'Audit Logs', path: '/audit-logs',
+      icon: (<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>)
     },
   ];
 

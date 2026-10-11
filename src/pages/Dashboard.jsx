@@ -4,6 +4,11 @@ import AdminLayout from '../components/AdminLayout'
 import Tesseract from 'tesseract.js'
 import { api } from '../api'
 
+const isUpcomingStatus = (statusStr) => {
+  const s = (statusStr || '').toUpperCase();
+  return s === 'UPCOMING' || s === 'STANDBY' || s.includes('UPCOMING') || s.includes('STANDBY');
+};
+
 export default function Dashboard() {
   const [todayISO, setTodayISO] = useState('');
   const [modalState, setModalState] = useState('NONE');
@@ -101,8 +106,13 @@ export default function Dashboard() {
     });
     api.get('/projects').then(data => {
       setProjects(data);
-      if (data.length > 0) setFormData(prev => ({ ...prev, project: data[0].name || data[0].title }));
-      setKpi(prev => ({ ...prev, activeProjects: data.length }));
+      const activeList = data.filter(p => !isUpcomingStatus(p.status));
+      if (activeList.length > 0) {
+        setFormData(prev => ({ ...prev, project: activeList[0].name || activeList[0].title }));
+      } else if (data.length > 0) {
+        setFormData(prev => ({ ...prev, project: data[0].name || data[0].title }));
+      }
+      setKpi(prev => ({ ...prev, activeProjects: activeList.length }));
     }).catch(() => {});
     api.get('/expenses/summary').then(data => {
       setKpi(prev => ({ ...prev, totalExpenses: data.total || 0 }));
@@ -143,6 +153,13 @@ export default function Dashboard() {
   // General Input Handler
   const handleInputChange = (e) => {
     const { name, value } = e.target;
+    if (name === 'project') {
+      const selectedProj = projects.find(p => (p.name || p.title) === value);
+      if (isUpcomingStatus(selectedProj?.status)) {
+        alert('Cannot add expenses to an upcoming project.');
+        return;
+      }
+    }
     if (name === 'amount' || name === 'cashTendered') {
       const num = parseFloat(value);
       if (num > MAX_AMOUNT) {
@@ -175,6 +192,11 @@ export default function Dashboard() {
   // Manual Add Functions
   const handleInitialSubmit = (e) => {
     e.preventDefault();
+    const selectedProj = projects.find(p => (p.name || p.title) === formData.project);
+    if (isUpcomingStatus(selectedProj?.status)) {
+      setAmountError('Cannot add expenses to an upcoming project. The project must be ONGOING first.');
+      return;
+    }
     const amt = parseFloat(formData.amount || 0);
     if (amt > MAX_AMOUNT) {
       setAmountError('Expense amount cannot exceed ₱999,999,999,999.');
@@ -192,6 +214,11 @@ export default function Dashboard() {
   // Scan Receipt Functions
   const handleScanDetailsSubmit = (e) => {
     e.preventDefault();
+    const selectedProj = projects.find(p => (p.name || p.title) === formData.project);
+    if (isUpcomingStatus(selectedProj?.status)) {
+      setAmountError('Cannot add expenses to an upcoming project. The project must be ONGOING first.');
+      return;
+    }
     const amt = parseFloat(formData.amount || 0);
     const cash = parseFloat(formData.cashTendered || 0);
     if (amt > MAX_AMOUNT || cash > MAX_AMOUNT) {
@@ -375,14 +402,39 @@ export default function Dashboard() {
         </div>
         <div className="flex gap-2">
           <button
-            onClick={() => setModalState('ADD')}
-            className="bg-[#E8C547] text-gray-900 px-3 py-1.5 rounded-lg font-bold text-[11px] shadow-sm hover:bg-[#d4b33d] transition-colors"
+            onClick={() => {
+              const hasActive = projects.some(p => !isUpcomingStatus(p.status));
+              if (!hasActive) {
+                alert('No active projects available. Cannot add expenses to an upcoming project.');
+                return;
+              }
+              setModalState('ADD');
+            }}
+            disabled={!projects.some(p => !isUpcomingStatus(p.status))}
+            title={!projects.some(p => !isUpcomingStatus(p.status)) ? 'No active ongoing projects available to add expenses.' : 'Add Expense'}
+            className={!projects.some(p => !isUpcomingStatus(p.status))
+              ? "bg-gray-100 text-gray-400 border border-gray-200 px-3 py-1.5 rounded-lg font-bold text-[11px] shadow-sm cursor-not-allowed opacity-75"
+              : "bg-[#E8C547] text-gray-900 px-3 py-1.5 rounded-lg font-bold text-[11px] shadow-sm hover:bg-[#d4b33d] transition-colors"
+            }
           >
             + Add Expense
           </button>
           <button
-            onClick={() => { setModalState('SCAN_START'); setPhotoData(null); }}
-            className="bg-white border border-[#A63228] text-[#A63228] px-3 py-1.5 rounded-lg font-bold text-[11px] shadow-sm hover:bg-red-50 transition-colors"
+            onClick={() => {
+              const hasActive = projects.some(p => !isUpcomingStatus(p.status));
+              if (!hasActive) {
+                alert('No active projects available. Cannot add expenses to an upcoming project.');
+                return;
+              }
+              setModalState('SCAN_START');
+              setPhotoData(null);
+            }}
+            disabled={!projects.some(p => !isUpcomingStatus(p.status))}
+            title={!projects.some(p => !isUpcomingStatus(p.status)) ? 'No active ongoing projects available to scan receipts.' : 'Scan Receipt'}
+            className={!projects.some(p => !isUpcomingStatus(p.status))
+              ? "bg-gray-100 text-gray-400 border border-gray-200 px-3 py-1.5 rounded-lg font-bold text-[11px] shadow-sm cursor-not-allowed opacity-75"
+              : "bg-white border border-[#A63228] text-[#A63228] px-3 py-1.5 rounded-lg font-bold text-[11px] shadow-sm hover:bg-red-50 transition-colors"
+            }
           >
             Scan Receipt
           </button>
@@ -707,7 +759,11 @@ export default function Dashboard() {
                   <div>
                     <label className="block text-[9px] font-bold text-gray-700 mb-1.5 uppercase">PROJECT</label>
                     <select name="project" value={formData.project} onChange={handleInputChange} className="w-full bg-[#f4f1ee] border border-transparent rounded-lg pl-3 pr-8 py-2.5 text-xs font-medium focus:border-[#A63228] outline-none appearance-none" style={selectStyles}>
-                      {projects.map(p => <option key={p.id} value={p.name || p.title}>{p.name || p.title}</option>)}
+                      {projects.map(p => (
+                        <option key={p.id} value={p.name || p.title} disabled={isUpcomingStatus(p.status)}>
+                          {p.name || p.title} {isUpcomingStatus(p.status) ? '— (Upcoming / Standby - Disabled)' : ''}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   <div>
@@ -915,7 +971,11 @@ export default function Dashboard() {
                   <div>
                     <label className="block text-[9px] font-bold text-gray-700 mb-1.5 uppercase">PROJECT</label>
                     <select name="project" value={formData.project} onChange={handleInputChange} className="w-full bg-[#f4f1ee] border border-transparent rounded-lg pl-3 pr-8 py-2.5 text-xs font-medium focus:border-[#A63228] outline-none appearance-none" style={selectStyles}>
-                      {projects.map(p => <option key={p.id} value={p.name || p.title}>{p.name || p.title}</option>)}
+                      {projects.map(p => (
+                        <option key={p.id} value={p.name || p.title} disabled={isUpcomingStatus(p.status)}>
+                          {p.name || p.title} {isUpcomingStatus(p.status) ? '— (Upcoming / Standby - Disabled)' : ''}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   <div>

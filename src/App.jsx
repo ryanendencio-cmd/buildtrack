@@ -33,6 +33,8 @@ import Workers from './pages/Workers'
 import Notifications from './pages/Notifications'
 import CashAdvance from './pages/CashAdvance'
 import Schedules from './pages/Schedules'
+import AuditLogs from './pages/AuditLogs'
+import WorkersSalary from './pages/WorkersSalary'
 
 function LandingPage() {
   return (
@@ -79,6 +81,9 @@ export default function App() {
         <Route path="/reports" element={<PrivateRoute><Reports /></PrivateRoute>} />
         <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
         <Route path="/notifications" element={<PrivateRoute><Notifications /></PrivateRoute>} />
+        <Route path="/audit-logs" element={<PrivateRoute><AuditLogs /></PrivateRoute>} />
+        <Route path="/salary" element={<PrivateRoute><WorkersSalary /></PrivateRoute>} />
+        <Route path="/payroll" element={<PrivateRoute><WorkersSalary /></PrivateRoute>} />
       </Routes>
     </BrowserRouter>
   )

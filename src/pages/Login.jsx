@@ -159,16 +159,24 @@ export default function Login() {
   const [mounted,      setMounted]      = useState(false)
   const navigate = useNavigate()
 
-  /* Trigger entrance animations after mount, setup remember me */
+  /* Trigger entrance animations after mount, setup remember me & session */
   useEffect(() => { 
     setMounted(true) 
     
+    // Auto-redirect if already logged in with an active session
+    const token = localStorage.getItem('adminToken')
+    const session = localStorage.getItem('adminSession')
+    if (token && session) {
+      navigate('/dashboard', { replace: true })
+      return
+    }
+
     const savedEmail = localStorage.getItem('rememberedEmail')
     if (savedEmail) {
       setEmail(savedEmail)
       setRememberMe(true)
     }
-  }, [])
+  }, [navigate])
 
   async function handleLogin(e) {
     e.preventDefault()

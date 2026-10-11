@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import Tesseract from 'tesseract.js'
 import { api } from '../api'
+import { CONSTRUCTION_MATERIALS, getUnitsForMaterial, resolveStandardMaterial } from '../constants/materials'
 
 export default function Expenses() {
     const { id } = useParams();
@@ -31,7 +32,7 @@ export default function Expenses() {
         date: '',
         time: '',
         category: 'Materials',
-        items: [{ qty: '', unit: 'pcs', description: '', price: '' }],
+        items: [{ qty: '', unit: '', description: '', price: '', isCustom: false, baseMaterial: '' }],
         amount: '',
         cashTendered: '',
         change: ''
@@ -74,17 +75,30 @@ export default function Expenses() {
         }
     }, [isCameraOn, stream]);
 
+    const isUpcomingStatus = (statusStr) => {
+        const s = (statusStr || '').toUpperCase();
+        return s === 'UPCOMING' || s === 'STANDBY' || s.includes('UPCOMING') || s.includes('STANDBY');
+    };
+
     const [mockProjects, setMockProjects] = useState([]);
 
     useEffect(() => {
         api.get('/projects').then(data => {
-            setMockProjects(data.map(p => ({ id: String(p.id), name: p.name, allocated: Number(p.budget) || 0, actual: 0 })));
+            setMockProjects(data.map(p => ({
+                id: String(p.id),
+                name: p.name,
+                allocated: Number(p.budget) || 0,
+                actual: 0,
+                status: p.status || 'ONGOING'
+            })));
         }).catch(console.error);
     }, []);
 
-    const currentProjectId = id || (mockProjects[0]?.id ?? "1");
+    const activeProject = mockProjects.find(p => !isUpcomingStatus(p.status)) || mockProjects[0];
+    const currentProjectId = id || (activeProject?.id ?? (mockProjects[0]?.id ?? "1"));
     const currentProjectData = mockProjects.find(p => p.id === currentProjectId);
     const currentProjectName = currentProjectData?.name || '';
+    const isCurrentProjectUpcoming = isUpcomingStatus(currentProjectData?.status);
 
     const [expensesList, setExpensesList] = useState([]);
 
@@ -103,6 +117,13 @@ export default function Expenses() {
     // ── GENERAL ADD/EDIT HANDLERS ──
     const handleInputChange = (e, isEdit = false) => {
         const { name, value } = e.target;
+        if (name === 'project') {
+            const matched = mockProjects.find(p => p.name === value);
+            if (isUpcomingStatus(matched?.status)) {
+                alert('Cannot add expenses to an upcoming project.');
+                return;
+            }
+        }
         if (name === 'amount' || name === 'cashTendered') {
             const num = parseFloat(value);
             if (num > MAX_AMOUNT) {
@@ -114,7 +135,7 @@ export default function Expenses() {
             }
         }
         if (name === 'category') {
-            const defaultUnit = value === 'Manpower' ? 'days' : value === 'Equipment' ? 'days' : 'pcs';
+            const defaultUnit = value === 'Manpower' ? 'day/s' : value === 'Equipment' ? 'day/s' : '';
             if (isEdit) {
                 setEditFormData(prev => ({
                     ...prev,
@@ -146,13 +167,48 @@ export default function Expenses() {
 
     const handleItemChange = (index, field, value) => {
         const newItems = [...formData.items];
-        newItems[index][field] = value;
+        const currentItem = { ...newItems[index], [field]: value };
+        if (field === 'description' && formData.category === 'Materials') {
+            if (!currentItem.isCustom) {
+                currentItem.baseMaterial = value;
+            }
+            const validUnits = getUnitsForMaterial(value);
+            if (!validUnits.includes(currentItem.unit)) {
+                currentItem.unit = validUnits[0] || 'pc/s';
+            }
+        }
+        newItems[index] = currentItem;
+        setFormData({ ...formData, items: newItems });
+    };
+
+    const handleToggleCustomMaterial = (index) => {
+        const newItems = [...formData.items];
+        const currentItem = { ...newItems[index] };
+        const nextIsCustom = !currentItem.isCustom;
+        if (nextIsCustom) {
+            currentItem.isCustom = true;
+            if (!currentItem.baseMaterial && currentItem.description) {
+                currentItem.baseMaterial = currentItem.description;
+            }
+        } else {
+            const standard = resolveStandardMaterial(currentItem.description, currentItem.baseMaterial);
+            currentItem.isCustom = false;
+            if (standard) {
+                currentItem.description = standard;
+                currentItem.baseMaterial = standard;
+                const validUnits = getUnitsForMaterial(standard);
+                if (!validUnits.includes(currentItem.unit)) {
+                    currentItem.unit = validUnits[0] || 'pc/s';
+                }
+            }
+        }
+        newItems[index] = currentItem;
         setFormData({ ...formData, items: newItems });
     };
 
     const addNewItem = () => {
-        const defaultUnit = formData.category === 'Manpower' ? 'days' : formData.category === 'Equipment' ? 'days' : 'pcs';
-        setFormData({ ...formData, items: [...formData.items, { qty: '', unit: defaultUnit, description: '', price: '' }] });
+        const defaultUnit = formData.category === 'Manpower' ? 'day/s' : formData.category === 'Equipment' ? 'day/s' : '';
+        setFormData({ ...formData, items: [...formData.items, { qty: '', unit: defaultUnit, description: '', price: '', isCustom: false, baseMaterial: '' }] });
     };
     const removeItem = (index) => setFormData({ ...formData, items: formData.items.filter((_, i) => i !== index) });
 
@@ -166,17 +222,23 @@ export default function Expenses() {
 
     const handleInitialSubmit = (e) => {
         e.preventDefault();
+        const selectedProj = mockProjects.find(p => p.name === formData.project || p.id === String(currentProjectId));
+        if (isUpcomingStatus(selectedProj?.status)) {
+            setAmountError('Cannot add expenses to an upcoming project. The project must be ONGOING first.');
+            return;
+        }
         const amt = computedTotal;
         if (amt > MAX_AMOUNT) {
             setAmountError('Total amount cannot exceed ₱999,999,999,999.');
             return;
         }
         if (amt <= 0) {
-            setAmountError('Please add at least one item with qty and price.');
+            setAmountError('Please add at least one item with quantity and unit price.');
             return;
         }
-        if (!photoData) {
-            setAmountError('Please upload a receipt image. It is required as proof of purchase.');
+        const hasInvalidItem = formData.items.some(it => !it.description?.trim() || !parseFloat(it.qty) || !parseFloat(it.price));
+        if (hasInvalidItem) {
+            setAmountError('Please make sure each item has a name/description, quantity, and unit price.');
             return;
         }
         setAmountError('');
@@ -186,7 +248,11 @@ export default function Expenses() {
     };
 
     const handleConfirmAdd = () => {
-        const proj = mockProjects.find(p => p.id === String(currentProjectId));
+        const proj = mockProjects.find(p => p.id === String(currentProjectId) || p.name === formData.project);
+        if (isUpcomingStatus(proj?.status)) {
+            alert('Cannot add expenses to an upcoming project. The project must be ONGOING first.');
+            return;
+        }
         const payload = {
             project_id: currentProjectId,
             project: proj?.name || '',
@@ -205,12 +271,17 @@ export default function Expenses() {
             setModalState('SUCCESS');
         }).catch(err => {
             console.error(err);
-            alert('Failed to save expense. Make sure the server is running.');
+            alert(err.message || err.error || 'Failed to save expense. Make sure the server is running.');
         });
     };
 
     const handleScanDetailsSubmit = (e) => {
         e.preventDefault();
+        const selectedProj = mockProjects.find(p => p.name === formData.project || p.id === String(currentProjectId));
+        if (isUpcomingStatus(selectedProj?.status)) {
+            setAmountError('Cannot add expenses to an upcoming project. The project must be ONGOING first.');
+            return;
+        }
         const amt = parseFloat(formData.amount || 0);
         const cash = parseFloat(formData.cashTendered || 0);
         if (amt > MAX_AMOUNT || cash > MAX_AMOUNT) {
@@ -334,7 +405,7 @@ export default function Expenses() {
         setAmountError('');
         setModalState('NONE');
         setFormData({
-            project: currentProjectData?.name, receiptNo: '', date: todayISO, time: '08:00', category: 'Materials', items: [{ qty: '', unit: 'pcs', description: '', price: '' }], amount: '', cashTendered: '', change: ''
+            project: currentProjectData?.name, receiptNo: '', date: todayISO, time: '08:00', category: 'Materials', items: [{ qty: '', unit: '', description: '', price: '', isCustom: false, baseMaterial: '' }], amount: '', cashTendered: '', change: ''
         });
     };
 
@@ -478,12 +549,16 @@ export default function Expenses() {
     };
 
     const getExpenseItems = (exp) => {
-        if (!exp?.items) return [];
+        if (!exp) return [];
         let items = exp.items;
         if (typeof items === 'string') {
-            try { items = JSON.parse(items); } catch { return []; }
+            try { items = JSON.parse(items); } catch { items = []; }
         }
-        return Array.isArray(items) ? items : [];
+        if (Array.isArray(items) && items.length > 0) return items;
+        if (exp.desc || exp.qty) {
+            return [{ qty: exp.qty || '1', unit: exp.unit || '', description: exp.desc, price: exp.price || exp.amount || 0 }];
+        }
+        return [];
     };
 
     const getReceiptNumber = (exp) => {
@@ -519,6 +594,7 @@ export default function Expenses() {
     });
     const allocatedBudget = currentProjectData?.allocated || 0;
     const totalActualExpense = expensesList.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const remainingBudget = allocatedBudget - totalActualExpense;
     const overallProgress = allocatedBudget > 0 ? Math.min((totalActualExpense / allocatedBudget) * 100, 100) : 0;
 
     const tableTotal = displayedExpenses.reduce((sum, item) => sum + Number(item.amount || 0), 0);
@@ -543,25 +619,70 @@ export default function Expenses() {
                             <label className="block text-[8px] font-bold text-gray-400 tracking-wider uppercase mb-1">PROJECT</label>
                             <select value={currentProjectId} onChange={handleProjectChange} className="w-full bg-white border border-gray-100 shadow-sm rounded-lg pl-2.5 pr-6 py-1.5 text-[10px] font-extrabold text-gray-800 outline-none appearance-none" style={selectStyles}>
                                 {mockProjects.map(p => (
-                                    <option key={p.id} value={p.id}>{p.name}</option>
+                                    <option key={p.id} value={p.id}>
+                                        {p.name} {isUpcomingStatus(p.status) ? '— (UPCOMING / Standby)' : ''}
+                                    </option>
                                 ))}
                             </select>
                         </div>
 
                         <div className="flex gap-2 w-full md:w-auto">
-                            <button onClick={() => setModalState('ADD')} className="bg-[#E8C547] text-gray-900 px-3 py-1.5 rounded-lg font-bold text-[10px] shadow-sm hover:bg-[#d4b33d] transition-colors flex items-center justify-center gap-1 flex-1 md:flex-none">
+                            <button
+                                onClick={() => {
+                                    if (isCurrentProjectUpcoming) return;
+                                    setModalState('ADD');
+                                }}
+                                disabled={isCurrentProjectUpcoming}
+                                title={isCurrentProjectUpcoming ? "Cannot add expenses to an upcoming project." : "Add Expense"}
+                                className={isCurrentProjectUpcoming
+                                    ? "bg-gray-100 text-gray-400 border border-gray-200 px-3 py-1.5 rounded-lg font-bold text-[10px] shadow-sm cursor-not-allowed opacity-75 flex items-center justify-center gap-1 flex-1 md:flex-none"
+                                    : "bg-[#E8C547] text-gray-900 px-3 py-1.5 rounded-lg font-bold text-[10px] shadow-sm hover:bg-[#d4b33d] transition-colors flex items-center justify-center gap-1 flex-1 md:flex-none"
+                                }
+                            >
                                 <span>+</span> Add Expense
                             </button>
-                            <button onClick={() => { setModalState('SCAN_START'); setPhotoData(null); }} className="bg-white border border-[#A63228] text-[#A63228] px-3 py-1.5 rounded-lg font-bold text-[10px] shadow-sm hover:bg-red-50 transition-colors flex-1 md:flex-none">
+                            <button
+                                onClick={() => {
+                                    if (isCurrentProjectUpcoming) return;
+                                    setModalState('SCAN_START');
+                                    setPhotoData(null);
+                                }}
+                                disabled={isCurrentProjectUpcoming}
+                                title={isCurrentProjectUpcoming ? "Cannot scan receipts for an upcoming project." : "Scan Receipt"}
+                                className={isCurrentProjectUpcoming
+                                    ? "bg-gray-100 text-gray-400 border border-gray-200 px-3 py-1.5 rounded-lg font-bold text-[10px] shadow-sm cursor-not-allowed opacity-75 flex-1 md:flex-none"
+                                    : "bg-white border border-[#A63228] text-[#A63228] px-3 py-1.5 rounded-lg font-bold text-[10px] shadow-sm hover:bg-red-50 transition-colors flex-1 md:flex-none"
+                                }
+                            >
                                 Scan Receipt
                             </button>
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                    {isCurrentProjectUpcoming && (
+                        <div className="bg-[#fffbeb] border border-[#fde68a] text-[#92400e] px-3.5 py-2.5 rounded-xl text-xs flex items-center gap-2.5 mb-3 shadow-xs">
+                            <svg className="w-4 h-4 text-[#d97706] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                            <div className="flex-1">
+                                <span className="font-extrabold uppercase text-[9px] tracking-wider text-[#b45309] mr-1.5">UPCOMING PROJECT:</span>
+                                <span className="text-[10px] font-medium text-amber-900">
+                                    This project is currently in <strong>UPCOMING (Standby)</strong> status. Expenses cannot be added until the project is set to <strong>ONGOING</strong>.
+                                </span>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
                         <div className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-center">
                             <span className="text-[9px] font-bold text-gray-400 tracking-wider uppercase mb-0.5">ACTUAL EXPENSES</span>
                             <h2 className="text-xl font-extrabold text-[#A63228]">₱{totalActualExpense.toLocaleString()}</h2>
+                        </div>
+                        <div className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-center">
+                            <span className="text-[9px] font-bold text-gray-400 tracking-wider uppercase mb-0.5">REMAINING BUDGET</span>
+                            <h2 className={`text-xl font-extrabold ${remainingBudget < 0 ? 'text-[#A63228]' : 'text-[#2e7d32]'}`}>
+                                {remainingBudget < 0 ? `-₱${Math.abs(remainingBudget).toLocaleString()}` : `₱${remainingBudget.toLocaleString()}`}
+                            </h2>
                         </div>
                         <div className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-center">
                             <span className="text-[9px] font-bold text-gray-400 tracking-wider uppercase mb-0.5">ALLOCATED BUDGET</span>
@@ -883,11 +1004,9 @@ export default function Expenses() {
                                     <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 pt-1">
                                         <div className="flex flex-col col-span-2"><span className="text-[8px] font-bold text-gray-400 uppercase">Project</span><span className="text-[10px] font-bold text-gray-900">{selectedReceipt.project || '-'}</span></div>
                                         <div className="flex flex-col"><span className="text-[8px] font-bold text-gray-400 uppercase">Receipt No.</span><span className="text-[10px] font-bold text-gray-900">{getReceiptNumber(selectedReceipt)}</span></div>
+                                        <div className="flex flex-col"><span className="text-[8px] font-bold text-gray-400 uppercase">Category</span><span className="text-[10px] font-bold text-gray-900 uppercase">{selectedReceipt.category}</span></div>
                                         <div className="flex flex-col"><span className="text-[8px] font-bold text-gray-400 uppercase">Date Logged</span><span className="text-[10px] font-bold text-gray-900">{formatDisplayDate(selectedReceipt.date)}</span></div>
                                         <div className="flex flex-col"><span className="text-[8px] font-bold text-gray-400 uppercase">Time</span><span className="text-[10px] font-bold text-gray-900">{formatTime(selectedReceipt.time)}</span></div>
-                                        <div className="flex flex-col"><span className="text-[8px] font-bold text-gray-400 uppercase">Category</span><span className="text-[10px] font-bold text-gray-900 uppercase">{selectedReceipt.category}</span></div>
-                                        <div className="flex flex-col"><span className="text-[8px] font-bold text-gray-400 uppercase">Quantity</span><span className="text-[10px] font-bold text-gray-900">{selectedReceipt.qty || (() => { let it = selectedReceipt.items; if (typeof it === 'string') { try { it = JSON.parse(it); } catch { it = []; } } return Array.isArray(it) && it.length > 0 ? it.map(x => x.qty).filter(Boolean).join(', ') : '-'; })() || '-'}</span></div>
-                                        <div className="flex flex-col col-span-2"><span className="text-[8px] font-bold text-gray-400 uppercase">Item Description</span><span className="text-[10px] font-bold text-gray-900">{getExpenseDescription(selectedReceipt)}</span></div>
                                     </div>
                                     <div className="border-t border-gray-100 pt-2 mt-1">
                                         <span className="text-[8px] font-bold text-gray-400 uppercase">Items / Labor</span>
@@ -896,11 +1015,14 @@ export default function Expenses() {
                                                 {getExpenseItems(selectedReceipt).map((item, index) => {
                                                     const qty = Number(item.qty) || 0;
                                                     const price = Number(item.price) || 0;
-                                                    return <div key={index} className="grid grid-cols-[34px_1fr_auto] gap-2 py-1.5 text-[9px]">
-                                                        <span className="font-bold text-gray-600">{item.qty || '-'}</span>
-                                                        <span className="font-medium text-gray-900">{item.description || item.desc || '-'}</span>
+                                                    return <div key={index} className="grid grid-cols-[auto_1fr_auto] gap-2 py-1.5 text-[9px] items-start">
+                                                        <span className="font-bold text-gray-600 shrink-0">{item.qty || '-'} {item.unit || ''}</span>
+                                                        <div>
+                                                            <span className="font-medium text-gray-900 block">{item.description || item.desc || '-'}</span>
+                                                            {item.remarks && <span className="text-[8px] text-gray-400 italic block">Purpose: {item.remarks}</span>}
+                                                            {price > 0 && <span className="text-[8px] text-gray-400 block">₱{price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} each</span>}
+                                                        </div>
                                                         <span className="font-bold text-[#2e7d32] whitespace-nowrap">₱{(qty * price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                                                        {price > 0 && <span className="col-start-2 col-span-2 text-[8px] text-gray-400">Unit price: ₱{price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>}
                                                     </div>;
                                                 })}
                                             </div>
@@ -1041,215 +1163,372 @@ export default function Expenses() {
 
             {/* ═════════ ADD / SCAN EXPENSE MODALS ═════════ */}
 
-            {/* ADD EXPENSE MODAL (MANUAL) */}
+            {/* ADD EXPENSE MODAL (CARD-BASED LIKE MATERIAL USAGE) */}
             {modalState === 'ADD' && (
-                <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 transition-all">
-                    <div className="bg-white rounded-2xl w-full max-w-[500px] shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
-                        <div className="flex justify-between items-center p-4 border-b border-gray-100 shrink-0">
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4 transition-all">
+                    <div className="bg-white rounded-2xl w-full max-w-[620px] shadow-2xl relative overflow-hidden flex flex-col max-h-[92vh]">
+                        <div className="flex justify-between items-center p-4 sm:p-5 border-b border-gray-100 shrink-0">
                             <div>
-                                <h3 className="text-sm font-extrabold text-[#1a1a1a]">Add Expense</h3>
-                                <p className="text-[10px] text-gray-500 font-medium mt-0.5">Keep track of project expenses.</p>
+                                <h3 className="text-sm sm:text-base font-extrabold text-[#1a1a1a]">Add Expense</h3>
+                                <p className="text-[10px] sm:text-xs text-gray-500 font-medium mt-0.5">Track project materials, labor, or equipment purchases.</p>
                             </div>
                             <button onClick={resetAndClose} className="text-gray-400 hover:text-gray-700 bg-gray-50 p-1.5 rounded-full hover:bg-gray-100 transition-colors">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                             </button>
                         </div>
 
-                        <div className="overflow-y-auto p-5">
-                            <form onSubmit={handleInitialSubmit} className="flex flex-col gap-4">
+                        <datalist id="materialsList">
+                            {formData.category === 'Materials' && (
+                                CONSTRUCTION_MATERIALS.map(m => (
+                                    <option key={m.name} value={m.name} />
+                                ))
+                            )}
+                            {formData.category === 'Manpower' && (
+                                <>
+                                    <option value="Project Foreman" />
+                                    <option value="Lead Carpenter" />
+                                    <option value="Master Mason" />
+                                    <option value="Steelman / Bar Bender" />
+                                    <option value="Certified Welder" />
+                                    <option value="Licensed Electrician" />
+                                    <option value="Master Plumber" />
+                                    <option value="Painter" />
+                                    <option value="General Construction Laborer" />
+                                    <option value="Site Helper" />
+                                </>
+                            )}
+                            {formData.category === 'Equipment' && (
+                                <>
+                                    <option value="Excavator Rental" />
+                                    <option value="Backhoe Loader" />
+                                    <option value="One-Bagger Concrete Mixer" />
+                                    <option value="Tamping Rammer / Compactor" />
+                                    <option value="Electric Jackhammer" />
+                                    <option value="Mobile Crane Rental" />
+                                    <option value="Tubular Scaffolding Set" />
+                                    <option value="10-Wheeler Dump Truck" />
+                                    <option value="Diesel Generator Set" />
+                                    <option value="Inverter Welding Machine" />
+                                    <option value="Submersible Water Pump" />
+                                    <option value="Diesel Fuel / Gasoline" />
+                                </>
+                            )}
+                        </datalist>
+
+                        <form onSubmit={handleInitialSubmit} className="flex flex-col flex-1 overflow-hidden">
+                            {/* Top Settings Section */}
+                            <div className="p-4 sm:p-5 border-b border-gray-100 bg-gray-50/50 flex flex-col gap-3 shrink-0">
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                     <div>
-                                        <label className="block text-[9px] font-bold text-gray-700 mb-1.5 uppercase">PROJECT</label>
-                                        <select name="project" value={formData.project} onChange={handleInputChange} className="w-full bg-[#f4f1ee] border border-transparent rounded-lg pl-3 pr-8 py-2.5 text-xs font-medium focus:border-[#A63228] outline-none appearance-none" style={selectStyles}>
-                                            {mockProjects.map(p => (<option key={p.id} value={p.name}>{p.name}</option>))}
+                                        <label className="block text-[8px] font-bold text-gray-400 tracking-wider uppercase mb-1">PROJECT</label>
+                                        <select
+                                            name="project"
+                                            value={formData.project}
+                                            onChange={handleInputChange}
+                                            className="w-full bg-white border border-gray-200 rounded-lg pl-2.5 pr-6 py-2 text-[11px] font-extrabold text-gray-800 outline-none appearance-none shadow-sm"
+                                            style={selectStyles}
+                                        >
+                                            {mockProjects.map(p => (
+                                                <option key={p.id} value={p.name} disabled={isUpcomingStatus(p.status)}>
+                                                    {p.name} {isUpcomingStatus(p.status) ? '— (Upcoming / Standby - Disabled)' : ''}
+                                                </option>
+                                            ))}
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="block text-[9px] font-bold text-gray-700 mb-1.5 uppercase">EXPENSE CATEGORY</label>
-                                        <select name="category" value={formData.category} onChange={handleInputChange} className="w-full bg-[#f4f1ee] border border-transparent rounded-lg pl-3 pr-8 py-2.5 text-xs font-medium focus:border-[#A63228] outline-none appearance-none" style={selectStyles}>
-                                            <option value="Materials">Materials</option><option value="Manpower">Manpower</option><option value="Equipment">Equipment / Fuel</option>
+                                        <label className="block text-[8px] font-bold text-gray-400 tracking-wider uppercase mb-1">EXPENSE CATEGORY</label>
+                                        <select
+                                            name="category"
+                                            value={formData.category}
+                                            onChange={handleInputChange}
+                                            className="w-full bg-white border border-gray-200 rounded-lg pl-2.5 pr-6 py-2 text-[11px] font-extrabold text-gray-800 outline-none appearance-none shadow-sm"
+                                            style={selectStyles}
+                                        >
+                                            <option value="Materials">Materials</option>
+                                            <option value="Manpower">Manpower</option>
+                                            <option value="Equipment">Equipment / Fuel</option>
                                         </select>
                                     </div>
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-3">
-                                    <div><label className="block text-[9px] font-bold text-gray-700 mb-1.5 uppercase">DATE</label><input type="date" name="date" value={formData.date} onChange={handleInputChange} required className="w-full bg-[#f4f1ee] border border-transparent rounded-lg px-3 py-2.5 text-xs font-medium focus:border-[#A63228] outline-none text-gray-700" /></div>
-                                    <div><label className="block text-[9px] font-bold text-gray-700 mb-1.5 uppercase">TIME</label><input type="time" name="time" value={formData.time} onChange={handleInputChange} required className="w-full bg-[#f4f1ee] border border-transparent rounded-lg px-3 py-2.5 text-xs font-medium focus:border-[#A63228] outline-none text-gray-700" /></div>
-                                </div>
-
-                                <div className="border border-gray-200 rounded-xl p-4 bg-gray-50/50 mt-1">
-                                    <div className="flex justify-between items-center mb-3">
-                                        <label className="block text-[10px] font-extrabold text-gray-800 uppercase">ITEMS / LABOR LIST</label>
-                                        <button type="button" onClick={addNewItem} className="bg-white border border-[#A63228] text-[#A63228] text-[10px] px-2 py-1 rounded-md font-bold hover:bg-red-50 flex items-center gap-1 shadow-sm transition-colors"><span>+</span> Add Item</button>
-                                    </div>
-                                    <datalist id="materialsList">
-                                        {formData.category === 'Materials' && (
-                                            <>
-                                                <option value="Cement" />
-                                                <option value="Sand" />
-                                                <option value="Gravel" />
-                                                <option value="Steel Rebar" />
-                                                <option value="Plywood" />
-                                                <option value="Nails" />
-                                                <option value="Paint" />
-                                                <option value="Hollow Blocks" />
-                                                <option value="Lumber" />
-                                                <option value="PVC Pipe" />
-                                                <option value="Wire" />
-                                                <option value="Tiles" />
-                                            </>
-                                        )}
-                                        {formData.category === 'Manpower' && (
-                                            <>
-                                                <option value="Foreman" />
-                                                <option value="Mason" />
-                                                <option value="Carpenter" />
-                                                <option value="Welder" />
-                                                <option value="Steelman" />
-                                                <option value="Laborer" />
-                                                <option value="Painter" />
-                                                <option value="Electrician" />
-                                                <option value="Plumber" />
-                                                <option value="Helper" />
-                                            </>
-                                        )}
-                                        {formData.category === 'Equipment' && (
-                                            <>
-                                                <option value="Excavator" />
-                                                <option value="Backhoe" />
-                                                <option value="Concrete Mixer" />
-                                                <option value="Crane" />
-                                                <option value="Jackhammer" />
-                                                <option value="Scaffolding" />
-                                                <option value="Dump Truck" />
-                                                <option value="Generator" />
-                                                <option value="Welding Machine" />
-                                                <option value="Water Pump" />
-                                            </>
-                                        )}
-                                    </datalist>
-
-                                    {/* Column headers */}
-                                    <div className="grid grid-cols-[55px_65px_1fr_80px_75px_28px] gap-1.5 mb-1.5 px-0.5">
-                                        <span className="text-[8px] font-bold text-gray-400 uppercase">Qty</span>
-                                        <span className="text-[8px] font-bold text-gray-400 uppercase">Unit</span>
-                                        <span className="text-[8px] font-bold text-gray-400 uppercase">Description</span>
-                                        <span className="text-[8px] font-bold text-gray-400 uppercase">Unit Price</span>
-                                        <span className="text-[8px] font-bold text-gray-400 uppercase text-right">Subtotal</span>
-                                        <span></span>
-                                    </div>
-                                    <div className="flex flex-col gap-2">
-                                        {formData.items.map((item, idx) => {
-                                            const subtotal = (parseFloat(item.qty) || 0) * (parseFloat(item.price) || 0);
-                                            return (
-                                                <div key={idx} className="grid grid-cols-[55px_65px_1fr_80px_75px_28px] gap-1.5 items-center">
-                                                    <input
-                                                        type="number" min="0"
-                                                        value={item.qty}
-                                                        onChange={(e) => handleItemChange(idx, 'qty', e.target.value)}
-                                                        className="w-full bg-white border border-gray-300 rounded-lg px-1.5 py-2 text-[11px] font-medium focus:border-[#A63228] outline-none text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                                        placeholder="0"
-                                                    />
-                                                    <select
-                                                        value={item.unit || 'pcs'}
-                                                        onChange={(e) => handleItemChange(idx, 'unit', e.target.value)}
-                                                        className="w-full bg-white border border-gray-300 rounded-lg px-1 py-2 text-[11px] font-medium focus:border-[#A63228] outline-none appearance-none text-center"
-                                                        style={{ backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3e%3cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3e%3c/svg%3e")`, backgroundPosition: 'right 0.2rem center', backgroundRepeat: 'no-repeat', backgroundSize: '0.6rem' }}
-                                                    >
-                                                        <option value="pcs">pcs</option>
-                                                        <option value="kg">kg</option>
-                                                        <option value="bags">bags</option>
-                                                        <option value="liters">liters</option>
-                                                        <option value="meters">meters</option>
-                                                        <option value="cu.m">cu.m</option>
-                                                        <option value="tons">tons</option>
-                                                        <option value="boxes">boxes</option>
-                                                        <option value="days">days</option>
-                                                        <option value="hours">hrs</option>
-                                                        <option value="pax">pax</option>
-                                                        <option value="trips">trips</option>
-                                                    </select>
-                                                    <input
-                                                        type="text"
-                                                        list="materialsList"
-                                                        value={item.description}
-                                                        onChange={(e) => handleItemChange(idx, 'description', e.target.value)}
-                                                        className="w-full bg-white border border-gray-300 rounded-lg px-2 py-2 text-[11px] font-medium focus:border-[#A63228] outline-none"
-                                                        placeholder={formData.category === 'Manpower' ? 'Name / Role' : 'Item Description'}
-                                                    />
-                                                    <input
-                                                        type="number" min="0" step="0.01"
-                                                        value={item.price}
-                                                        onChange={(e) => handleItemChange(idx, 'price', e.target.value)}
-                                                        className="w-full bg-white border border-gray-300 rounded-lg px-2 py-2 text-[11px] font-medium focus:border-[#A63228] outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                                        placeholder="0.00"
-                                                    />
-                                                    <div className="text-right">
-                                                        <span className="text-[10px] font-bold text-[#2e7d32]">
-                                                            {subtotal > 0 ? `₱${subtotal.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
-                                                        </span>
-                                                    </div>
-                                                    {formData.items.length > 1 ? (
-                                                        <button type="button" onClick={() => removeItem(idx)} className="text-gray-400 hover:text-red-600 flex items-center justify-center h-7 w-7 bg-white border border-gray-200 rounded-lg hover:border-red-200 hover:bg-red-50 transition-colors text-xs">
-                                                            ✕
-                                                        </button>
-                                                    ) : <span />}
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                    {formData.category === 'Manpower' && <p className="text-[9px] text-gray-500 mt-2.5 italic">* Manpower: Qty = number of workers/days, Price = daily rate.</p>}
-                                </div>
-
-                                {/* AUTO-COMPUTED TOTAL */}
-                                <div className={`flex items-center justify-between rounded-xl px-4 py-3 border-2 ${amountError ? 'border-red-400 bg-red-50' : 'border-[#2e7d32] bg-[#e6f4ea]'}`}>
                                     <div>
-                                        <p className="text-[9px] font-extrabold text-[#2e7d32] uppercase tracking-wide">Total Amount (Auto-computed)</p>
-                                        {amountError && (
-                                            <p className="text-[9px] text-red-600 font-bold mt-0.5 flex items-center gap-1">
-                                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                                                {amountError}
-                                            </p>
-                                        )}
+                                        <label className="block text-[8px] font-bold text-gray-400 tracking-wider uppercase mb-1">DATE LOGGED</label>
+                                        <input
+                                            type="date"
+                                            name="date"
+                                            value={formData.date}
+                                            onChange={handleInputChange}
+                                            required
+                                            className="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-2 text-[11px] font-bold text-[#A63228] outline-none shadow-sm"
+                                        />
                                     </div>
-                                    <span className={`text-lg font-black ${amountError ? 'text-red-600' : 'text-[#2e7d32]'}`}>
-                                        ₱{computedTotal.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    <div>
+                                        <label className="block text-[8px] font-bold text-gray-400 tracking-wider uppercase mb-1">TIME</label>
+                                        <input
+                                            type="time"
+                                            name="time"
+                                            value={formData.time}
+                                            onChange={handleInputChange}
+                                            required
+                                            className="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-2 text-[11px] font-bold text-gray-800 outline-none shadow-sm"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Scrollable Item Cards */}
+                            <div className="overflow-y-auto p-4 sm:p-5 flex flex-col gap-3.5 flex-1">
+                                <div className="flex justify-between items-center mb-0.5">
+                                    <span className="text-[10px] font-extrabold text-gray-700 uppercase tracking-wider">
+                                        {formData.category === 'Materials' ? 'MATERIALS / CONSUMABLES LIST' : formData.category === 'Manpower' ? 'WORKERS / LABOR FORCE LIST' : 'EXPENSE ITEMS LIST'}
+                                    </span>
+                                    <span className="text-[10px] font-bold text-gray-400">
+                                        {formData.items.length} item(s) in list
                                     </span>
                                 </div>
 
-                                {/* ── UPLOAD RECEIPT (REQUIRED) ── */}
-                                <div className="mt-1">
-                                    <label className="block text-[9px] font-bold text-gray-700 mb-1.5 uppercase">Upload Receipt <span className="text-red-500">* Required</span></label>
+                                {formData.items.map((item, idx) => {
+                                    const subtotal = (parseFloat(item.qty) || 0) * (parseFloat(item.price) || 0);
+                                    return (
+                                        <div key={idx} className="bg-gray-50/70 border border-gray-200 rounded-xl p-3.5 relative flex flex-col gap-2.5 shadow-sm">
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-[10px] font-extrabold text-[#A63228] bg-red-50 px-2 py-0.5 rounded-md">
+                                                    {formData.category === 'Materials' ? `MATERIAL #${idx + 1}` : formData.category === 'Manpower' ? `WORKER #${idx + 1}` : `ITEM #${idx + 1}`}
+                                                </span>
+                                                {formData.items.length > 1 && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => removeItem(idx)}
+                                                        className="text-xs font-bold text-gray-400 hover:text-red-600 transition-colors px-1"
+                                                        title="Remove item"
+                                                    >
+                                                        ✕ Remove
+                                                    </button>
+                                                )}
+                                            </div>
+
+                                            {/* Row 1: Item Description, Qty, Unit */}
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                                <div>
+                                                    {formData.category === 'Materials' ? (
+                                                        <>
+                                                            <div className="flex justify-between items-center mb-1">
+                                                                <label className="block text-[9px] font-bold text-gray-600 uppercase">MATERIAL NAME</label>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleToggleCustomMaterial(idx)}
+                                                                    className="text-[9px] text-[#A63228] hover:underline font-bold"
+                                                                >
+                                                                    {item.isCustom ? "← Select standard" : "+ Type custom"}
+                                                                </button>
+                                                            </div>
+                                                            {item.isCustom ? (
+                                                                <input
+                                                                    type="text"
+                                                                    list="materialsList"
+                                                                    value={item.description}
+                                                                    onChange={(e) => handleItemChange(idx, 'description', e.target.value)}
+                                                                    required
+                                                                    placeholder="Type custom material name"
+                                                                    className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-xs font-medium focus:border-[#A63228] outline-none"
+                                                                />
+                                                            ) : (
+                                                                <select
+                                                                    value={item.description}
+                                                                    onChange={(e) => {
+                                                                        if (e.target.value === '__CUSTOM__') {
+                                                                            handleToggleCustomMaterial(idx);
+                                                                        } else {
+                                                                            handleItemChange(idx, 'description', e.target.value);
+                                                                        }
+                                                                    }}
+                                                                    required
+                                                                    className="w-full bg-white border border-gray-200 rounded-lg pl-2.5 pr-6 py-2 text-xs font-medium focus:border-[#A63228] outline-none appearance-none"
+                                                                    style={selectStyles}
+                                                                >
+                                                                    <option value="" disabled>-- Select Material --</option>
+                                                                    {CONSTRUCTION_MATERIALS.map(m => (
+                                                                        <option key={m.name} value={m.name}>{m.name}</option>
+                                                                    ))}
+                                                                    <option value="__CUSTOM__">✏️ Other / Type Custom Material...</option>
+                                                                </select>
+                                                            )}
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <label className="block text-[9px] font-bold text-gray-600 mb-1 uppercase">
+                                                                {formData.category === 'Manpower' ? 'WORKER / ROLE' : 'ITEM DESCRIPTION'}
+                                                            </label>
+                                                            <input
+                                                                type="text"
+                                                                list="materialsList"
+                                                                value={item.description}
+                                                                onChange={(e) => handleItemChange(idx, 'description', e.target.value)}
+                                                                required
+                                                                placeholder={formData.category === 'Manpower' ? 'e.g. Mason / Carpenter' : 'e.g. Concrete Mixer'}
+                                                                className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-xs font-medium focus:border-[#A63228] outline-none"
+                                                            />
+                                                        </>
+                                                    )}
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <div>
+                                                        <label className="block text-[9px] font-bold text-gray-600 mb-1 uppercase">
+                                                            {formData.category === 'Manpower' ? 'DAYS / QTY' : 'QTY USED'}
+                                                        </label>
+                                                        <input
+                                                            type="number"
+                                                            step="any"
+                                                            min="0.01"
+                                                            value={item.qty}
+                                                            onChange={(e) => handleItemChange(idx, 'qty', e.target.value)}
+                                                            required
+                                                            placeholder="0"
+                                                            className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-xs font-extrabold focus:border-[#A63228] outline-none"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-[9px] font-bold text-gray-600 mb-1 uppercase">UNIT</label>
+                                                        <select
+                                                            value={item.unit}
+                                                            onChange={(e) => handleItemChange(idx, 'unit', e.target.value)}
+                                                            required
+                                                            className="w-full bg-white border border-gray-200 rounded-lg pl-2.5 pr-6 py-2 text-xs font-medium focus:border-[#A63228] outline-none appearance-none"
+                                                            style={selectStyles}
+                                                        >
+                                                            {formData.category === 'Materials' ? (
+                                                                !item.description ? (
+                                                                    <option value="" disabled>Select material first</option>
+                                                                ) : (
+                                                                    getUnitsForMaterial(item.description).map(u => (
+                                                                        <option key={u} value={u}>{u}</option>
+                                                                    ))
+                                                                )
+                                                            ) : formData.category === 'Manpower' ? (
+                                                                <>
+                                                                    <option value="day/s">day/s</option>
+                                                                    <option value="hr/s">hr/s</option>
+                                                                    <option value="pax">pax</option>
+                                                                    <option value="week/s">week/s</option>
+                                                                    <option value="lot/s">lot/s</option>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <option value="day/s">day/s</option>
+                                                                    <option value="hr/s">hr/s</option>
+                                                                    <option value="trip/s">trip/s</option>
+                                                                    <option value="unit/s">unit/s</option>
+                                                                    <option value="pc/s">pc/s</option>
+                                                                    <option value="liter/s">liter/s</option>
+                                                                    <option value="lot/s">lot/s</option>
+                                                                </>
+                                                            )}
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Row 2: Unit Price, Subtotal */}
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                                <div>
+                                                    <label className="block text-[9px] font-bold text-gray-600 mb-1 uppercase">
+                                                        {formData.category === 'Manpower' ? 'DAILY RATE (₱)' : 'UNIT COST (₱)'}
+                                                    </label>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        step="any"
+                                                        value={item.price}
+                                                        onChange={(e) => handleItemChange(idx, 'price', e.target.value)}
+                                                        required
+                                                        placeholder="0.00"
+                                                        className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-xs font-extrabold text-[#A63228] focus:border-[#A63228] outline-none"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-[9px] font-bold text-gray-600 mb-1 uppercase">SUBTOTAL (₱)</label>
+                                                    <input
+                                                        type="text"
+                                                        disabled
+                                                        value={subtotal.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                        className="w-full bg-red-50/50 border border-red-100 rounded-lg px-3 py-2 text-xs font-extrabold text-[#A63228] outline-none cursor-not-allowed"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+
+                                <button
+                                    type="button"
+                                    onClick={addNewItem}
+                                    className="w-full py-2.5 border-2 border-dashed border-gray-200 rounded-xl text-xs font-extrabold text-gray-600 hover:text-[#A63228] hover:border-[#A63228] hover:bg-red-50/30 transition-all flex items-center justify-center gap-1.5"
+                                >
+                                    <span>+</span> Add Another {formData.category === 'Materials' ? 'Material Used' : formData.category === 'Manpower' ? 'Worker / Role' : 'Item'}
+                                </button>
+
+                                {/* Receipt Upload (Optional) */}
+                                <div className="bg-gray-50/70 p-3 rounded-xl border border-gray-200">
+                                    <div className="flex justify-between items-center mb-1.5">
+                                        <label className="block text-[9px] font-bold text-gray-700 uppercase">
+                                            Receipt / Proof Image <span className="text-gray-400 font-normal lowercase">(optional)</span>
+                                        </label>
+                                        {photoData && (
+                                            <span className="text-[9px] font-bold text-[#2e7d32]">✓ Image Attached</span>
+                                        )}
+                                    </div>
                                     {photoData ? (
-                                        <div className="relative w-full rounded-xl overflow-hidden border border-[#A63228]/30 bg-gray-50">
-                                            <img src={photoData} alt="Receipt preview" className="w-full max-h-40 object-contain" />
+                                        <div className="relative w-full rounded-xl overflow-hidden border border-[#A63228]/30 bg-white">
+                                            <img src={photoData} alt="Receipt preview" className="w-full max-h-32 object-contain py-1" />
                                             <button
                                                 type="button"
                                                 onClick={() => setPhotoData(null)}
-                                                className="absolute top-1.5 right-1.5 bg-white/80 hover:bg-red-50 text-gray-500 hover:text-[#A63228] rounded-full p-1 shadow transition-colors"
+                                                className="absolute top-1.5 right-1.5 bg-white/90 hover:bg-red-50 text-gray-500 hover:text-[#A63228] rounded-full p-1 shadow transition-colors"
                                                 title="Remove image"
                                             >
-                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                                             </button>
                                         </div>
                                     ) : (
-                                        <label className="flex flex-col items-center justify-center gap-1.5 w-full h-20 rounded-xl border-2 border-dashed border-gray-300 hover:border-[#A63228] hover:bg-red-50/30 cursor-pointer transition-colors bg-gray-50/60">
-                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-gray-400"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-                                            <span className="text-[9px] font-semibold text-gray-500">Click to upload receipt image</span>
+                                        <label className="flex items-center justify-center gap-2 w-full py-2.5 px-3 rounded-xl border border-dashed border-gray-300 hover:border-[#A63228] hover:bg-red-50/20 cursor-pointer transition-colors bg-white">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-gray-400"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                                            <span className="text-[10px] font-semibold text-gray-500">Attach receipt photo or invoice</span>
                                             <input type="file" accept="image/*" onChange={handleManualFileUpload} className="hidden" />
                                         </label>
                                     )}
                                 </div>
+                            </div>
 
-                                <button
-                                    type="submit"
-                                    disabled={Boolean(amountError) || parseFloat(formData.amount || 0) > MAX_AMOUNT}
-                                    className="w-full mt-3 py-3 bg-[#E8C547] text-gray-900 rounded-xl text-xs font-bold hover:bg-[#d4b33d] shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    Review & Save Expense
-                                </button>
-                            </form>
-                        </div>
+                            {/* Bottom Summary Bar */}
+                            <div className="p-4 sm:p-5 border-t border-gray-100 bg-gray-50 flex flex-col sm:flex-row justify-between items-center gap-3 shrink-0">
+                                <div className="text-left w-full sm:w-auto">
+                                    <span className="block text-[9px] font-extrabold text-gray-400 uppercase tracking-wider">TOTAL EXPENSE COST</span>
+                                    <span className="text-base font-extrabold text-[#A63228]">
+                                        ₱{computedTotal.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </span>
+                                    {amountError && (
+                                        <p className="text-[9px] text-red-600 font-bold mt-0.5">{amountError}</p>
+                                    )}
+                                </div>
+                                <div className="flex gap-2 w-full sm:w-auto">
+                                    <button
+                                        type="button"
+                                        onClick={resetAndClose}
+                                        className="flex-1 sm:flex-initial px-4 py-2.5 bg-white border border-[#A63228] text-[#A63228] rounded-xl text-xs font-extrabold hover:bg-red-50 transition-colors uppercase tracking-wider"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={computedTotal <= 0 || computedTotal > MAX_AMOUNT}
+                                        className="flex-1 sm:flex-initial px-5 py-2.5 bg-[#E8C547] text-gray-900 rounded-xl text-xs font-extrabold hover:bg-[#d4b33d] transition-colors shadow-sm uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        Save All {formData.items.length} Item(s)
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
                     </div>
                 </div>
             )}
@@ -1330,7 +1609,16 @@ export default function Expenses() {
                         <div className="overflow-y-auto p-5">
                             <form onSubmit={handleScanDetailsSubmit} className="flex flex-col gap-4">
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    <div><label className="block text-[9px] font-bold text-gray-700 mb-1.5 uppercase">PROJECT</label><select name="project" value={formData.project} onChange={handleInputChange} className="w-full bg-[#f4f1ee] border border-transparent rounded-lg pl-3 pr-8 py-2.5 text-xs font-medium focus:border-[#A63228] outline-none appearance-none" style={selectStyles}>{mockProjects.map(p => (<option key={p.id} value={p.name}>{p.name}</option>))}</select></div>
+                                    <div>
+                                        <label className="block text-[9px] font-bold text-gray-700 mb-1.5 uppercase">PROJECT</label>
+                                        <select name="project" value={formData.project} onChange={handleInputChange} className="w-full bg-[#f4f1ee] border border-transparent rounded-lg pl-3 pr-8 py-2.5 text-xs font-medium focus:border-[#A63228] outline-none appearance-none" style={selectStyles}>
+                                            {mockProjects.map(p => (
+                                                <option key={p.id} value={p.name} disabled={isUpcomingStatus(p.status)}>
+                                                    {p.name} {isUpcomingStatus(p.status) ? '— (Upcoming / Standby - Disabled)' : ''}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
                                     <div><label className="block text-[9px] font-bold text-gray-700 mb-1.5 uppercase">EXPENSE CATEGORY</label><select name="category" value={formData.category} onChange={handleInputChange} className="w-full bg-[#f4f1ee] border border-transparent rounded-lg pl-3 pr-8 py-2.5 text-xs font-medium focus:border-[#A63228] outline-none appearance-none" style={selectStyles}><option value="Materials">Materials</option><option value="Manpower">Manpower</option><option value="Equipment">Equipment / Fuel</option></select></div>
                                 </div>
 
@@ -1402,19 +1690,138 @@ export default function Expenses() {
 
             {/* CONFIRM MODAL (MANUAL ADD) */}
             {modalState === 'CONFIRM' && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 transition-all">
-                    <div className="bg-white rounded-2xl p-6 w-full max-w-[320px] shadow-2xl relative text-center">
-                        <h3 className="text-base font-extrabold text-[#1a1a1a] mb-2">Final Confirmation</h3>
-                        <p className="text-xs text-gray-500 mb-5 leading-relaxed px-2">Are you sure you want to add this expense?</p>
-
-                        <div className="bg-[#fce8e6]/50 rounded-xl p-4 flex justify-between items-center mb-6 border border-[#fce8e6]">
-                            <span className="text-xs font-bold text-gray-800 uppercase">{formData.category}</span>
-                            <span className="text-lg font-extrabold text-[#A63228]">₱{parseFloat(formData.amount || 0).toLocaleString()}</span>
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-4 transition-all">
+                    <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl border border-gray-100 overflow-hidden flex flex-col max-h-[90vh]">
+                        {/* Header */}
+                        <div className="p-4 bg-gray-900 text-white flex justify-between items-center shrink-0">
+                            <div>
+                                <span className="text-[9px] font-bold text-[#E8C547] uppercase tracking-wider block">FINAL VERIFICATION</span>
+                                <h3 className="text-sm font-extrabold text-white mt-0.5">Confirm Expense & Materials</h3>
+                            </div>
+                            <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-white/10 text-white uppercase tracking-wider">
+                                {formData.category}
+                            </span>
                         </div>
 
-                        <div className="flex gap-3">
-                            <button onClick={() => setModalState('ADD')} className="flex-1 py-2.5 bg-white border border-[#A63228] text-[#A63228] rounded-xl text-xs font-bold hover:bg-red-50 transition-colors">Cancel</button>
-                            <button onClick={handleConfirmAdd} className="flex-1 py-2.5 bg-[#8B1A10] border border-[#8B1A10] text-white rounded-xl text-xs font-bold hover:bg-[#72150d] transition-colors">Confirm</button>
+                        {/* Body */}
+                        <div className="p-4 sm:p-5 overflow-y-auto space-y-3.5 text-left">
+                            {/* Meta info card */}
+                            <div className="bg-gray-50 rounded-xl p-3 border border-gray-100 grid grid-cols-2 sm:grid-cols-3 gap-2 text-[10px]">
+                                <div>
+                                    <span className="text-[8px] font-bold text-gray-400 uppercase block">PROJECT SITE</span>
+                                    <strong className="text-gray-900 font-extrabold truncate block">
+                                        {formData.project || currentProjectName || 'Project Site'}
+                                    </strong>
+                                </div>
+                                <div>
+                                    <span className="text-[8px] font-bold text-gray-400 uppercase block">DATE & TIME</span>
+                                    <strong className="text-gray-800 font-bold block">
+                                        {formData.date || todayISO} {formData.time ? `• ${formData.time}` : ''}
+                                    </strong>
+                                </div>
+                                <div className="col-span-2 sm:col-span-1">
+                                    <span className="text-[8px] font-bold text-gray-400 uppercase block">RECEIPT NO.</span>
+                                    <strong className="text-gray-800 font-bold block">
+                                        {formData.receiptNo ? `#${formData.receiptNo}` : '— (No Receipt)'}
+                                    </strong>
+                                </div>
+                            </div>
+
+                            {/* Materials / Items Table */}
+                            <div>
+                                <div className="flex items-center justify-between mb-1.5">
+                                    <h4 className="text-[10px] font-extrabold text-gray-800 uppercase tracking-wider flex items-center gap-1.5">
+                                        <span>📦</span>
+                                        <span>
+                                            {formData.category === 'Materials' ? 'Materials Information' : 'Expense Items Breakdown'}
+                                        </span>
+                                        <span className="text-[9px] font-bold text-[#A63228] bg-red-50 px-1.5 py-0.2 rounded-full">
+                                            {formData.items?.filter(it => it.description || it.qty).length || 1} item(s)
+                                        </span>
+                                    </h4>
+                                    <span className="text-[8px] text-gray-400 font-medium">Verify units & quantity</span>
+                                </div>
+
+                                <div className="border border-gray-200 rounded-xl overflow-hidden bg-white">
+                                    <table className="w-full text-left border-collapse text-[10px]">
+                                        <thead className="bg-gray-100/80 text-[8px] font-extrabold text-gray-500 uppercase tracking-wider border-b border-gray-200">
+                                            <tr>
+                                                <th className="py-2 px-3">MATERIAL / ITEM NAME</th>
+                                                <th className="py-2 px-2 text-center">QUANTITY & UNIT</th>
+                                                <th className="py-2 px-2 text-right">UNIT PRICE</th>
+                                                <th className="py-2 px-3 text-right">SUBTOTAL</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100">
+                                            {formData.items?.filter(it => it.description || it.qty || it.price).map((item, idx) => {
+                                                const q = parseFloat(item.qty || 0);
+                                                const p = parseFloat(item.price || 0);
+                                                const sub = q * p;
+                                                return (
+                                                    <tr key={idx} className="hover:bg-gray-50/60 transition-colors">
+                                                        <td className="py-2.5 px-3">
+                                                            <div className="font-extrabold text-gray-900 leading-tight">
+                                                                {item.description || 'Unspecified Item'}
+                                                            </div>
+                                                            {item.baseMaterial && item.baseMaterial !== item.description && (
+                                                                <span className="text-[7.5px] font-bold text-gray-400 block mt-0.5">
+                                                                    Base: {item.baseMaterial}
+                                                                </span>
+                                                            )}
+                                                        </td>
+                                                        <td className="py-2.5 px-2 text-center">
+                                                            <span className="inline-block px-2 py-0.5 bg-blue-50 text-blue-700 rounded-md font-extrabold text-[9px]">
+                                                                {item.qty || '0'} {item.unit || ''}
+                                                            </span>
+                                                        </td>
+                                                        <td className="py-2.5 px-2 text-right font-extrabold text-gray-700">
+                                                            ₱{p.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                            <span className="text-[7.5px] font-normal text-gray-400 block">/{item.unit || 'unit'}</span>
+                                                        </td>
+                                                        <td className="py-2.5 px-3 text-right font-black text-[#A63228]">
+                                                            ₱{sub.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            {/* Total Amount Box */}
+                            <div className="bg-[#fce8e6]/40 rounded-xl p-3.5 border border-[#fce8e6] flex items-center justify-between">
+                                <div>
+                                    <span className="text-[8.5px] font-extrabold text-gray-500 uppercase tracking-wider block">TOTAL EXPENSE COST</span>
+                                    <span className="text-xl font-black text-[#A63228] tracking-tight">
+                                        ₱{parseFloat(formData.amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </span>
+                                </div>
+                                {photoData && (
+                                    <div className="flex items-center gap-2 bg-white px-2.5 py-1.5 rounded-lg border border-gray-200">
+                                        <img src={photoData} alt="Proof thumbnail" className="w-8 h-8 rounded object-cover" />
+                                        <span className="text-[8px] font-bold text-[#2e7d32]">Receipt Attached</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Footer Buttons */}
+                        <div className="p-3.5 border-t border-gray-100 bg-gray-50 flex gap-2.5 shrink-0">
+                            <button
+                                type="button"
+                                onClick={() => setModalState('ADD')}
+                                className="flex-1 py-2.5 bg-white border border-[#A63228] text-[#A63228] rounded-xl text-xs font-extrabold hover:bg-red-50 transition-colors uppercase tracking-wider"
+                            >
+                                ← Back to Edit
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleConfirmAdd}
+                                className="flex-1 py-2.5 bg-[#8B1A10] border border-[#8B1A10] text-white rounded-xl text-xs font-extrabold hover:bg-[#72150d] transition-colors shadow-sm uppercase tracking-wider"
+                            >
+                                ✓ Confirm & Add Expense
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -1422,19 +1829,126 @@ export default function Expenses() {
 
             {/* SCAN_CONFIRM (Big Confirm Modal) */}
             {modalState === 'SCAN_CONFIRM' && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 transition-all">
-                    <div className="bg-white rounded-2xl p-6 w-full max-w-[320px] shadow-2xl relative text-center">
-                        <h3 className="text-base font-extrabold text-[#1a1a1a] mb-2">Final Confirmation</h3>
-                        <p className="text-xs text-gray-500 mb-5 leading-relaxed px-2">Are you sure you want to save this scanned receipt?</p>
-
-                        <div className="bg-[#fce8e6]/50 rounded-xl p-4 flex justify-between items-center mb-6 border border-[#fce8e6]">
-                            <span className="text-xs font-bold text-gray-800 uppercase">{formData.category}</span>
-                            <span className="text-lg font-extrabold text-[#A63228]">₱{parseFloat(formData.amount || 0).toLocaleString()}</span>
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-4 transition-all">
+                    <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl border border-gray-100 overflow-hidden flex flex-col max-h-[90vh]">
+                        {/* Header */}
+                        <div className="p-4 bg-gray-900 text-white flex justify-between items-center shrink-0">
+                            <div>
+                                <span className="text-[9px] font-bold text-[#E8C547] uppercase tracking-wider block">SCANNED RECEIPT VERIFICATION</span>
+                                <h3 className="text-sm font-extrabold text-white mt-0.5">Confirm Scanned Expense</h3>
+                            </div>
+                            <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-white/10 text-white uppercase tracking-wider">
+                                {formData.category}
+                            </span>
                         </div>
 
-                        <div className="flex gap-3">
-                            <button onClick={() => setModalState('SCAN_DETAILS')} className="flex-1 py-2.5 bg-white border border-[#A63228] text-[#A63228] rounded-xl text-xs font-bold hover:bg-red-50 transition-colors">Back to Edit</button>
-                            <button onClick={handleScanConfirmAdd} className="flex-1 py-2.5 bg-[#8B1A10] border border-[#8B1A10] text-white rounded-xl text-xs font-bold hover:bg-[#72150d] transition-colors">Save</button>
+                        {/* Body */}
+                        <div className="p-4 sm:p-5 overflow-y-auto space-y-3.5 text-left">
+                            {/* Meta info card */}
+                            <div className="bg-gray-50 rounded-xl p-3 border border-gray-100 grid grid-cols-2 sm:grid-cols-3 gap-2 text-[10px]">
+                                <div>
+                                    <span className="text-[8px] font-bold text-gray-400 uppercase block">PROJECT SITE</span>
+                                    <strong className="text-gray-900 font-extrabold truncate block">
+                                        {formData.project || currentProjectName || 'Project Site'}
+                                    </strong>
+                                </div>
+                                <div>
+                                    <span className="text-[8px] font-bold text-gray-400 uppercase block">DATE & TIME</span>
+                                    <strong className="text-gray-800 font-bold block">
+                                        {formData.date || todayISO} {formData.time ? `• ${formData.time}` : ''}
+                                    </strong>
+                                </div>
+                                <div className="col-span-2 sm:col-span-1">
+                                    <span className="text-[8px] font-bold text-gray-400 uppercase block">RECEIPT NO.</span>
+                                    <strong className="text-gray-800 font-bold block">
+                                        {formData.receiptNo ? `#${formData.receiptNo}` : '— (No Receipt)'}
+                                    </strong>
+                                </div>
+                            </div>
+
+                            {/* Materials / Items Table */}
+                            <div>
+                                <div className="flex items-center justify-between mb-1.5">
+                                    <h4 className="text-[10px] font-extrabold text-gray-800 uppercase tracking-wider flex items-center gap-1.5">
+                                        <span>📦</span>
+                                        <span>Scanned Materials & Items</span>
+                                        <span className="text-[9px] font-bold text-[#A63228] bg-red-50 px-1.5 py-0.2 rounded-full">
+                                            {formData.items?.filter(it => it.description || it.qty).length || 1} item(s)
+                                        </span>
+                                    </h4>
+                                    <span className="text-[8px] text-gray-400 font-medium">Extracted from receipt</span>
+                                </div>
+
+                                <div className="border border-gray-200 rounded-xl overflow-hidden bg-white">
+                                    <table className="w-full text-left border-collapse text-[10px]">
+                                        <thead className="bg-gray-100/80 text-[8px] font-extrabold text-gray-500 uppercase tracking-wider border-b border-gray-200">
+                                            <tr>
+                                                <th className="py-2 px-3">MATERIAL / ITEM NAME</th>
+                                                <th className="py-2 px-2 text-center">QUANTITY</th>
+                                                <th className="py-2 px-3 text-right">UNIT / STATUS</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100">
+                                            {formData.items?.filter(it => it.description || it.qty).map((item, idx) => (
+                                                <tr key={idx} className="hover:bg-gray-50/60 transition-colors">
+                                                    <td className="py-2.5 px-3">
+                                                        <div className="font-extrabold text-gray-900 leading-tight">
+                                                            {item.description || 'Scanned Item'}
+                                                        </div>
+                                                    </td>
+                                                    <td className="py-2.5 px-2 text-center">
+                                                        <span className="inline-block px-2 py-0.5 bg-blue-50 text-blue-700 rounded-md font-extrabold text-[9px]">
+                                                            {item.qty || '1'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="py-2.5 px-3 text-right font-medium text-gray-500">
+                                                        {item.unit || 'Scanned'}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            {/* Total Amount Box */}
+                            <div className="bg-[#fce8e6]/40 rounded-xl p-3.5 border border-[#fce8e6] flex items-center justify-between">
+                                <div>
+                                    <span className="text-[8.5px] font-extrabold text-gray-500 uppercase tracking-wider block">TOTAL EXTRACTED AMOUNT</span>
+                                    <span className="text-xl font-black text-[#A63228] tracking-tight">
+                                        ₱{parseFloat(formData.amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </span>
+                                    {formData.cashTendered && (
+                                        <div className="text-[8px] text-gray-500 font-bold mt-0.5">
+                                            Cash Paid: ₱{parseFloat(formData.cashTendered || 0).toLocaleString()} • Change: ₱{parseFloat(formData.change || 0).toLocaleString()}
+                                        </div>
+                                    )}
+                                </div>
+                                {photoData && (
+                                    <div className="flex items-center gap-2 bg-white px-2.5 py-1.5 rounded-lg border border-gray-200">
+                                        <img src={photoData} alt="Receipt thumbnail" className="w-8 h-8 rounded object-cover" />
+                                        <span className="text-[8px] font-bold text-[#2e7d32]">Scanned Proof</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Footer Buttons */}
+                        <div className="p-3.5 border-t border-gray-100 bg-gray-50 flex gap-2.5 shrink-0">
+                            <button
+                                type="button"
+                                onClick={() => setModalState('SCAN_DETAILS')}
+                                className="flex-1 py-2.5 bg-white border border-[#A63228] text-[#A63228] rounded-xl text-xs font-extrabold hover:bg-red-50 transition-colors uppercase tracking-wider"
+                            >
+                                ← Back to Edit
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleScanConfirmAdd}
+                                className="flex-1 py-2.5 bg-[#8B1A10] border border-[#8B1A10] text-white rounded-xl text-xs font-extrabold hover:bg-[#72150d] transition-colors shadow-sm uppercase tracking-wider"
+                            >
+                                ✓ Confirm & Save Receipt
+                            </button>
                         </div>
                     </div>
                 </div>

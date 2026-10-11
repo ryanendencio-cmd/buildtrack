@@ -93,6 +93,22 @@ function startServer() {
         created_at: FieldValue.serverTimestamp()
       }
       const docRef = await db.collection('schedules').add(newSchedule)
+      recordNotification({
+        type: 'Schedule',
+        title: `New Schedule: ${title}`,
+        message: `Schedule "${title}" was set for date ${schedule_date}${assigned_to ? ` [Assigned: ${assigned_to}]` : ''}.`,
+        severity: 'Medium',
+        action: 'schedule_created'
+      }).catch(() => {})
+      recordAuditLog({
+        action: 'SCHEDULE_CREATED',
+        module: 'Schedules',
+        description: `New schedule "${title}" was created for date ${schedule_date}${assigned_to ? ` [Assigned: ${assigned_to}]` : ''}.`,
+        target_id: docRef.id,
+        target_name: title,
+        details: { schedule_date, assigned_to, status, notes },
+        req
+      }).catch(() => {})
       res.json({ id: docRef.id, ...req.body, link_type: link.type, project_id: link.projectId, expense_id: link.expenseId })
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -106,6 +122,22 @@ function startServer() {
         project_id: link.projectId, expense_id: link.expenseId, link_type: link.type,
         title, schedule_date, assigned_to: assigned_to || null, status, notes: notes || null
       })
+      recordNotification({
+        type: 'Schedule',
+        title: `Schedule Updated: ${title}`,
+        message: `Schedule "${title}" was updated (Status: ${status || 'Updated'}, Date: ${schedule_date}).`,
+        severity: 'Low',
+        action: 'schedule_updated'
+      }).catch(() => {})
+      recordAuditLog({
+        action: 'SCHEDULE_UPDATED',
+        module: 'Schedules',
+        description: `Schedule "${title}" was updated (Status: ${status || 'Updated'}, Date: ${schedule_date}).`,
+        target_id: req.params.id,
+        target_name: title,
+        details: { schedule_date, assigned_to, status, notes },
+        req
+      }).catch(() => {})
       res.json({ success: true })
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -114,6 +146,13 @@ function startServer() {
   app.delete('/api/schedules/:id', async (req, res) => {
     try {
       await db.collection('schedules').doc(req.params.id).delete()
+      recordAuditLog({
+        action: 'SCHEDULE_DELETED',
+        module: 'Schedules',
+        description: `Deleted schedule record ID #${req.params.id}.`,
+        target_id: req.params.id,
+        req
+      }).catch(() => {})
       res.json({ success: true })
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -166,6 +205,15 @@ function startServer() {
         created_at: FieldValue.serverTimestamp()
       }
       const docRef = await db.collection('projects').add(newProject)
+      recordAuditLog({
+        action: 'PROJECT_CREATED',
+        module: 'Projects',
+        description: `Created new project "${name}" with budget ₱${Number(budget || 0).toLocaleString()} (Status: ${targetStatus}).`,
+        target_id: docRef.id,
+        target_name: name,
+        details: { budget, status: targetStatus, location, start_date, end_date },
+        req
+      }).catch(() => {})
       res.json({ id: docRef.id, ...newProject })
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -225,6 +273,15 @@ function startServer() {
       }
 
       await projectRef.update(updateData)
+      recordAuditLog({
+        action: 'PROJECT_UPDATED',
+        module: 'Projects',
+        description: `Updated project "${name || currentDoc.data()?.name || 'Project'}" (Status: ${status || currentDoc.data()?.status || 'Active'}).`,
+        target_id: req.params.id,
+        target_name: name || currentDoc.data()?.name,
+        details: updateData,
+        req
+      }).catch(() => {})
       res.json({ success: true })
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -233,7 +290,17 @@ function startServer() {
 
   app.delete('/api/projects/:id', async (req, res) => {
     try {
+      const delDoc = await db.collection('projects').doc(req.params.id).get()
+      const delName = delDoc.exists ? delDoc.data().name : `Project #${req.params.id}`
       await db.collection('projects').doc(req.params.id).delete()
+      recordAuditLog({
+        action: 'PROJECT_DELETED',
+        module: 'Projects',
+        description: `Deleted project "${delName}" [ID: ${req.params.id}].`,
+        target_id: req.params.id,
+        target_name: delName,
+        req
+      }).catch(() => {})
       res.json({ success: true })
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -284,6 +351,15 @@ function startServer() {
         created_at: FieldValue.serverTimestamp()
       }
       const docRef = await db.collection('budget_additions').add(newAddition)
+      recordAuditLog({
+        action: 'BUDGET_ADDED',
+        module: 'Projects',
+        description: `Added ₱${Number(amount).toLocaleString()} budget to project "${projectDoc.data().name}" (New total: ₱${Number(next).toLocaleString()}).`,
+        target_id: req.params.id,
+        target_name: projectDoc.data().name,
+        details: { amount, note, date, previous_budget: current, new_budget: next },
+        req
+      }).catch(() => {})
       res.json({ id: docRef.id, ...newAddition, budget: next })
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -388,6 +464,26 @@ function startServer() {
     const { project_id, project, category, amount, receipt_no, date, time, items, cash_tendered, change, image } = req.body
     try {
       const pid = await resolveProjectId(project_id)
+
+      // Prevent adding expenses to upcoming/standby projects
+      let targetProjectDoc = null
+      if (pid) {
+        const pDoc = await db.collection('projects').doc(pid).get()
+        if (pDoc.exists) targetProjectDoc = pDoc
+      }
+      if (!targetProjectDoc && project) {
+        const pSnap = await db.collection('projects').where('name', '==', project).limit(1).get()
+        if (!pSnap.empty) targetProjectDoc = pSnap.docs[0]
+      }
+      if (targetProjectDoc) {
+        const pStatus = (targetProjectDoc.data().status || '').toUpperCase()
+        if (pStatus === 'UPCOMING' || pStatus === 'STANDBY' || pStatus.includes('UPCOMING') || pStatus.includes('STANDBY')) {
+          return res.status(400).json({
+            error: `Cannot add expenses to an upcoming project ("${targetProjectDoc.data().name}"). The project status must be ONGOING first.`
+          })
+        }
+      }
+
       const newExpense = {
         project_id: pid || project_id || null, project, category, amount, receipt_no, date, time, 
         items: typeof items === 'string' ? JSON.parse(items) : (items || []), 
@@ -395,6 +491,22 @@ function startServer() {
         created_at: FieldValue.serverTimestamp()
       }
       const docRef = await db.collection('expenses').add(newExpense)
+      recordNotification({
+        type: 'Expenses',
+        title: `Expense Logged: ₱${Number(amount || 0).toLocaleString()}`,
+        message: `Logged expense under ${category} (₱${Number(amount || 0).toLocaleString()}) for project "${project || 'Site'}"${receipt_no ? ` [Receipt: ${receipt_no}]` : ''}.`,
+        severity: Number(amount || 0) >= 10000 ? 'High' : 'Medium',
+        action: 'expense_logged'
+      }).catch(() => {})
+      recordAuditLog({
+        action: 'EXPENSE_CREATED',
+        module: 'Expenses',
+        description: `Logged expense of ₱${Number(amount || 0).toLocaleString()} under ${category} (Receipt #${receipt_no || 'N/A'}, Project: "${project || 'Site'}").`,
+        target_id: docRef.id,
+        target_name: receipt_no || `Expense #${docRef.id}`,
+        details: { amount, category, project, receipt_no, date, items },
+        req
+      }).catch(() => {})
       res.json({ id: docRef.id, ...req.body, project_id: pid || project_id || null })
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -412,6 +524,15 @@ function startServer() {
       if (image) updateData.image = image
       
       await db.collection('expenses').doc(req.params.id).update(updateData)
+      recordAuditLog({
+        action: 'EXPENSE_UPDATED',
+        module: 'Expenses',
+        description: `Updated expense record [ID: ${req.params.id}] (Receipt #${receipt_no || 'N/A'}, Amount: ₱${Number(amount || 0).toLocaleString()}).`,
+        target_id: req.params.id,
+        target_name: receipt_no || `Expense #${req.params.id}`,
+        details: updateData,
+        req
+      }).catch(() => {})
       res.json({ success: true })
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -420,7 +541,18 @@ function startServer() {
 
   app.delete('/api/expenses/:id', async (req, res) => {
     try {
+      const expDoc = await db.collection('expenses').doc(req.params.id).get()
+      const expData = expDoc.exists ? expDoc.data() : null
       await db.collection('expenses').doc(req.params.id).delete()
+      recordAuditLog({
+        action: 'EXPENSE_DELETED',
+        module: 'Expenses',
+        description: `Deleted expense record [ID: ${req.params.id}]${expData?.receipt_no ? ` (Receipt #${expData.receipt_no}, Amount: ₱${Number(expData.amount || 0).toLocaleString()})` : ''}.`,
+        target_id: req.params.id,
+        target_name: expData?.receipt_no,
+        details: expData,
+        req
+      }).catch(() => {})
       res.json({ success: true })
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -590,32 +722,166 @@ function startServer() {
     }
   })
 
-  // ── NOTIFICATIONS ──
+  // ── RECORD NOTIFICATION HELPER (For Worker & Staff Actions) ──
+  async function recordNotification({
+    type = 'Staff & Workers',
+    title,
+    message,
+    severity = 'Medium',
+    actor_name = null,
+    actor_role = null,
+    action = null,
+    link = null
+  }) {
+    try {
+      const now = new Date()
+      const dateStr = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
+
+      const notifData = {
+        type,
+        title,
+        message,
+        severity,
+        actor_name: actor_name || null,
+        actor_role: actor_role || null,
+        action: action || null,
+        link: link || null,
+        date: dateStr,
+        time: timeStr,
+        read: false,
+        timestamp: now.getTime(),
+        created_at: FieldValue.serverTimestamp()
+      }
+
+      const docRef = await db.collection('notifications').add(notifData)
+      return { id: docRef.id, ...notifData }
+    } catch (err) {
+      console.error('Failed to record notification:', err.message)
+      return null
+    }
+  }
+
+  // ── NOTIFICATIONS ENDPOINT ──
   app.get('/api/notifications', async (req, res) => {
     const alerts = []
     try {
-      // 1. Budget warnings
-      const pSnap = await db.collection('projects').where('budget', '>', 0).get()
-      for (const pDoc of pSnap.docs) {
-        const p = pDoc.data()
-        const eSnap = await db.collection('expenses').where('project_id', '==', pDoc.id).get()
-        const spent = eSnap.docs.reduce((sum, eDoc) => sum + Number(eDoc.data().amount || 0), 0)
-        
-        const pct = Math.round((spent / p.budget) * 100)
-        if (pct >= 80) {
+      const today = new Date()
+      const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime()
+
+      // 1. SCHEDULE DEADLINE WARNINGS (3 days or fewer remaining)
+      const schedSnap = await db.collection('schedules').get()
+      for (const sDoc of schedSnap.docs) {
+        const s = sDoc.data()
+        const sStatus = (s.status || '').toLowerCase()
+        if (sStatus === 'completed' || sStatus === 'done') continue
+        if (!s.schedule_date) continue
+
+        const sDateClean = String(s.schedule_date).slice(0, 10)
+        const parts = sDateClean.split('-').map(Number)
+        if (parts.length < 3 || isNaN(parts[0]) || isNaN(parts[1]) || isNaN(parts[2])) continue
+        const targetMidnight = new Date(parts[0], parts[1] - 1, parts[2]).getTime()
+        const diffDays = Math.round((targetMidnight - todayMidnight) / (1000 * 60 * 60 * 24))
+
+        let pName = s.project_name || null
+        if (!pName && s.project_id) {
+          try {
+            const pDoc = await db.collection('projects').doc(s.project_id).get()
+            if (pDoc.exists) pName = pDoc.data().name
+          } catch (_) {}
+        }
+
+        if (diffDays <= 3 && diffDays >= 0) {
+          let dayLabel = ''
+          let severity = 'Medium'
+          if (diffDays === 0) {
+            dayLabel = 'Due Today'
+            severity = 'High'
+          } else if (diffDays === 1) {
+            dayLabel = 'Due Tomorrow (1 day remaining)'
+            severity = 'High'
+          } else {
+            dayLabel = `${diffDays} days remaining`
+            severity = 'Medium'
+          }
+
           alerts.push({
-            id: `budget-${pDoc.id}`,
-            type: 'Budget',
-            title: 'Budget Warning Threshold Reached',
-            message: `Project "${p.name}" has utilized ${pct}% of its allocated budget.`,
+            id: `schedule-warning-${sDoc.id}-${sDateClean}`,
+            type: 'Schedule',
+            title: diffDays === 0 ? `Schedule Alert: Due Today!` : `Schedule Warning: ${diffDays} Days Remaining!`,
+            message: `Schedule "${s.title}"${pName ? ` for Project "${pName}"` : ''} is set for ${sDateClean} (${dayLabel})${s.assigned_to ? ` [Assigned to: ${s.assigned_to}]` : ''}.`,
             date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+            time: 'Schedule Alert',
             read: false,
-            severity: pct >= 95 ? 'High' : 'Medium'
+            severity,
+            timestamp: targetMidnight
+          })
+        } else if (diffDays < 0 && diffDays >= -7) {
+          alerts.push({
+            id: `schedule-overdue-${sDoc.id}-${sDateClean}`,
+            type: 'Schedule',
+            title: `Overdue Schedule Alert (${Math.abs(diffDays)} days overdue)`,
+            message: `Schedule "${s.title}"${pName ? ` (${pName})` : ''} set for ${sDateClean} is overdue and not yet completed.`,
+            date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+            time: 'Overdue Alert',
+            read: false,
+            severity: 'High',
+            timestamp: targetMidnight
           })
         }
       }
 
-      // 2. Equipment in use alerts
+      // 2. PROJECT TARGET COMPLETION SCHEDULE WARNINGS (3 days or fewer)
+      const pSnap = await db.collection('projects').get()
+      for (const pDoc of pSnap.docs) {
+        const p = pDoc.data()
+        const pStatus = (p.status || '').toUpperCase()
+        if (pStatus === 'COMPLETED') continue
+
+        if (p.end_date) {
+          const pDateClean = String(p.end_date).slice(0, 10)
+          const pParts = pDateClean.split('-').map(Number)
+          if (pParts.length >= 3 && !isNaN(pParts[0]) && !isNaN(pParts[1]) && !isNaN(pParts[2])) {
+            const targetMidnight = new Date(pParts[0], pParts[1] - 1, pParts[2]).getTime()
+            const diffDays = Math.round((targetMidnight - todayMidnight) / (1000 * 60 * 60 * 24))
+
+            if (diffDays <= 3 && diffDays >= 0) {
+              alerts.push({
+                id: `project-schedule-${pDoc.id}-${pDateClean}`,
+                type: 'Schedule',
+                title: diffDays === 0 ? `Project Deadline Alert: Due Today!` : `Project Schedule Warning (${diffDays} Days Remaining)`,
+                message: `Target completion for project "${p.name}" is on ${pDateClean} (${diffDays === 0 ? 'Due Today' : `${diffDays} days remaining`}).`,
+                date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+                time: 'Project Deadline',
+                read: false,
+                severity: 'High',
+                timestamp: targetMidnight
+              })
+            }
+          }
+        }
+
+        // Budget warnings
+        if (p.budget && Number(p.budget) > 0) {
+          const eSnap = await db.collection('expenses').where('project_id', '==', pDoc.id).get()
+          const spent = eSnap.docs.reduce((sum, eDoc) => sum + Number(eDoc.data().amount || 0), 0)
+          const pct = Math.round((spent / p.budget) * 100)
+          if (pct >= 80) {
+            alerts.push({
+              id: `budget-${pDoc.id}`,
+              type: 'Budget',
+              title: 'Budget Warning Threshold Reached',
+              message: `Project "${p.name}" has utilized ${pct}% of its allocated budget.`,
+              date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+              read: false,
+              severity: pct >= 95 ? 'High' : 'Medium',
+              timestamp: Date.now()
+            })
+          }
+        }
+      }
+
+      // 3. Equipment in use alerts
       const aSnap = await db.collection('assets').where('status', '==', 'In Use').get()
       aSnap.docs.forEach(aDoc => {
         const a = aDoc.data()
@@ -623,14 +889,15 @@ function startServer() {
           id: `asset-${aDoc.id}`,
           type: 'Tools',
           title: 'Equipment Currently In Use',
-          message: `"${a.name}" is currently checked out${a.assigned_to ? ` by ${a.assigned_to}` : ''}.`,
+          message: `"${a.name}" is currently borrowed${a.assigned_to ? ` by ${a.assigned_to}` : ''}.`,
           date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
           read: false,
-          severity: 'Medium'
+          severity: 'Medium',
+          timestamp: Date.now()
         })
       })
 
-      // 3. Large expenses
+      // 4. Large expenses
       const expSnap = await db.collection('expenses').get()
       const expenses = expSnap.docs.map(d => ({ id: d.id, ...d.data() }))
       if (expenses.length > 0) {
@@ -639,7 +906,7 @@ function startServer() {
           .filter(e => Number(e.amount || 0) > (avg * 2))
           .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
           .slice(0, 3)
-        
+
         largeExps.forEach(e => {
           alerts.push({
             id: `expense-${e.id}`,
@@ -648,21 +915,419 @@ function startServer() {
             message: `A ${e.category} expense of ₱${Number(e.amount).toLocaleString()} was logged for project "${e.project}".`,
             date: new Date(e.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
             read: false,
-            severity: 'Medium'
+            severity: 'Medium',
+            timestamp: new Date(e.date).getTime() || Date.now()
           })
         })
       }
 
-      res.json(alerts)
+      // 5. FETCH RECORDED WORKER & STAFF ACTION NOTIFICATIONS
+      const savedSnap = await db.collection('notifications').get()
+      const savedList = savedSnap.docs.map(doc => {
+        const d = doc.data()
+        return {
+          id: doc.id,
+          type: d.type || 'Staff & Workers',
+          title: d.title,
+          message: d.message,
+          date: d.date || (d.created_at?._seconds ? new Date(d.created_at._seconds * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })),
+          time: d.time || (d.created_at?._seconds ? new Date(d.created_at._seconds * 1000).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : null),
+          read: Boolean(d.read),
+          severity: d.severity || 'Medium',
+          actor_name: d.actor_name || null,
+          actor_role: d.actor_role || null,
+          action: d.action || null,
+          timestamp: d.timestamp || (d.created_at?._seconds ? d.created_at._seconds * 1000 : 0)
+        }
+      })
+
+      const combined = [...alerts, ...savedList]
+      combined.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+
+      res.json(combined)
     } catch (err) {
       res.status(500).json({ error: err.message })
     }
   })
 
-  app.put('/api/notifications/:id/read', (req, res) => {
-    // Notifications are generated dynamically, client handles read state
-    res.json({ success: true })
+  // POST /api/notifications (Explicitly record action notification)
+  app.post('/api/notifications', async (req, res) => {
+    const { type, title, message, severity, actor_name, actor_role, action, link } = req.body
+    if (!title || !message) {
+      return res.status(400).json({ error: 'Title and message are required.' })
+    }
+    const result = await recordNotification({
+      type: type || 'Staff & Workers',
+      title,
+      message,
+      severity: severity || 'Medium',
+      actor_name,
+      actor_role,
+      action,
+      link
+    })
+    if (result) {
+      res.json({ success: true, notification: result })
+    } else {
+      res.status(500).json({ error: 'Failed to record notification.' })
+    }
   })
+
+  // PUT /api/notifications/:id/read
+  app.put('/api/notifications/:id/read', async (req, res) => {
+    try {
+      const docRef = db.collection('notifications').doc(req.params.id)
+      const doc = await docRef.get()
+      if (doc.exists) {
+        await docRef.update({ read: true, updated_at: FieldValue.serverTimestamp() })
+      }
+      res.json({ success: true })
+    } catch (err) {
+      res.json({ success: true })
+    }
+  })
+
+  // PUT /api/notifications/mark-all-read
+  app.put('/api/notifications/mark-all-read', async (req, res) => {
+    try {
+      const snap = await db.collection('notifications').where('read', '==', false).get()
+      const batch = db.batch()
+      snap.docs.forEach(doc => {
+        batch.update(doc.ref, { read: true })
+      })
+      await batch.commit()
+      res.json({ success: true })
+    } catch (err) {
+      res.json({ success: true })
+    }
+  })
+
+  // ── AUDIT LOG HELPER (Security & Action Governance Trail) ──
+  async function recordAuditLog({
+    action,
+    module,
+    description,
+    actor_name = null,
+    actor_role = null,
+    actor_id = null,
+    target_id = null,
+    target_name = null,
+    details = null,
+    status = 'SUCCESS',
+    req = null
+  }) {
+    try {
+      const now = new Date()
+      const dateStr = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
+
+      let ip_address = '127.0.0.1'
+      let user_agent = 'Web Browser'
+
+      if (req) {
+        const rawIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || req.ip || '127.0.0.1'
+        ip_address = typeof rawIp === 'string' ? rawIp.split(',')[0].trim().replace(/^::ffff:/, '') : '127.0.0.1'
+        user_agent = req.headers['user-agent'] || 'Web Browser'
+      }
+
+      let finalActorName = actor_name
+      let finalActorRole = actor_role
+      let finalActorId = actor_id
+
+      if (!finalActorName && req) {
+        finalActorName = req.body?.actor_name || req.body?.updated_by || req.body?.set_by || req.headers['x-actor-name'] || 'Administrator'
+        finalActorRole = req.body?.actor_role || req.headers['x-actor-role'] || 'Administrator'
+      }
+
+      const logData = {
+        action: action || 'ACTION_LOGGED',
+        module: module || 'System',
+        description: description || '',
+        actor_name: finalActorName || 'Administrator',
+        actor_role: finalActorRole || 'Administrator',
+        actor_id: finalActorId || null,
+        target_id: target_id ? String(target_id) : null,
+        target_name: target_name ? String(target_name) : null,
+        details: details || null,
+        ip_address: String(ip_address),
+        user_agent: String(user_agent),
+        status: status || 'SUCCESS',
+        date: dateStr,
+        time: timeStr,
+        timestamp: now.getTime(),
+        created_at: FieldValue.serverTimestamp()
+      }
+
+      const docRef = await db.collection('audit_logs').add(logData)
+      return { id: docRef.id, ...logData }
+    } catch (err) {
+      console.error('Failed to record audit log:', err.message)
+      return null
+    }
+  }
+
+  // ── AUDIT LOG BACKFILL SEEDER (Populate initial activity trail if empty) ──
+  async function backfillAuditLogsIfEmpty() {
+    try {
+      const snap = await db.collection('audit_logs').limit(1).get()
+      if (!snap.empty) return
+
+      console.log('Seeding initial audit logs from existing system activity...')
+      const now = Date.now()
+
+      // 1. Initial System Setup / Admin Log
+      await db.collection('audit_logs').add({
+        action: 'SYSTEM_AUDIT_INITIALIZED',
+        module: 'Authentication',
+        description: 'Successfully initialized Security Audit Trail for BuildTrack.',
+        actor_name: 'Administrator',
+        actor_role: 'Administrator',
+        ip_address: '127.0.0.1',
+        user_agent: 'BuildTrack Core System',
+        status: 'SUCCESS',
+        date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+        timestamp: now - (86400000 * 4),
+        created_at: FieldValue.serverTimestamp()
+      })
+
+      // 2. Existing Projects
+      const projectsSnap = await db.collection('projects').get()
+      for (const doc of projectsSnap.docs) {
+        const p = doc.data()
+        const pTime = p.created_at?._seconds ? p.created_at._seconds * 1000 : (now - 86400000 * 3)
+        const dateObj = new Date(pTime)
+        await db.collection('audit_logs').add({
+          action: 'PROJECT_CREATED',
+          module: 'Projects',
+          description: `Created construction project "${p.name || 'Project'}" (Location: ${p.location || 'N/A'}, Budget: ₱${Number(p.allocated_budget || 0).toLocaleString()}).`,
+          actor_name: 'Administrator',
+          actor_role: 'Administrator',
+          target_id: doc.id,
+          target_name: p.name,
+          ip_address: '127.0.0.1',
+          user_agent: 'Web App',
+          status: 'SUCCESS',
+          date: dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+          time: dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+          timestamp: pTime,
+          created_at: FieldValue.serverTimestamp()
+        })
+      }
+
+      // 3. Existing Workers
+      const workersSnap = await db.collection('workers').get()
+      for (const doc of workersSnap.docs) {
+        const w = doc.data()
+        const wTime = w.created_at?._seconds ? w.created_at._seconds * 1000 : (now - 86400000 * 2)
+        const dateObj = new Date(wTime)
+        await db.collection('audit_logs').add({
+          action: 'WORKER_REGISTERED',
+          module: 'Workers',
+          description: `Worker ${w.full_name || 'Worker'} (${w.position || w.role || 'Staff'}) registered into system.`,
+          actor_name: w.full_name || 'Worker',
+          actor_role: w.position || w.role || 'Worker',
+          actor_id: doc.id,
+          target_id: doc.id,
+          target_name: w.full_name,
+          ip_address: '127.0.0.1',
+          user_agent: 'Mobile App',
+          status: 'SUCCESS',
+          date: dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+          time: dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+          timestamp: wTime,
+          created_at: FieldValue.serverTimestamp()
+        })
+      }
+
+      // 4. Existing Expenses
+      const expensesSnap = await db.collection('expenses').limit(25).get()
+      for (const doc of expensesSnap.docs) {
+        const exp = doc.data()
+        const expTime = exp.created_at?._seconds ? exp.created_at._seconds * 1000 : (now - 86400000)
+        const dateObj = new Date(expTime)
+        await db.collection('audit_logs').add({
+          action: 'EXPENSE_RECORDED',
+          module: 'Expenses',
+          description: `Recorded expense of ₱${Number(exp.amount || 0).toLocaleString()} for "${exp.desc || exp.category || 'Expense'}" at ${exp.project || 'Project Site'}.`,
+          actor_name: 'Administrator',
+          actor_role: 'Administrator',
+          target_id: doc.id,
+          target_name: exp.desc || exp.category,
+          ip_address: '127.0.0.1',
+          user_agent: 'Web App',
+          status: 'SUCCESS',
+          date: dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+          time: dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+          timestamp: expTime,
+          created_at: FieldValue.serverTimestamp()
+        })
+      }
+
+      // 5. Existing Attendance
+      const attSnap = await db.collection('attendance').limit(25).get()
+      for (const doc of attSnap.docs) {
+        const a = doc.data()
+        const aTime = a.created_at?._seconds ? a.created_at._seconds * 1000 : now
+        const dateObj = new Date(aTime)
+        await db.collection('audit_logs').add({
+          action: 'ATTENDANCE_RECORDED',
+          module: 'Attendance',
+          description: `Recorded attendance for ${a.worker_name || 'Worker'} (${a.role || 'Worker'}): ${a.status || 'Present'} on ${a.date || 'N/A'}.`,
+          actor_name: a.worker_name || 'Timekeeper',
+          actor_role: a.role || 'Worker',
+          actor_id: a.worker_id || null,
+          target_id: doc.id,
+          target_name: a.worker_name,
+          ip_address: '127.0.0.1',
+          user_agent: 'Mobile App',
+          status: 'SUCCESS',
+          date: dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+          time: dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+          timestamp: aTime,
+          created_at: FieldValue.serverTimestamp()
+        })
+      }
+      console.log('Seeding initial audit logs complete.')
+    } catch (err) {
+      console.error('Error backfilling audit logs:', err.message)
+    }
+  }
+
+  // ── AUDIT LOGS ENDPOINTS ──
+  app.get('/api/audit-logs', async (req, res) => {
+    try {
+      const { module, action, status, search, startDate, endDate, limit = 250 } = req.query
+      let snap = await db.collection('audit_logs').get()
+      if (snap.empty) {
+        await backfillAuditLogsIfEmpty()
+        snap = await db.collection('audit_logs').get()
+      }
+      let results = snap.docs.map(doc => {
+        const d = doc.data()
+        return {
+          id: doc.id,
+          ...d,
+          date: d.date || (d.created_at?._seconds ? new Date(d.created_at._seconds * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''),
+          time: d.time || (d.created_at?._seconds ? new Date(d.created_at._seconds * 1000).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : ''),
+          timestamp: d.timestamp || (d.created_at?._seconds ? d.created_at._seconds * 1000 : 0)
+        }
+      })
+
+      // Sort descending by timestamp
+      results.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+
+      // Filter by module
+      if (module && module !== 'All') {
+        results = results.filter(log => String(log.module || '').toLowerCase() === String(module).toLowerCase())
+      }
+
+      // Filter by action type
+      if (action && action !== 'All') {
+        results = results.filter(log => String(log.action || '').toLowerCase().includes(String(action).toLowerCase()))
+      }
+
+      // Filter by status
+      if (status && status !== 'All') {
+        results = results.filter(log => String(log.status || '').toUpperCase() === String(status).toUpperCase())
+      }
+
+      // Filter by search keyword
+      if (search) {
+        const q = String(search).toLowerCase().trim()
+        results = results.filter(log =>
+          (log.description || '').toLowerCase().includes(q) ||
+          (log.actor_name || '').toLowerCase().includes(q) ||
+          (log.action || '').toLowerCase().includes(q) ||
+          (log.target_name || '').toLowerCase().includes(q) ||
+          (log.ip_address || '').toLowerCase().includes(q) ||
+          (log.module || '').toLowerCase().includes(q)
+        )
+      }
+
+      // Filter by date range
+      if (startDate) {
+        const startMs = new Date(startDate).setHours(0, 0, 0, 0)
+        results = results.filter(log => (log.timestamp || 0) >= startMs)
+      }
+      if (endDate) {
+        const endMs = new Date(endDate).setHours(23, 59, 59, 999)
+        results = results.filter(log => (log.timestamp || 0) <= endMs)
+      }
+
+      const maxLimit = parseInt(limit, 10) || 250
+      res.json(results.slice(0, maxLimit))
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  app.post('/api/audit-logs', async (req, res) => {
+    try {
+      const { action, module, description, actor_name, actor_role, target_id, target_name, details, status } = req.body
+      const log = await recordAuditLog({
+        action, module, description, actor_name, actor_role, target_id, target_name, details, status, req
+      })
+      res.json({ success: true, log })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  app.get('/api/audit-logs/stats', async (req, res) => {
+    try {
+      const snap = await db.collection('audit_logs').get()
+      const logs = snap.docs.map(doc => doc.data())
+      const todayStart = new Date().setHours(0, 0, 0, 0)
+
+      const total = logs.length
+      const todayCount = logs.filter(l => (l.timestamp || 0) >= todayStart).length
+      const authCount = logs.filter(l => l.module === 'Authentication').length
+      const financialCount = logs.filter(l => ['Expenses', 'Cash Advance', 'Projects'].includes(l.module)).length
+      const workforceCount = logs.filter(l => ['Workers', 'Attendance', 'Tools', 'Materials'].includes(l.module)).length
+
+      res.json({ total, todayCount, authCount, financialCount, workforceCount })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  // Helper: check if a date is designated as a non-working day
+  async function isDateNonWorkingDay(dateStr) {
+    if (!dateStr) return { isNonWorking: false };
+
+    let autoSundaysOff = true;
+    try {
+      const settingsDoc = await db.collection('settings').doc('attendance').get();
+      if (settingsDoc.exists && settingsDoc.data().auto_sundays_off !== undefined) {
+        autoSundaysOff = Boolean(settingsDoc.data().auto_sundays_off);
+      }
+    } catch (_) {}
+
+    const d = new Date(dateStr + 'T00:00:00');
+    if (autoSundaysOff && d.getDay() === 0) {
+      return {
+        isNonWorking: true,
+        reason: 'Sunday Rest Day',
+        type: 'Sunday'
+      };
+    }
+
+    try {
+      const snap = await db.collection('non_working_days').where('date', '==', dateStr).limit(1).get();
+      if (!snap.empty) {
+        const data = snap.docs[0].data();
+        return {
+          isNonWorking: true,
+          reason: data.reason || 'Declared Non-Working Day',
+          type: data.type || 'Holiday/Suspension',
+          set_by: data.set_by || 'Admin / Attendance Officer'
+        };
+      }
+    } catch (_) {}
+
+    return { isNonWorking: false };
+  }
 
   // ── WORKERS SUMMARY (for Dashboard) — MUST be before /api/workers plain GET ──
   app.get('/api/workers/summary', async (req, res) => {
@@ -678,8 +1343,12 @@ function startServer() {
       const aSnap = await db.collection('attendance').where('date', '==', today).get()
       const attendance = aSnap.docs.map(d => d.data())
       
+      const checkNW = await isDateNonWorkingDay(today)
+      const isNonWorking = checkNW.isNonWorking
+
       const presentToday = attendance.filter(a => a.status === 'Present').length
-      const absent = attendance.filter(a => a.status === 'Absent').length
+      // On non-working days, workers must NOT be counted as absent!
+      const absent = isNonWorking ? 0 : attendance.filter(a => a.status === 'Absent').length
       
       const rolesMap = {}
       workers.forEach(w => {
@@ -699,7 +1368,9 @@ function startServer() {
         presentToday,
         absent,
         roles,
-        todayPayroll
+        todayPayroll,
+        is_non_working_day: isNonWorking,
+        non_working_reason: checkNW.reason || null
       })
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -741,6 +1412,24 @@ function startServer() {
         created_at: FieldValue.serverTimestamp()
       }
       const docRef = await db.collection('workers').add(newWorker)
+      recordNotification({
+        type: 'Staff & Workers',
+        title: `New Worker Profile: ${computedFullName}`,
+        message: `Added ${computedFullName} as ${cleanPosition || role || 'Worker'} to the workforce directory.`,
+        severity: 'Low',
+        actor_name: computedFullName,
+        actor_role: cleanPosition || role || 'Worker',
+        action: 'worker_created'
+      }).catch(() => {})
+      recordAuditLog({
+        action: 'WORKER_CREATED',
+        module: 'Workers',
+        description: `Created worker profile for "${computedFullName}" (${cleanPosition || role || 'Worker'}, Rate: ₱${daily_rate || 600}/day).`,
+        target_id: docRef.id,
+        target_name: computedFullName,
+        details: { role, position: cleanPosition, daily_rate: daily_rate || 600, status: status || 'Active' },
+        req
+      }).catch(() => {})
       res.json({ id: docRef.id, ...req.body, position: cleanPosition, full_name: computedFullName, approval_status: approval_status || 'Approved' })
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -775,6 +1464,24 @@ function startServer() {
         }
       }
       await db.collection('workers').doc(req.params.id).update(updateData)
+      recordNotification({
+        type: 'Staff & Workers',
+        title: `Worker Profile Updated: ${computedFullName}`,
+        message: `Profile data updated for ${computedFullName} (${cleanPosition || role || 'Worker'}).`,
+        severity: 'Low',
+        actor_name: computedFullName,
+        actor_role: cleanPosition || role || 'Worker',
+        action: 'worker_updated'
+      }).catch(() => {})
+      recordAuditLog({
+        action: 'WORKER_UPDATED',
+        module: 'Workers',
+        description: `Updated worker record for "${computedFullName}" (${cleanPosition || role || 'Worker'}, Status: ${status || 'Active'}, Approval: ${approval_status || 'Approved'}).`,
+        target_id: req.params.id,
+        target_name: computedFullName,
+        details: { role, position: cleanPosition, status, approval_status, daily_rate },
+        req
+      }).catch(() => {})
       res.json({ success: true, position: cleanPosition })
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -783,7 +1490,17 @@ function startServer() {
 
   app.delete('/api/workers/:id', async (req, res) => {
     try {
+      const wDoc = await db.collection('workers').doc(req.params.id).get()
+      const wName = wDoc.exists ? (wDoc.data().full_name || `Worker #${req.params.id}`) : `Worker #${req.params.id}`
       await db.collection('workers').doc(req.params.id).delete()
+      recordAuditLog({
+        action: 'WORKER_DELETED',
+        module: 'Workers',
+        description: `Deleted worker record for "${wName}" [ID: ${req.params.id}].`,
+        target_id: req.params.id,
+        target_name: wName,
+        req
+      }).catch(() => {})
       res.json({ success: true })
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -898,6 +1615,115 @@ function startServer() {
     }
   }
 
+  // ── ATTENDANCE SETTINGS & NON-WORKING DAYS ──
+  app.get('/api/attendance-settings', async (req, res) => {
+    try {
+      const doc = await db.collection('settings').doc('attendance').get()
+      if (doc.exists) {
+        res.json({
+          auto_schedule: true,
+          open_time: '07:00',
+          close_time: '17:30',
+          auto_sundays_off: true,
+          manual_override: null,
+          ...doc.data()
+        })
+      } else {
+        res.json({
+          auto_schedule: true,
+          open_time: '07:00',
+          close_time: '17:30',
+          auto_sundays_off: true,
+          manual_override: null
+        })
+      }
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  app.post('/api/attendance-settings', async (req, res) => {
+    const { auto_schedule, open_time, close_time, auto_sundays_off, manual_override, updated_by } = req.body
+    try {
+      const updateData = {
+        auto_schedule: auto_schedule !== undefined ? Boolean(auto_schedule) : true,
+        open_time: open_time || '07:00',
+        close_time: close_time || '17:30',
+        auto_sundays_off: auto_sundays_off !== undefined ? Boolean(auto_sundays_off) : true,
+        manual_override: manual_override !== undefined ? manual_override : null,
+        updated_by: updated_by || 'Admin / Attendance Monitoring Officer',
+        updated_at: FieldValue.serverTimestamp()
+      }
+      await db.collection('settings').doc('attendance').set(updateData, { merge: true })
+      recordAuditLog({
+        action: 'ATTENDANCE_SETTINGS_UPDATED',
+        module: 'Settings',
+        description: `Updated shift schedule settings: Open ${open_time}, Close ${close_time}, Auto-Sundays: ${updateData.auto_sundays_off ? 'Active' : 'Disabled'}${manual_override ? ` (Override: ${manual_override})` : ''}.`,
+        actor_name: updated_by || 'Admin / Attendance Monitoring Officer',
+        details: updateData,
+        req
+      }).catch(() => {})
+      res.json({ success: true, ...updateData })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  app.get('/api/non-working-days', async (req, res) => {
+    try {
+      const snap = await db.collection('non_working_days').get()
+      const results = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+      results.sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+      res.json(results)
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  app.post('/api/non-working-days', async (req, res) => {
+    const { date, reason, type, set_by } = req.body
+    if (!date) return res.status(400).json({ error: 'Date is required.' })
+    try {
+      const docRef = db.collection('non_working_days').doc(date)
+      const data = {
+        date,
+        reason: reason || 'Non-Working Day',
+        type: type || 'Holiday',
+        set_by: set_by || 'Admin / Attendance Monitoring Officer',
+        created_at: FieldValue.serverTimestamp()
+      }
+      await docRef.set(data, { merge: true })
+      recordAuditLog({
+        action: 'NON_WORKING_DAY_DECLARED',
+        module: 'Attendance',
+        description: `Declared ${date} as Non-Working Day (${reason || 'Rest Day'}).`,
+        actor_name: set_by || 'Admin / Attendance Monitoring Officer',
+        target_id: date,
+        details: data,
+        req
+      }).catch(() => {})
+      res.json({ id: date, ...data })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  app.delete('/api/non-working-days/:date', async (req, res) => {
+    try {
+      await db.collection('non_working_days').doc(req.params.date).delete()
+      recordAuditLog({
+        action: 'NON_WORKING_DAY_REVERTED',
+        module: 'Attendance',
+        description: `Reverted Non-Working Day status for date ${req.params.date} back to regular working day.`,
+        target_id: req.params.date,
+        req
+      }).catch(() => {})
+      res.json({ success: true, date: req.params.date })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
   // ── ATTENDANCE ──
   app.get('/api/attendance/:project_id', async (req, res) => {
     const { project_id } = req.params
@@ -967,10 +1793,17 @@ function startServer() {
     }
 
     const evaluated = evaluateTwoSessions(mIn, aIn, baseRate)
-    const status = req.body.status && req.body.status !== 'Present' ? req.body.status : evaluated.status
-    const earnedAmount = (status === 'Absent') ? 0 : evaluated.earnedAmount
+    let status = req.body.status && req.body.status !== 'Present' ? req.body.status : evaluated.status
 
     try {
+      const checkNW = await isDateNonWorkingDay(finalDate)
+      if (checkNW.isNonWorking) {
+        if (!status || status === 'Absent') {
+          status = 'Rest Day / Non-Working'
+        }
+      }
+
+      const earnedAmount = (status === 'Absent' || status === 'Rest Day / Non-Working') ? 0 : evaluated.earnedAmount
       const pid = await resolveProjectId(project_id)
       const newAttendance = {
         project_id: pid || project_id || null, worker_id: worker_id || null, worker_name: finalName, date: finalDate, role: role || 'Laborer',
@@ -981,6 +1814,29 @@ function startServer() {
       }
       const docRef = await db.collection('attendance').add(newAttendance)
       
+      recordNotification({
+        type: 'Staff & Workers',
+        title: `Attendance Logged: ${finalName}`,
+        message: `Recorded attendance for ${finalName} (${role || 'Worker'}): ${status} (${mIn ? `Morning In: ${mIn}` : (aIn ? `Afternoon In: ${aIn}` : `Time: ${timeIn || 'Logged'}`)}).`,
+        severity: (status === 'Late' || status === 'Double Late') ? 'Medium' : 'Low',
+        actor_name: finalName,
+        actor_role: role || 'Worker',
+        action: 'attendance_in'
+      }).catch(() => {})
+
+      recordAuditLog({
+        action: 'ATTENDANCE_RECORDED',
+        module: 'Attendance',
+        description: `Recorded attendance for ${finalName} (${role || 'Worker'}): ${status} (${mIn ? `Morning In: ${mIn}` : (aIn ? `Afternoon In: ${aIn}` : `Time: ${timeIn || 'Logged'}`)}).`,
+        actor_name: finalName,
+        actor_role: role || 'Worker',
+        actor_id: worker_id,
+        target_id: docRef.id,
+        target_name: finalName,
+        details: { status, date: finalDate, earnedAmount, morningIn: mIn, afternoonIn: aIn },
+        req
+      }).catch(() => {})
+
       res.json({
         id: docRef.id,
         project_id, worker_id, worker_name: finalName, name: finalName, date: finalDate, role: role || 'Laborer',
@@ -1022,6 +1878,37 @@ function startServer() {
         time_in: mIn || aIn || '—', time_out: aOut || mOut || '—',
         earned_amount: finalEarned, status: finalStatus
       })
+
+      const wName = existing.worker_name || 'Worker'
+      const wRole = existing.role || 'Worker'
+      let actionDetail = ''
+      if (mOut && mOut !== '—' && existing.morning_out === '—') actionDetail = `Morning Time Out (${mOut})`
+      else if (aIn && aIn !== '—' && existing.afternoon_in === '—') actionDetail = `Afternoon Time In (${aIn})`
+      else if (aOut && aOut !== '—' && existing.afternoon_out === '—') actionDetail = `Afternoon Time Out (${aOut})`
+      else actionDetail = `Attendance update (${finalStatus})`
+
+      recordNotification({
+        type: 'Staff & Workers',
+        title: `Attendance Update: ${wName}`,
+        message: `Recorded ${actionDetail} for ${wName} (${wRole}).`,
+        severity: 'Low',
+        actor_name: wName,
+        actor_role: wRole,
+        action: 'attendance_update'
+      }).catch(() => {})
+
+      recordAuditLog({
+        action: 'ATTENDANCE_UPDATED',
+        module: 'Attendance',
+        description: `Recorded ${actionDetail} for ${wName} (${wRole}). Status: ${finalStatus}.`,
+        actor_name: wName,
+        actor_role: wRole,
+        actor_id: existing.worker_id,
+        target_id: req.params.id,
+        target_name: wName,
+        details: { status: finalStatus, actionDetail },
+        req
+      }).catch(() => {})
 
       res.json({
         success: true,
@@ -1092,6 +1979,15 @@ function startServer() {
         created_at: FieldValue.serverTimestamp()
       }
       const docRef = await db.collection('assets').add(newAsset)
+      recordAuditLog({
+        action: 'ASSET_CREATED',
+        module: 'Tools',
+        description: `Added new tool/asset: "${newAsset.name}" (Status: ${newAsset.status}, Condition: ${cond}).`,
+        target_id: docRef.id,
+        target_name: newAsset.name,
+        details: newAsset,
+        req
+      }).catch(() => {})
       res.json({ id: docRef.id, ...newAsset, condition: cond, type: cond })
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -1119,6 +2015,15 @@ function startServer() {
         updateData.project_id = pid || null
       }
       await db.collection('assets').doc(req.params.id).update(updateData)
+      recordAuditLog({
+        action: 'ASSET_UPDATED',
+        module: 'Tools',
+        description: `Updated tool/asset ID #${req.params.id} "${name || 'Tool'}" (Status: ${status || 'Available'}, Assigned: ${assignedUser || 'None'}).`,
+        target_id: req.params.id,
+        target_name: name,
+        details: updateData,
+        req
+      }).catch(() => {})
       res.json({ success: true })
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -1128,6 +2033,13 @@ function startServer() {
   app.delete('/api/assets/:id', async (req, res) => {
     try {
       await db.collection('assets').doc(req.params.id).delete()
+      recordAuditLog({
+        action: 'ASSET_DELETED',
+        module: 'Tools',
+        description: `Deleted tool/asset ID #${req.params.id}.`,
+        target_id: req.params.id,
+        req
+      }).catch(() => {})
       res.json({ success: true })
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -1162,6 +2074,26 @@ function startServer() {
         created_at: FieldValue.serverTimestamp()
       }
       const docRef = await db.collection('borrow_history').add(newHistory)
+      const actionVerb = action === 'Returned' ? 'returned' : 'borrowed'
+      recordNotification({
+        type: 'Tools',
+        title: `Tool ${action || 'Transaction'}: ${borrower_name}`,
+        message: `${borrower_name} ${actionVerb} ${quantity || 1} "${tool_name}" (Condition: ${condition_status || 'Good'}).`,
+        severity: 'Medium',
+        actor_name: borrower_name,
+        action: 'tool_borrow_return'
+      }).catch(() => {})
+      recordAuditLog({
+        action: action === 'Returned' ? 'TOOL_RETURNED' : 'TOOL_BORROWED',
+        module: 'Tools',
+        description: `${borrower_name} ${actionVerb} ${quantity || 1} "${tool_name}" (Condition: ${condition_status || 'Good'}).`,
+        actor_name: borrower_name,
+        actor_role: 'Worker',
+        target_id: docRef.id,
+        target_name: tool_name,
+        details: { quantity, action, condition_status },
+        req
+      }).catch(() => {})
       res.json({ id: docRef.id, ...req.body, project_id: pid || rawPid || null })
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -1198,6 +2130,22 @@ function startServer() {
         created_at: FieldValue.serverTimestamp()
       }
       const docRef = await db.collection('materials').add(newMaterial)
+      recordNotification({
+        type: 'Staff & Workers',
+        title: `Material Usage Logged: ${name}`,
+        message: `Recorded material usage of ${qty} ${unit} "${name}"${remarks ? ` [Remarks: ${remarks}]` : ''}.`,
+        severity: 'Low',
+        action: 'material_logged'
+      }).catch(() => {})
+      recordAuditLog({
+        action: 'MATERIAL_RECORDED',
+        module: 'Materials',
+        description: `Recorded material usage of ${qty} ${unit} "${name}"${remarks ? ` [Remarks: ${remarks}]` : ''}.`,
+        target_id: docRef.id,
+        target_name: name,
+        details: { qty, unit, cost, remarks },
+        req
+      }).catch(() => {})
       res.json({ id: docRef.id, ...req.body, project_id: pid || rawPid || null })
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -1213,6 +2161,15 @@ function startServer() {
       await db.collection('materials').doc(req.params.id).update({
         date, name, qty, unit, cost, remarks
       })
+      recordAuditLog({
+        action: 'MATERIAL_UPDATED',
+        module: 'Materials',
+        description: `Updated material ID #${req.params.id} "${name}" (${qty} ${unit}).`,
+        target_id: req.params.id,
+        target_name: name,
+        details: { qty, unit, cost, remarks },
+        req
+      }).catch(() => {})
       res.json({ success: true })
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -1222,6 +2179,13 @@ function startServer() {
   app.delete('/api/materials/:id', async (req, res) => {
     try {
       await db.collection('materials').doc(req.params.id).delete()
+      recordAuditLog({
+        action: 'MATERIAL_DELETED',
+        module: 'Materials',
+        description: `Deleted material ID #${req.params.id}.`,
+        target_id: req.params.id,
+        req
+      }).catch(() => {})
       res.json({ success: true })
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -1233,6 +2197,14 @@ function startServer() {
     const { status } = req.body
     try {
       await db.collection('attendance').doc(req.params.id).update({ status })
+      recordAuditLog({
+        action: 'ATTENDANCE_STATUS_UPDATED',
+        module: 'Attendance',
+        description: `Updated attendance status for ID #${req.params.id} to "${status}".`,
+        target_id: req.params.id,
+        details: { status },
+        req
+      }).catch(() => {})
       res.json({ success: true })
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -1291,7 +2263,18 @@ function startServer() {
       return res.status(400).json({ error: 'Invalid status.' })
     }
     try {
+      const caDoc = await db.collection('cash_advances').doc(req.params.id).get()
+      const caData = caDoc.exists ? caDoc.data() : null
       await db.collection('cash_advances').doc(req.params.id).update({ status })
+      recordAuditLog({
+        action: status === 'Approved' ? 'CASH_ADVANCE_APPROVED' : 'CASH_ADVANCE_REJECTED',
+        module: 'Cash Advance',
+        description: `Admin ${status.toLowerCase()} cash advance request of ₱${Number(caData?.amount || 0).toLocaleString()} for "${caData?.workerName || caData?.name || 'Worker'}".`,
+        target_id: req.params.id,
+        target_name: caData?.workerName || caData?.name,
+        details: { status, amount: caData?.amount, reason: caData?.reason },
+        req
+      }).catch(() => {})
       res.json({ success: true, status })
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -1336,6 +2319,27 @@ function startServer() {
             created_at: FieldValue.serverTimestamp()
           }
           const docRef = await db.collection('cash_advances').add(newAdvance)
+          recordNotification({
+            type: 'Staff & Workers',
+            title: `Cash Advance Request: ${name}`,
+            message: `${name} submitted a request for Cash Advance of ₱${Number(amount || 0).toLocaleString()}${reason ? ` (Reason: "${reason}")` : ''}.`,
+            severity: 'Medium',
+            actor_name: name,
+            actor_role: 'Worker',
+            action: 'cash_advance_request'
+          }).catch(() => {})
+          recordAuditLog({
+            action: 'CASH_ADVANCE_REQUESTED',
+            module: 'Cash Advance',
+            description: `${name} submitted a request for Cash Advance of ₱${Number(amount || 0).toLocaleString()}${reason ? ` (Reason: "${reason}")` : ''}.`,
+            actor_name: name,
+            actor_role: 'Worker',
+            actor_id: workerId || null,
+            target_id: docRef.id,
+            target_name: name,
+            details: { amount, reason, date: cleanDate },
+            req
+          }).catch(() => {})
           res.json({ id: docRef.id, ...req.body, project_id: pid || project_id || null, workerName: name, date: cleanDate })
         } catch (err) {
           res.status(500).json({ error: err.message })
@@ -1370,6 +2374,493 @@ function startServer() {
     }
   })
 
+  // ── WORKERS SALARY & PAYROLL ──
+
+  // Auto-Generate Payroll preview based on attendance, daily rates, and cash advances
+  app.get('/api/payroll/generate', async (req, res) => {
+    try {
+      const { project_id } = req.query
+      let { startDate, endDate } = req.query
+
+      const today = new Date()
+      const todayStr = today.toISOString().slice(0, 10)
+
+      // Default cutoff if not provided: current semi-monthly cutoff (1-15 or 16-end)
+      if (!startDate || !endDate) {
+        const year = today.getFullYear()
+        const month = today.getMonth()
+        const dateNum = today.getDate()
+        if (dateNum <= 15) {
+          startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`
+          endDate = `${year}-${String(month + 1).padStart(2, '0')}-15`
+        } else {
+          startDate = `${year}-${String(month + 1).padStart(2, '0')}-16`
+          const lastDay = new Date(year, month + 1, 0).getDate()
+          endDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+        }
+      }
+
+      // Generate all dates in cutoff range
+      const calendarDates = []
+      const curr = new Date(startDate + 'T00:00:00')
+      const stop = new Date(endDate + 'T00:00:00')
+      while (curr <= stop) {
+        calendarDates.push(curr.toISOString().slice(0, 10))
+        curr.setDate(curr.getDate() + 1)
+      }
+
+      // Check non-working days for all dates
+      const nonWorkingMap = {}
+      for (const d of calendarDates) {
+        const nw = await isDateNonWorkingDay(d)
+        if (nw.isNonWorking) {
+          nonWorkingMap[d] = nw
+        }
+      }
+
+      // Fetch workers (approved and not inactive)
+      const workersSnap = await db.collection('workers').get()
+      const allWorkers = workersSnap.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter(w => (w.approval_status || 'Approved') !== 'Pending' && w.status !== 'Inactive')
+
+      // Fetch attendance in the date range
+      let attQuery = db.collection('attendance')
+        .where('date', '>=', startDate)
+        .where('date', '<=', endDate)
+
+      const pid = await resolveProjectId(project_id)
+      if (pid) {
+        attQuery = attQuery.where('project_id', '==', pid)
+      }
+
+      const attSnap = await attQuery.get()
+      const attDocs = attSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+
+      // Fetch cash advances (approved and not yet deducted)
+      const caSnap = await db.collection('cash_advances')
+        .where('status', '==', 'Approved')
+        .get()
+      const allCashAdvances = caSnap.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter(ca => !ca.is_deducted)
+
+      // Fetch project name if project_id is specified
+      let projectName = 'All Projects'
+      if (pid) {
+        const pDoc = await db.collection('projects').doc(pid).get()
+        if (pDoc.exists) projectName = pDoc.data().name || 'Project Site'
+      }
+
+      let totalGrossPay = 0
+      let totalCashAdvances = 0
+      let totalLateDeductions = 0
+      let totalNetPayout = 0
+      let totalHours = 0
+
+      const workersPayroll = []
+
+      for (const worker of allWorkers) {
+        const workerName = (worker.full_name || `${worker.first_name || ''} ${worker.last_name || ''}`).trim() || worker.name || 'Worker'
+        const baseDailyRate = Number(worker.daily_rate) || (
+          worker.role?.includes('Foreman') ? 1000 :
+          (worker.role?.includes('Skilled') || worker.role?.includes('Operator')) ? 800 : 600
+        )
+        const hourlyRate = Math.round((baseDailyRate / 8) * 100) / 100
+
+        // Find attendance logs for this worker
+        const workerAtts = attDocs.filter(a => {
+          if (a.worker_id && String(a.worker_id) === String(worker.id)) return true
+          const aName = (a.worker_name || a.name || '').trim().toLowerCase()
+          return aName && (aName === workerName.toLowerCase() || aName === (worker.username || '').toLowerCase())
+        })
+
+        // Find cash advances for this worker
+        const workerCAs = allCashAdvances.filter(ca => {
+          if (ca.worker_id && String(ca.worker_id) === String(worker.id)) return true
+          if (ca.workerId && String(ca.workerId) === String(worker.id)) return true
+          const caName = (ca.workerName || ca.name || '').trim().toLowerCase()
+          return caName && caName === workerName.toLowerCase()
+        })
+
+        const workerCATotal = workerCAs.reduce((s, ca) => s + (Number(ca.amount) || 0), 0)
+
+        let presentDays = 0
+        let lateDays = 0
+        let doubleLateDays = 0
+        let halfdayDays = 0
+        let halfdayLateDays = 0
+        let absentDays = 0
+        let restDays = 0
+        let workerHours = 0
+        let workerGross = 0
+        let workerLatePenalty = 0
+
+        const dailyLogs = []
+
+        for (const dateStr of calendarDates) {
+          const log = workerAtts.find(a => a.date === dateStr)
+          const isNW = Boolean(nonWorkingMap[dateStr])
+
+          if (log) {
+            const status = log.status || 'Present'
+            let earned = (log.earned_amount !== undefined && log.earned_amount !== null) ? Number(log.earned_amount) : 0
+            let hours = 0
+            let penalty = 0
+
+            if (status === 'Present') {
+              hours = 8.0
+              earned = baseDailyRate
+              presentDays++
+            } else if (status === 'Late') {
+              hours = 8.0
+              earned = Math.max(0, baseDailyRate - 100)
+              penalty = 100
+              lateDays++
+            } else if (status === 'Double Late') {
+              hours = 8.0
+              earned = Math.max(0, baseDailyRate - 200)
+              penalty = 200
+              doubleLateDays++
+            } else if (status === 'Halfday') {
+              hours = 4.0
+              earned = Math.round((baseDailyRate / 2) * 100) / 100
+              halfdayDays++
+            } else if (status === 'Halfday (Late)') {
+              hours = 4.0
+              earned = Math.max(0, (baseDailyRate / 2) - 100)
+              penalty = 100
+              halfdayLateDays++
+            } else if (status === 'Absent') {
+              hours = 0
+              earned = 0
+              absentDays++
+            } else if (status.includes('Rest Day') || status.includes('Non-Working')) {
+              hours = 0
+              earned = 0
+              restDays++
+            } else {
+              hours = 8.0
+              earned = baseDailyRate
+              presentDays++
+            }
+
+            workerHours += hours
+            workerGross += earned
+            workerLatePenalty += penalty
+
+            dailyLogs.push({
+              date: dateStr,
+              status,
+              morning_in: log.morning_in || log.time_in || '—',
+              morning_out: log.morning_out || '—',
+              afternoon_in: log.afternoon_in || '—',
+              afternoon_out: log.afternoon_out || log.time_out || '—',
+              hours,
+              rate: baseDailyRate,
+              earned,
+              deduction: penalty,
+              note: penalty > 0 ? `Late penalty (-₱${penalty})` : ''
+            })
+          } else {
+            // No attendance recorded on this date
+            if (isNW) {
+              restDays++
+              dailyLogs.push({
+                date: dateStr,
+                status: 'Rest Day / Non-Working',
+                morning_in: '—',
+                morning_out: '—',
+                afternoon_in: '—',
+                afternoon_out: '—',
+                hours: 0,
+                rate: baseDailyRate,
+                earned: 0,
+                deduction: 0,
+                note: nonWorkingMap[dateStr]?.reason || 'Official Rest Day'
+              })
+            } else if (dateStr <= todayStr) {
+              absentDays++
+              dailyLogs.push({
+                date: dateStr,
+                status: 'Absent',
+                morning_in: '—',
+                morning_out: '—',
+                afternoon_in: '—',
+                afternoon_out: '—',
+                hours: 0,
+                rate: baseDailyRate,
+                earned: 0,
+                deduction: 0,
+                note: 'No attendance record'
+              })
+            } else {
+              dailyLogs.push({
+                date: dateStr,
+                status: 'Scheduled / Upcoming',
+                morning_in: '—',
+                morning_out: '—',
+                afternoon_in: '—',
+                afternoon_out: '—',
+                hours: 0,
+                rate: baseDailyRate,
+                earned: 0,
+                deduction: 0,
+                note: 'Upcoming work day'
+              })
+            }
+          }
+        }
+
+        const workedDays = presentDays + lateDays + doubleLateDays + halfdayDays + halfdayLateDays
+        const netPay = Math.max(0, workerGross - workerCATotal)
+
+        totalGrossPay += workerGross
+        totalCashAdvances += workerCATotal
+        totalLateDeductions += workerLatePenalty
+        totalNetPayout += netPay
+        totalHours += workerHours
+
+        workersPayroll.push({
+          worker_id: worker.id,
+          worker_name: workerName,
+          role: worker.role || worker.position || 'Laborer',
+          daily_rate: baseDailyRate,
+          hourly_rate: hourlyRate,
+          present_days: presentDays,
+          late_days: lateDays + doubleLateDays,
+          double_late_days: doubleLateDays,
+          halfday_days: halfdayDays + halfdayLateDays,
+          absent_days: absentDays,
+          rest_days: restDays,
+          worked_days: workedDays,
+          total_hours: workerHours,
+          regular_earnings: workerGross + workerLatePenalty,
+          late_deductions: workerLatePenalty,
+          gross_pay: workerGross,
+          cash_advance_deductions: workerCATotal,
+          cash_advances: workerCAs.map(ca => ({
+            id: ca.id,
+            amount: Number(ca.amount) || 0,
+            date: ca.date,
+            reason: ca.reason || 'Cash Advance'
+          })),
+          total_deductions: workerCATotal,
+          net_pay: netPay,
+          daily_logs: dailyLogs
+        })
+      }
+
+      workersPayroll.sort((a, b) => a.worker_name.localeCompare(b.worker_name))
+
+      res.json({
+        startDate,
+        endDate,
+        project_id: pid || 'ALL',
+        project_name: projectName,
+        summary: {
+          totalGrossPay,
+          totalCashAdvances,
+          totalLateDeductions,
+          totalNetPayout,
+          totalWorkers: workersPayroll.length,
+          totalHours
+        },
+        workers: workersPayroll
+      })
+    } catch (err) {
+      console.error('Error generating payroll:', err)
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  // Save / Submit Payroll Run
+  app.post('/api/payroll', async (req, res) => {
+    try {
+      const {
+        startDate, endDate, project_id, project_name,
+        summary, workers, status, notes, created_by
+      } = req.body
+
+      const newPayroll = {
+        cutoff_start: startDate,
+        cutoff_end: endDate,
+        project_id: project_id || 'ALL',
+        project_name: project_name || 'All Projects',
+        summary: summary || {},
+        workers: workers || [],
+        status: status || 'Draft',
+        notes: notes || null,
+        created_by: created_by || 'Admin',
+        created_at: FieldValue.serverTimestamp(),
+        updated_at: FieldValue.serverTimestamp()
+      }
+
+      const docRef = await db.collection('payrolls').add(newPayroll)
+
+      if (status === 'Paid') {
+        for (const w of (workers || [])) {
+          if (Array.isArray(w.cash_advances)) {
+            for (const ca of w.cash_advances) {
+              if (ca.id) {
+                await db.collection('cash_advances').doc(ca.id).update({
+                  is_deducted: true,
+                  deducted_in_payroll_id: docRef.id,
+                  deducted_date: new Date().toISOString().slice(0, 10)
+                }).catch(() => {})
+              }
+            }
+          }
+        }
+      }
+
+      recordAuditLog({
+        action: status === 'Paid' ? 'PAYROLL_RELEASED' : 'PAYROLL_GENERATED',
+        module: 'Expenses',
+        description: `Admin ${status === 'Paid' ? 'released' : 'generated'} payroll for cutoff ${startDate} to ${endDate} (${workers?.length || 0} workers, Net: ₱${Number(summary?.totalNetPayout || 0).toLocaleString()}).`,
+        target_id: docRef.id,
+        target_name: `Payroll ${startDate} - ${endDate}`,
+        details: { startDate, endDate, summary, status },
+        req
+      }).catch(() => {})
+
+      recordNotification({
+        type: 'Staff & Workers',
+        title: `Payroll ${status === 'Paid' ? 'Released' : 'Generated'}`,
+        message: `Payroll ${status === 'Paid' ? 'released' : 'generated'} for cutoff ${startDate} to ${endDate} for ${workers?.length || 0} workers (Total Net: ₱${Number(summary?.totalNetPayout || 0).toLocaleString()}).`,
+        severity: 'Low',
+        action: 'payroll'
+      }).catch(() => {})
+
+      res.json({ id: docRef.id, ...newPayroll })
+    } catch (err) {
+      console.error('Error saving payroll:', err)
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  // List all payroll runs
+  app.get('/api/payroll', async (req, res) => {
+    try {
+      const snap = await db.collection('payrolls').get()
+      const list = snap.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+      list.sort((a, b) => (b.cutoff_end || '').localeCompare(a.cutoff_end || '') || (b.created_at?._seconds || 0) - (a.created_at?._seconds || 0))
+      res.json(list)
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  // Get specific payroll run
+  app.get('/api/payroll/:id', async (req, res) => {
+    try {
+      const doc = await db.collection('payrolls').doc(req.params.id).get()
+      if (!doc.exists) return res.status(404).json({ error: 'Payroll not found' })
+      res.json({ id: doc.id, ...doc.data() })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  // Update payroll status (Draft -> Approved -> Paid)
+  app.put('/api/payroll/:id/status', async (req, res) => {
+    const { status } = req.body
+    try {
+      const docRef = db.collection('payrolls').doc(req.params.id)
+      const docSnap = await docRef.get()
+      if (!docSnap.exists) return res.status(404).json({ error: 'Payroll not found' })
+
+      const existingData = docSnap.data()
+      await docRef.update({
+        status,
+        updated_at: FieldValue.serverTimestamp()
+      })
+
+      if (status === 'Paid') {
+        const workers = existingData.workers || []
+        for (const w of workers) {
+          if (Array.isArray(w.cash_advances)) {
+            for (const ca of w.cash_advances) {
+              if (ca.id) {
+                await db.collection('cash_advances').doc(ca.id).update({
+                  is_deducted: true,
+                  deducted_in_payroll_id: req.params.id,
+                  deducted_date: new Date().toISOString().slice(0, 10)
+                }).catch(() => {})
+              }
+            }
+          }
+        }
+      }
+
+      recordAuditLog({
+        action: status === 'Paid' ? 'PAYROLL_RELEASED' : 'PAYROLL_UPDATED',
+        module: 'Expenses',
+        description: `Admin updated payroll status to "${status}" for cutoff ${existingData.cutoff_start} to ${existingData.cutoff_end}.`,
+        target_id: req.params.id,
+        target_name: `Payroll ${existingData.cutoff_start} - ${existingData.cutoff_end}`,
+        details: { status, summary: existingData.summary },
+        req
+      }).catch(() => {})
+
+      res.json({ success: true, status })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  // Delete draft payroll run
+  app.delete('/api/payroll/:id', async (req, res) => {
+    try {
+      await db.collection('payrolls').doc(req.params.id).delete()
+      recordAuditLog({
+        action: 'PAYROLL_DELETED',
+        module: 'Expenses',
+        description: `Deleted draft payroll ID #${req.params.id}.`,
+        target_id: req.params.id,
+        req
+      }).catch(() => {})
+      res.json({ success: true })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  // Get payroll payouts for a specific worker (Mobile App & Worker Portal)
+  app.get('/api/workers/:id/payroll', async (req, res) => {
+    try {
+      const workerId = req.params.id
+      const snap = await db.collection('payrolls').get()
+      const workerPayouts = []
+
+      for (const doc of snap.docs) {
+        const p = doc.data()
+        if (p.status !== 'Draft') {
+          const workerItem = (p.workers || []).find(w => String(w.worker_id) === String(workerId))
+          if (workerItem) {
+            workerPayouts.push({
+              payroll_id: doc.id,
+              cutoff_start: p.cutoff_start,
+              cutoff_end: p.cutoff_end,
+              project_name: p.project_name,
+              status: p.status,
+              created_at: p.created_at,
+              ...workerItem
+            })
+          }
+        }
+      }
+
+      workerPayouts.sort((a, b) => (b.cutoff_end || '').localeCompare(a.cutoff_end || ''))
+      res.json(workerPayouts)
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
   // ── REGISTRATION ──
   app.post('/api/register', async (req, res) => {
     const { firstName, middleName, lastName, username, birthday, age, phone, address, address_obj, role, position, password } = req.body
@@ -1390,6 +2881,28 @@ function startServer() {
       }
       
       const docRef = await db.collection('workers').add(newWorker)
+      recordNotification({
+        type: 'Staff & Workers',
+        title: `New Worker Registration: ${fullName}`,
+        message: `${fullName} (${position || role || 'Worker'}, Phone: ${phone || 'N/A'}) submitted registration. Awaiting Admin approval.`,
+        severity: 'High',
+        actor_name: fullName,
+        actor_role: position || role || 'Worker',
+        action: 'worker_registration'
+      }).catch(() => {})
+
+      recordAuditLog({
+        action: 'WORKER_REGISTERED',
+        module: 'Authentication',
+        description: `${fullName} (${position || role || 'Worker'}, Phone: ${phone || 'N/A'}) registered. Status: Pending Approval.`,
+        actor_name: fullName,
+        actor_role: position || role || 'Worker',
+        target_id: docRef.id,
+        target_name: fullName,
+        details: { role, position, phone },
+        req
+      }).catch(() => {})
+
       res.json({ success: true, message: 'Registration submitted for approval', id: docRef.id })
     } catch (err) {
       res.status(500).json({ error: 'Failed to process registration' })
@@ -1431,6 +2944,15 @@ function startServer() {
       }
 
       if (snapshot.empty) {
+        recordAuditLog({
+          action: 'LOGIN_FAILED',
+          module: 'Authentication',
+          description: `Failed login attempt: Account "${rawUser}" not found.`,
+          actor_name: rawUser || 'Unknown User',
+          actor_role: 'Anonymous / Guest',
+          status: 'FAILED',
+          req
+        }).catch(() => {})
         return res.status(401).json({ error: 'Account not found' })
       }
 
@@ -1439,14 +2961,44 @@ function startServer() {
 
       // Check approval status
       if (user.approval_status === 'Pending') {
+        recordAuditLog({
+          action: 'LOGIN_FAILED',
+          module: 'Authentication',
+          description: `Login blocked: Account "${user.full_name || rawUser}" is still pending administrator approval.`,
+          actor_name: user.full_name || rawUser,
+          actor_role: user.role || 'Worker',
+          actor_id: userDoc.id,
+          status: 'FAILED',
+          req
+        }).catch(() => {})
         return res.status(403).json({ error: 'pending_approval', message: 'Account pending approval' })
       }
 
       if (user.approval_status === 'Rejected') {
+        recordAuditLog({
+          action: 'LOGIN_FAILED',
+          module: 'Authentication',
+          description: `Login blocked: Account "${user.full_name || rawUser}" was rejected by administrator.`,
+          actor_name: user.full_name || rawUser,
+          actor_role: user.role || 'Worker',
+          actor_id: userDoc.id,
+          status: 'FAILED',
+          req
+        }).catch(() => {})
         return res.status(403).json({ error: 'rejected', message: 'Account was rejected' })
       }
 
       if (!user.password) {
+        recordAuditLog({
+          action: 'LOGIN_FAILED',
+          module: 'Authentication',
+          description: `Login blocked for "${user.full_name || rawUser}": No password set.`,
+          actor_name: user.full_name || rawUser,
+          actor_role: user.role || 'Worker',
+          actor_id: userDoc.id,
+          status: 'FAILED',
+          req
+        }).catch(() => {})
         return res.status(401).json({ error: 'No password set for this account. Please contact administrator.' })
       }
 
@@ -1457,8 +3009,30 @@ function startServer() {
         validPassword = await bcrypt.compare(rawPassword.trim(), user.password)
       }
       if (!validPassword) {
+        recordAuditLog({
+          action: 'LOGIN_FAILED',
+          module: 'Authentication',
+          description: `Failed login attempt for "${user.full_name || rawUser}": Incorrect password.`,
+          actor_name: user.full_name || rawUser,
+          actor_role: user.role || 'Worker',
+          actor_id: userDoc.id,
+          status: 'FAILED',
+          req
+        }).catch(() => {})
         return res.status(401).json({ error: 'Invalid password' })
       }
+
+      // Record successful login in Audit Logs
+      recordAuditLog({
+        action: 'LOGIN_SUCCESS',
+        module: 'Authentication',
+        description: `User "${user.full_name || user.first_name}" (${user.role || user.position || 'Worker'}) successfully logged in.`,
+        actor_name: user.full_name || user.first_name,
+        actor_role: user.role || user.position || 'Worker',
+        actor_id: userDoc.id,
+        status: 'SUCCESS',
+        req
+      }).catch(() => {})
 
       // Return user info (without password)
       res.json({
@@ -1529,7 +3103,18 @@ function startServer() {
         approval_status: cleanStatus,
         status: cleanStatus === 'Approved' ? 'Active' : 'Inactive'
       }
+      const wDoc = await db.collection('workers').doc(req.params.id).get()
+      const wName = wDoc.exists ? (wDoc.data().full_name || `Worker #${req.params.id}`) : `Worker #${req.params.id}`
       await db.collection('workers').doc(req.params.id).update(updateData)
+      recordAuditLog({
+        action: cleanStatus === 'Approved' ? 'WORKER_REGISTRATION_APPROVED' : 'WORKER_REGISTRATION_REJECTED',
+        module: 'Workers',
+        description: `Admin ${cleanStatus.toLowerCase()} the worker registration of "${wName}".`,
+        target_id: req.params.id,
+        target_name: wName,
+        details: { approval_status: cleanStatus, status: updateData.status },
+        req
+      }).catch(() => {})
       res.json({ success: true, message: `User ${cleanStatus.toLowerCase()}` })
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -1543,15 +3128,48 @@ function startServer() {
 
     try {
       const snapshot = await db.collection('admins').where('username', '==', username).limit(1).get()
-      if (snapshot.empty) return res.status(401).json({ error: 'Invalid username or password.' })
+      if (snapshot.empty) {
+        recordAuditLog({
+          action: 'LOGIN_FAILED',
+          module: 'Authentication',
+          description: `Failed admin login attempt: account "${username}" not found.`,
+          actor_name: username || 'Unknown',
+          actor_role: 'Anonymous / Guest',
+          status: 'FAILED',
+          req
+        }).catch(() => {})
+        return res.status(401).json({ error: 'Invalid username or password.' })
+      }
 
       const adminDoc = snapshot.docs[0]
       const adminData = adminDoc.data()
       
       const match = await bcrypt.compare(password, adminData.password)
-      if (!match) return res.status(401).json({ error: 'Invalid username or password.' })
+      if (!match) {
+        recordAuditLog({
+          action: 'LOGIN_FAILED',
+          module: 'Authentication',
+          description: `Failed admin login attempt for "${username}": incorrect password.`,
+          actor_name: username || 'Unknown',
+          actor_role: 'Anonymous / Guest',
+          status: 'FAILED',
+          req
+        }).catch(() => {})
+        return res.status(401).json({ error: 'Invalid username or password.' })
+      }
 
       const token = jwt.sign({ id: adminDoc.id, type: 'admin' }, process.env.JWT_SECRET || 'scon_super_secret_key_2026', { expiresIn: '8h' })
+
+      recordAuditLog({
+        action: 'LOGIN_SUCCESS',
+        module: 'Authentication',
+        description: `Administrator "${adminData.full_name || username}" (${adminData.role || 'Administrator'}) successfully logged in.`,
+        actor_name: adminData.full_name || username,
+        actor_role: adminData.role || 'Administrator',
+        actor_id: adminDoc.id,
+        status: 'SUCCESS',
+        req
+      }).catch(() => {})
 
       res.json({
         success: true,
@@ -1571,6 +3189,31 @@ function startServer() {
           dept: adminData.dept || 'Management'
         }
       })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  // ── LOGOUT ENDPOINT (Unified for Admin & Mobile Users) ──
+  app.post(['/api/logout', '/api/admin/logout'], async (req, res) => {
+    try {
+      const { userId, name, username, role, client } = req.body || {}
+      const finalName = name || username || 'Administrator'
+      const finalRole = role || 'Administrator'
+      const clientType = client || (req.headers['user-agent']?.includes('Dart') || req.headers['user-agent']?.includes('Flutter') ? 'Mobile App' : 'Web App')
+
+      recordAuditLog({
+        action: 'LOGOUT',
+        module: 'Authentication',
+        description: `${finalRole} "${finalName}" successfully logged out of the system (${clientType}).`,
+        actor_name: finalName,
+        actor_role: finalRole,
+        actor_id: userId ? String(userId) : null,
+        status: 'SUCCESS',
+        req
+      }).catch(() => {})
+
+      res.json({ success: true, message: 'Logged out successfully' })
     } catch (err) {
       res.status(500).json({ error: err.message })
     }
@@ -1758,6 +3401,16 @@ function startServer() {
       if (status !== undefined) updateData.status = status || null
 
       await db.collection('admins').doc(targetId).update(updateData)
+      recordAuditLog({
+        action: 'PROFILE_UPDATED',
+        module: 'Authentication',
+        description: `Updated profile details for administrator "${fullName}" (${role || 'Administrator'}).`,
+        actor_name: fullName,
+        actor_role: role || 'Administrator',
+        actor_id: targetId,
+        details: { email, phone, role, dept, empId },
+        req
+      }).catch(() => {})
 
       res.json({
         success: true,
