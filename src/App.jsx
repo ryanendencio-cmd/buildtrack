@@ -1,9 +1,18 @@
 import React from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 
+// Clean up legacy localStorage tokens so closing the browser/tab always auto-logs out
+try {
+  if (localStorage.getItem('adminToken') || localStorage.getItem('adminSession')) {
+    localStorage.removeItem('adminToken')
+    localStorage.removeItem('adminSession')
+    localStorage.removeItem('adminId')
+  }
+} catch {}
+
 function PrivateRoute({ children }) {
-  const token = localStorage.getItem('adminToken')
-  const session = localStorage.getItem('adminSession')
+  const token = sessionStorage.getItem('adminToken')
+  const session = sessionStorage.getItem('adminSession')
   if (!token || !session) return <Navigate to="/login" replace />
   return children
 }
@@ -80,6 +89,13 @@ export default function App() {
         <Route path="/audit-logs" element={<PrivateRoute><AuditLogs /></PrivateRoute>} />
         <Route path="/salary" element={<PrivateRoute><WorkersSalary /></PrivateRoute>} />
         <Route path="/payroll" element={<PrivateRoute><WorkersSalary /></PrivateRoute>} />
+        <Route path="/workers-salary" element={<PrivateRoute><WorkersSalary /></PrivateRoute>} />
+        <Route path="/workers%20salary" element={<Navigate to="/salary" replace />} />
+        <Route path="/workers salary" element={<Navigate to="/salary" replace />} />
+        <Route path="/projects/:id" element={<PrivateRoute><ProjectDetails /></PrivateRoute>} />
+
+        {/* Global Fallback Route (prevents blank screen on unknown paths) */}
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </BrowserRouter>
   )

@@ -52,7 +52,7 @@ export default function Profile() {
     // ── STATE FOR PROFILE DATA ──
     const [profileData, setProfileData] = useState(() => {
         try {
-            const savedProfile = JSON.parse(localStorage.getItem('adminProfile') || '{}');
+            const savedProfile = JSON.parse(sessionStorage.getItem('adminProfile') || localStorage.getItem('adminProfile') || '{}');
             return { ...defaultProfile, ...savedProfile };
         } catch {
             return defaultProfile;
@@ -65,7 +65,7 @@ export default function Profile() {
 
     // ── FETCH PROFILE FROM DATABASE ──
     const loadProfileFromDB = () => {
-        const adminId = localStorage.getItem('adminId') || 1;
+        const adminId = sessionStorage.getItem('adminId') || localStorage.getItem('adminId') || 1;
         api.get(`/admin/profile/${adminId}`)
             .then(data => {
                 if (data && !data.error) {
@@ -85,7 +85,7 @@ export default function Profile() {
                     };
                     loadedProfile.name = formatName(loadedProfile);
                     setProfileData(loadedProfile);
-                    localStorage.setItem('adminProfile', JSON.stringify(loadedProfile));
+                    sessionStorage.setItem('adminProfile', JSON.stringify(loadedProfile));
                     window.dispatchEvent(new Event('admin-profile-updated'));
                 }
             })
@@ -187,7 +187,7 @@ export default function Profile() {
         };
         updatedProfile.name = formatName(updatedProfile);
 
-        const adminId = localStorage.getItem('adminId') || profileData.id || 1;
+        const adminId = sessionStorage.getItem('adminId') || localStorage.getItem('adminId') || profileData.id || 1;
 
         try {
             const result = await api.post('/admin/profile/save', {
@@ -205,7 +205,7 @@ export default function Profile() {
             });
 
             setProfileData(updatedProfile);
-            localStorage.setItem('adminProfile', JSON.stringify(updatedProfile));
+            sessionStorage.setItem('adminProfile', JSON.stringify(updatedProfile));
             window.dispatchEvent(new Event('admin-profile-updated'));
             setSuccessMsg('Admin profile information has been saved to the database successfully.');
             setModalState('SUCCESS');
@@ -232,7 +232,7 @@ export default function Profile() {
             return;
         }
 
-        const adminId = localStorage.getItem('adminId') || profileData.id || 1;
+        const adminId = sessionStorage.getItem('adminId') || localStorage.getItem('adminId') || profileData.id || 1;
         setSaving(true);
 
         try {

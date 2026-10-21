@@ -433,7 +433,7 @@ export default function Expenses() {
             return;
         }
         if (!photoData) {
-            setAmountError('Official receipt / invoice proof image is REQUIRED to prove where and how much was spent.');
+            setAmountError('Kailangang mag-upload ng katibayan o litrato ng resibo bago mai-save ang gastusin (Receipt upload is REQUIRED).');
             return;
         }
         setAmountError('');
@@ -500,6 +500,10 @@ export default function Expenses() {
         }
         if (amt <= 0) {
             setAmountError('Please enter a valid expense amount.');
+            return;
+        }
+        if (!photoData) {
+            setAmountError('Kailangang may kalakip na litrato o scan ng resibo bago mai-save ang gastusin (Receipt upload is REQUIRED).');
             return;
         }
         setAmountError('');
@@ -1087,7 +1091,7 @@ export default function Expenses() {
                     </div>
                 </>
             ) : (
-                /* ── VIEW ALL RECEIPTS GALLERY ── */
+                // ── VIEW ALL RECEIPTS GALLERY ──
                 <div className="animate-fade-in flex flex-col">
                     <button onClick={() => { setViewAllModal(false); setGalleryTab('ACTIVE'); }} className="text-gray-500 hover:text-[#A63228] text-xs font-bold flex items-center gap-1 transition-colors w-fit mb-3">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
@@ -1658,14 +1662,16 @@ export default function Expenses() {
                                 </button>
 
                                 {/* Receipt Upload (REQUIRED) */}
-                                <div className={`p-2.5 rounded-xl border transition-colors ${!photoData && amountError.includes('receipt') ? 'bg-red-50/50 border-red-300' : 'bg-gray-50/70 border-gray-200'}`}>
+                                <div className={`p-2.5 rounded-xl border transition-colors ${!photoData ? 'bg-amber-50/50 border-amber-300 ring-1 ring-amber-200' : 'bg-gray-50/70 border-gray-200'}`}>
                                     <div className="flex justify-between items-center mb-1">
                                         <label className="block text-[8.5px] font-bold text-gray-700 uppercase flex items-center gap-1">
                                             <span>Receipt / Proof Image</span>
-                                            <span className="text-red-600 font-extrabold text-[7.5px] bg-red-50 border border-red-200 px-1.5 py-0.2 rounded uppercase">* Required Proof</span>
+                                            <span className="text-red-700 font-extrabold text-[7.5px] bg-red-100 border border-red-300 px-1.5 py-0.2 rounded uppercase">* Required (Kailangan)</span>
                                         </label>
-                                        {photoData && (
+                                        {photoData ? (
                                             <span className="text-[8.5px] font-bold text-[#2e7d32]">✓ Receipt Attached</span>
+                                        ) : (
+                                            <span className="text-[8.5px] font-bold text-amber-700">⚠ Mag-attach ng Resibo</span>
                                         )}
                                     </div>
                                     {photoData ? (
@@ -1714,7 +1720,8 @@ export default function Expenses() {
                                     </button>
                                     <button
                                         type="submit"
-                                        disabled={computedTotal <= 0 || computedTotal > MAX_AMOUNT}
+                                        disabled={computedTotal <= 0 || computedTotal > MAX_AMOUNT || !photoData}
+                                        title={!photoData ? "Kailangang mag-upload ng resibo bago mag-save (Receipt is REQUIRED)" : "Save All Items"}
                                         className="flex-1 sm:flex-initial px-4 py-2 bg-[#E8C547] text-gray-900 rounded-xl text-xs font-extrabold hover:bg-[#d4b33d] transition-colors shadow-sm uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                         Save All {formData.items.length} Item(s)

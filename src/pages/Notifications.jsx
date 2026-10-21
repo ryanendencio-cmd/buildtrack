@@ -92,7 +92,7 @@ export const resolveNotificationDestination = (notif) => {
     // 5. Budget / Projects
     if (type.includes('budget') || title.includes('budget') || msg.includes('budget') || title.includes('project')) {
         return {
-            path: pid ? `/projects/${pid}` : '/projects',
+            path: pid ? `/project-details/${pid}` : '/projects',
             label: 'Go to Projects',
             module: 'Projects & Budget'
         };
@@ -127,9 +127,10 @@ export const resolveNotificationDestination = (notif) => {
 
     // 9. Payroll & Wages
     if (title.includes('payroll') || title.includes('salary') || msg.includes('payroll')) {
+        const isHistory = title.includes('release') || msg.includes('release') || title.includes('generated') || msg.includes('generated');
         return {
-            path: '/workers-salary',
-            label: 'Go to Payroll',
+            path: isHistory ? '/salary?tab=history' : '/salary',
+            label: isHistory ? 'View Released Payroll' : 'Go to Payroll',
             module: 'Workers Salary'
         };
     }

@@ -164,8 +164,8 @@ export default function Login() {
     setMounted(true) 
     
     // Auto-redirect if already logged in with an active session
-    const token = localStorage.getItem('adminToken')
-    const session = localStorage.getItem('adminSession')
+    const token = sessionStorage.getItem('adminToken')
+    const session = sessionStorage.getItem('adminSession')
     if (token && session) {
       navigate('/dashboard', { replace: true })
       return
@@ -198,9 +198,12 @@ export default function Login() {
         } else {
           localStorage.removeItem('rememberedEmail')
         }
-        localStorage.setItem('adminId', data.admin.id)
-        localStorage.setItem('adminSession', JSON.stringify(data.admin))
-        localStorage.setItem('adminToken', data.token)
+        sessionStorage.setItem('adminId', data.admin.id)
+        sessionStorage.setItem('adminSession', JSON.stringify(data.admin))
+        sessionStorage.setItem('adminToken', data.token)
+        localStorage.removeItem('adminId')
+        localStorage.removeItem('adminSession')
+        localStorage.removeItem('adminToken')
         navigate('/dashboard')
       }
     } catch {

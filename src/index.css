@@ -2078,3 +2078,100 @@ footer {
 .scrollbar-custom::-webkit-scrollbar-thumb:hover {
   background-color: #94a3b8;
 }
+
+/* ══════════════════════════════════════════════════════════
+   GLOBAL PRINT STYLESHEET
+   Turns printed web pages into clean, professional documents
+   without sidebars, navbars, headers, and buttons.
+══════════════════════════════════════════════════════════ */
+@media print {
+  /* 1. Hide navigation, sidebar, headers, and UI controls */
+  aside,
+  nav,
+  header,
+  .print\:hidden,
+  button,
+  .btn-login,
+  input[type="month"],
+  select {
+    display: none !important;
+  }
+
+  /* 2. Reset page background and dimensions */
+  html,
+  body {
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #111827 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    font-size: 10.5pt !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* 3. Main layout fills full printed page width */
+  main,
+  div[class*="overflow-y-auto"],
+  div[class*="overflow-x-auto"],
+  div[class*="overflow-hidden"],
+  div[class*="h-screen"] {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    position: static !important;
+  }
+
+  /* 4. Remove UI card shadows and ensure clean borders */
+  .bg-white,
+  div[class*="rounded-xl"],
+  div[class*="rounded-2xl"] {
+    box-shadow: none !important;
+    border: 1px solid #e5e7eb !important;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  /* 5. Clean, paginated table formatting */
+  table {
+    width: 100% !important;
+    min-width: 100% !important;
+    border-collapse: collapse !important;
+    page-break-inside: auto;
+  }
+
+  tr {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  th {
+    background-color: #f9fafb !important;
+    color: #111827 !important;
+    font-weight: 700 !important;
+    border-bottom: 2px solid #d1d5db !important;
+    padding: 6px 8px !important;
+  }
+
+  td {
+    border-bottom: 1px solid #e5e7eb !important;
+    padding: 6px 8px !important;
+  }
+
+  /* 6. Page setup */
+  @page {
+    margin: 12mm 15mm;
+    size: auto;
+  }
+}

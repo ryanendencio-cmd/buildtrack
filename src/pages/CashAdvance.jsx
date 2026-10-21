@@ -146,6 +146,19 @@ export default function CashAdvance() {
         }
     }, [currentProjectId, mockProjects, allExpenses, projectExpensesMap, cashAdvances]);
 
+    // Project status evaluation (Ongoing / Completed / Upcoming)
+    const currentProjectObj = useMemo(() => {
+        if (currentProjectId === 'ALL') return null;
+        return mockProjects.find(p => String(p.id) === String(currentProjectId)) || null;
+    }, [mockProjects, currentProjectId]);
+
+    const currentProjectStatus = (currentProjectObj?.status || '').toUpperCase();
+    const isCurrentOngoing = currentProjectId === 'ALL'
+        ? mockProjects.some(p => (p.status || '').toUpperCase() === 'ONGOING' || (p.status || '').toUpperCase() === 'ACTIVE')
+        : (currentProjectStatus === 'ONGOING' || currentProjectStatus === 'ACTIVE');
+    const isCurrentCompleted = currentProjectStatus === 'COMPLETED';
+    const isCurrentUpcoming = currentProjectStatus === 'UPCOMING' || currentProjectStatus === 'PLANNING' || currentProjectStatus === 'STANDBY';
+
     // Form: Active Selected Project Details in Modal
     const formSelectedProject = useMemo(() => {
         if (!formData.projectId) return null;
@@ -302,6 +315,13 @@ export default function CashAdvance() {
             setFormError('Please enter a valid amount greater than ₱0.');
             return;
         }
+        if (formSelectedProject) {
+            const pStatus = (formSelectedProject.status || '').toUpperCase();
+            if (pStatus !== 'ONGOING' && pStatus !== 'ACTIVE') {
+                setFormError(`Bawal mag-vale sa proyektong hindi Ongoing ("${formSelectedProject.name}"). Ang status nito ay "${formSelectedProject.status || pStatus}". Bawal bawasan ang budget ng Upcoming o Completed na proyekto.`);
+                return;
+            }
+        }
         if (formSelectedProject && formSelectedProject.budget > 0 && amt > formSelectedProject.remaining) {
             setFormError(`Cannot save: Exceeds remaining project budget of ₱${formSelectedProject.remaining.toLocaleString(undefined, { minimumFractionDigits: 2 })}.`);
             return;
@@ -417,20 +437,28 @@ export default function CashAdvance() {
                         style={selectStyles}
                     >
                         <option value="ALL">All Projects / Overview</option>
-                        {mockProjects.map(p => (
-                            <option key={p.id} value={p.id}>{p.name}</option>
-                        ))}
+                        {mockProjects.map(p => {
+                            const isOng = (p.status || '').toUpperCase() === 'ONGOING' || (p.status || '').toUpperCase() === 'ACTIVE';
+                            const isComp = (p.status || '').toUpperCase() === 'COMPLETED';
+                            const tag = isOng ? ' (Ongoing)' : isComp ? ' (Completed - Bawal)' : ' (Upcoming - Bawal)';
+                            return (
+                                <option key={p.id} value={p.id}>{p.name}{tag}</option>
+                            );
+                        })}
                     </select>
                 </div>
 
                 <div className="flex gap-2 w-full md:w-auto">
                     <button
                         type="button"
+                        disabled={!isCurrentOngoing}
                         onClick={() => {
+                            if (!isCurrentOngoing) return;
                             setFormError('');
+                            const defaultOngoingProj = mockProjects.find(p => (p.status || '').toUpperCase() === 'ONGOING' || (p.status || '').toUpperCase() === 'ACTIVE');
                             setFormData(prev => ({
                                 ...prev,
-                                projectId: currentProjectId === 'ALL' ? (mockProjects[0]?.id || '') : currentProjectId,
+                                projectId: currentProjectId === 'ALL' ? (defaultOngoingProj?.id || mockProjects[0]?.id || '') : currentProjectId,
                                 workerId: '',
                                 workerName: '',
                                 amount: '',
@@ -438,12 +466,46 @@ export default function CashAdvance() {
                             }));
                             setModalState('ADD');
                         }}
-                        className="bg-[#E8C547] text-gray-900 px-3.5 py-1.5 rounded-lg font-extrabold text-[10px] shadow-xs hover:bg-[#d4b33d] transition-colors flex items-center justify-center gap-1.5 flex-1 md:flex-none cursor-pointer"
+                        title={
+                            isCurrentCompleted ? "Bawal mag-vale: Tapos na (Completed) ang proyektong ito." :
+                            isCurrentUpcoming ? "Bawal mag-vale: Upcoming pa lamang ang proyektong ito. Bawal bawasan ang budget." :
+                            "Add Cash Advance"
+                        }
+                        className={
+                            !isCurrentOngoing
+                                ? "bg-gray-100 text-gray-400 border border-gray-200 px-3.5 py-1.5 rounded-lg font-extrabold text-[10px] shadow-xs cursor-not-allowed opacity-70 flex items-center justify-center gap-1.5 flex-1 md:flex-none"
+                                : "bg-[#E8C547] text-gray-900 px-3.5 py-1.5 rounded-lg font-extrabold text-[10px] shadow-xs hover:bg-[#d4b33d] transition-colors flex items-center justify-center gap-1.5 flex-1 md:flex-none cursor-pointer"
+                        }
                     >
                         <span>+</span> Add Cash Advance
                     </button>
                 </div>
             </div>
+
+            {/* COMPLETED / UPCOMING PROJECT BANNER */}
+            {isCurrentCompleted && (
+                <div className="bg-blue-50 border border-blue-200 text-blue-900 p-3 rounded-xl text-xs flex items-center gap-2.5 mb-3 shadow-xs">
+                    <span className="text-xl">🏁</span>
+                    <div>
+                        <strong className="text-[11px] uppercase tracking-wide text-blue-950 block">Tapos Na Ang Proyektong Ito (COMPLETED)</strong>
+                        <span className="text-[10px] text-blue-800">
+                            Ang <strong>{currentProjectObj?.name}</strong> ay opisyal nang tapos. Bawal nang mag-request o mag-release ng bagong vale (Cash Advance) dito.
+                        </span>
+                    </div>
+                </div>
+            )}
+
+            {isCurrentUpcoming && (
+                <div className="bg-amber-50 border border-amber-200 text-amber-900 p-3 rounded-xl text-xs flex items-center gap-2.5 mb-3 shadow-xs">
+                    <span className="text-xl">⏳</span>
+                    <div>
+                        <strong className="text-[11px] uppercase tracking-wide text-amber-950 block">Parating Pa Lamang Ang Proyektong Ito (UPCOMING)</strong>
+                        <span className="text-[10px] text-amber-800">
+                            Ang <strong>{currentProjectObj?.name}</strong> ay Upcoming pa lamang. Bawal mag-vale (Cash Advance) at bawal bawasan ang budget hangga't hindi pa <strong>ONGOING</strong> ang proyekto.
+                        </span>
+                    </div>
+                </div>
+            )}
 
             {/* PROJECT BUDGET IMPACT SUMMARY BANNER */}
             <div className="bg-white rounded-xl shadow-xs border border-gray-100 p-3 mb-3">
@@ -683,11 +745,15 @@ export default function CashAdvance() {
                                     style={selectStyles}
                                 >
                                     <option value="">-- Choose a Project --</option>
-                                    {mockProjects.map(p => (
-                                        <option key={p.id} value={p.id}>
-                                            {p.name} {p.budget ? `(Budget: ₱${p.budget.toLocaleString()})` : ''}
-                                        </option>
-                                    ))}
+                                    {mockProjects.map(p => {
+                                        const isOng = (p.status || '').toUpperCase() === 'ONGOING' || (p.status || '').toUpperCase() === 'ACTIVE';
+                                        const statusLabel = isOng ? '' : ` (${p.status || 'Not Ongoing'} - Bawal)`;
+                                        return (
+                                            <option key={p.id} value={p.id} disabled={!isOng}>
+                                                {p.name} {p.budget ? `(Budget: ₱${p.budget.toLocaleString()})` : ''}{statusLabel}
+                                            </option>
+                                        );
+                                    })}
                                 </select>
 
                                 {/* Project Budget Card */}

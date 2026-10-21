@@ -198,8 +198,8 @@ export default function Dashboard() {
   // General Input & Profile Fetch
   const [adminName, setAdminName] = useState(() => {
     try {
-      const saved = JSON.parse(localStorage.getItem('adminProfile') || '{}');
-      const session = JSON.parse(localStorage.getItem('adminSession') || '{}');
+      const saved = JSON.parse(sessionStorage.getItem('adminProfile') || localStorage.getItem('adminProfile') || '{}');
+      const session = JSON.parse(sessionStorage.getItem('adminSession') || localStorage.getItem('adminSession') || '{}');
       const name = saved.fullName || saved.name || session.fullName || (saved.firstName ? `${saved.firstName} ${saved.lastName || ''}`.trim() : null) || session.username;
       return name ? String(name).trim() : 'Administrator';
     } catch {
@@ -839,7 +839,7 @@ export default function Dashboard() {
 
               {/* Chart Body */}
               {pieChartViewMode === 'UTILIZATION' ? (
-                /* ── MODE 1: BUDGET VS ACTUAL COST (SPENT VS REMAINING) ── */
+                // ── MODE 1: BUDGET VS ACTUAL COST (SPENT VS REMAINING) ──
                 <div className="flex items-center justify-between gap-3 h-28 w-full">
                   {/* Left: SVG Pie/Donut Chart */}
                   <div className="relative w-24 h-24 sm:w-28 sm:h-28 shrink-0 flex items-center justify-center">
@@ -999,7 +999,7 @@ export default function Dashboard() {
                   </div>
                 </div>
               ) : (
-                /* ── MODE 2: BY PROJECT COST DISTRIBUTION ── */
+                // ── MODE 2: BY PROJECT COST DISTRIBUTION ──
                 <div className="flex items-center justify-between gap-3 h-28 w-full">
                   {/* Left: Multi-Slice Donut */}
                   <div className="relative w-24 h-24 sm:w-28 sm:h-28 shrink-0 flex items-center justify-center">

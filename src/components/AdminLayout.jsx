@@ -8,8 +8,8 @@ export default function AdminLayout({ children }) {
   const [showLogoutModal, setShowLogoutModal] = React.useState(false);
   const [adminProfile, setAdminProfile] = React.useState(() => {
     try {
-      const saved = JSON.parse(localStorage.getItem('adminProfile') || '{}');
-      const session = JSON.parse(localStorage.getItem('adminSession') || '{}');
+      const saved = JSON.parse(sessionStorage.getItem('adminProfile') || localStorage.getItem('adminProfile') || '{}');
+      const session = JSON.parse(sessionStorage.getItem('adminSession') || localStorage.getItem('adminSession') || '{}');
       return {
         name: saved.fullName || saved.name || session.fullName || 'Administrator',
         role: saved.role || session.role || 'Administrator',
@@ -32,7 +32,7 @@ export default function AdminLayout({ children }) {
   React.useEffect(() => {
     const refreshProfile = () => {
       try {
-        setAdminProfile(current => ({ ...current, ...JSON.parse(localStorage.getItem('adminProfile') || '{}') }));
+        setAdminProfile(current => ({ ...current, ...JSON.parse(sessionStorage.getItem('adminProfile') || localStorage.getItem('adminProfile') || '{}') }));
       } catch {
         // Keep the last valid profile if browser storage is unavailable or malformed.
       }
@@ -47,9 +47,9 @@ export default function AdminLayout({ children }) {
 
   const confirmLogout = async () => {
     try {
-      const adminId = localStorage.getItem('adminId');
-      const session = JSON.parse(localStorage.getItem('adminSession') || '{}');
-      const savedProfile = JSON.parse(localStorage.getItem('adminProfile') || '{}');
+      const adminId = sessionStorage.getItem('adminId') || localStorage.getItem('adminId');
+      const session = JSON.parse(sessionStorage.getItem('adminSession') || localStorage.getItem('adminSession') || '{}');
+      const savedProfile = JSON.parse(sessionStorage.getItem('adminProfile') || localStorage.getItem('adminProfile') || '{}');
       const name = session.fullName || session.name || session.username || savedProfile.name || adminProfile.name || 'Administrator';
       const role = session.role || savedProfile.role || adminProfile.role || 'Administrator';
 
@@ -120,11 +120,11 @@ export default function AdminLayout({ children }) {
   ];
 
   return (
-    <div className="flex h-screen bg-[#f3efea] overflow-hidden text-gray-800">
+    <div className="flex h-screen bg-[#f3efea] overflow-hidden text-gray-800 print:h-auto print:bg-white print:overflow-visible">
 
       {/* ── LEFT SIDEBAR ── */}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 w-60 bg-white shadow-xl border-r border-gray-100/80 transform transition-transform duration-300 ease-in-out flex flex-col ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        className={`fixed inset-y-0 left-0 z-40 w-60 bg-white shadow-xl border-r border-gray-100/80 transform transition-transform duration-300 ease-in-out flex flex-col print:hidden ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
           }`}
       >
         {/* Sidebar Header */}
@@ -216,9 +216,9 @@ export default function AdminLayout({ children }) {
 
       {/* ── MAIN CONTENT ── */}
       <main
-        className={`flex-1 flex flex-col min-w-0 h-full overflow-hidden transition-all duration-300 ease-in-out ${isSidebarOpen ? 'md:ml-60' : 'ml-0'}`}
+        className={`flex-1 flex flex-col min-w-0 h-full overflow-hidden transition-all duration-300 ease-in-out ${isSidebarOpen ? 'md:ml-60' : 'ml-0'} print:ml-0 print:h-auto print:overflow-visible print:w-full`}
       >
-        <header className="flex items-center justify-between px-4 md:px-6 shrink-0 h-12 border-b border-gray-100/50 bg-white/40 backdrop-blur-sm">
+        <header className="flex items-center justify-between px-4 md:px-6 shrink-0 h-12 border-b border-gray-100/50 bg-white/40 backdrop-blur-sm print:hidden">
           <div className="flex items-center gap-2">
             {!isSidebarOpen && (
               <button
@@ -235,7 +235,7 @@ export default function AdminLayout({ children }) {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto px-4 md:px-6 pb-8 pt-3">
+        <div className="flex-1 overflow-y-auto px-4 md:px-6 pb-8 pt-3 print:overflow-visible print:p-0 print:h-auto">
           {children}
         </div>
       </main>

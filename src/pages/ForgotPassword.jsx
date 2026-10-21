@@ -430,7 +430,7 @@ export default function ForgotPassword() {
               </div>
 
             ) : (
-              /* ── FORM STATE ── */
+              // ── FORM STATE ──
               <>
                 {/* Lock icon header */}
                 <div style={{

@@ -4,10 +4,14 @@ import { useNavigate } from 'react-router-dom'
 export default function Navbar() {
   const navigate = useNavigate()
   const [scrolled, setScrolled] = useState(false)
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 40)
     window.addEventListener('scroll', handleScroll)
+    const token = sessionStorage.getItem('adminToken')
+    const session = sessionStorage.getItem('adminSession')
+    setIsLoggedIn(Boolean(token && session))
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
@@ -29,8 +33,8 @@ export default function Navbar() {
       </div>
 
       <div className="nav-right">
-        <button className="btn-login" onClick={() => navigate('/login')}>
-          Log In
+        <button className="btn-login" onClick={() => navigate(isLoggedIn ? '/dashboard' : '/login')}>
+          {isLoggedIn ? 'Dashboard' : 'Log In'}
         </button>
       </div>
     </nav>

@@ -97,7 +97,7 @@ export default function Attendance() {
 
     const adminProfile = (() => {
         try {
-            return JSON.parse(localStorage.getItem('adminProfile') || '{}');
+            return JSON.parse(sessionStorage.getItem('adminProfile') || localStorage.getItem('adminProfile') || '{}');
         } catch {
             return {};
         }
@@ -923,7 +923,7 @@ export default function Attendance() {
                 </table>
             </div>
 
-            /* ── DAILY MANPOWER EXPENSE SUMMARY ── */
+
             <div className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 mb-4">
                 <h3 className="text-[9px] font-extrabold text-[#A63228] tracking-wider uppercase mb-2">DAILY MANPOWER EXPENSE</h3>
                 <div className="flex flex-col gap-1.5">

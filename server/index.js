@@ -575,6 +575,13 @@ function startServer() {
         }
       }
 
+      // Receipt Upload is strictly REQUIRED for expenses
+      if (!image || !String(image).trim()) {
+        return res.status(400).json({
+          error: 'Required ang pag-upload ng official receipt o katibayan ng resibo bago mai-record ang gastusin (Receipt / proof image is required).'
+        })
+      }
+
       const newExpense = {
         project_id: pid || project_id || null, project, category, amount, receipt_no, date, time, 
         items: typeof items === 'string' ? JSON.parse(items) : (items || []), 
@@ -2905,6 +2912,23 @@ function startServer() {
       const caDoc = await db.collection('cash_advances').doc(req.params.id).get()
       if (!caDoc.exists) return res.status(404).json({ error: 'Cash advance not found.' })
       const caData = caDoc.data()
+
+      // Only ONGOING projects can have cash advances approved / deducted from budget
+      if (status === 'Approved' && caData.project_id) {
+        const pid = await resolveProjectId(caData.project_id)
+        if (pid) {
+          const pDoc = await db.collection('projects').doc(pid).get()
+          if (pDoc.exists) {
+            const pStatus = (pDoc.data().status || '').toUpperCase()
+            if (pStatus !== 'ONGOING' && pStatus !== 'ACTIVE') {
+              return res.status(400).json({
+                error: `Bawal mag-approve ng vale sa proyektong hindi Ongoing ("${pDoc.data().name}"). Ang status nito ay "${pDoc.data().status || pStatus}". Bawal bawasan ang budget ng Upcoming o Completed na proyekto.`
+              })
+            }
+          }
+        }
+      }
+
       await db.collection('cash_advances').doc(req.params.id).update({ status })
 
       // Deduct from or restore project budget in expenses
@@ -2968,10 +2992,18 @@ function startServer() {
     try {
       const pid = await resolveProjectId(project_id)
 
-      // Project Remaining Budget Check
+      // Project Remaining Budget Check & Ongoing Status Check
       if (pid) {
         const pDoc = await db.collection('projects').doc(pid).get()
         if (pDoc.exists) {
+          const pStatus = (pDoc.data().status || '').toUpperCase()
+          if (pStatus !== 'ONGOING' && pStatus !== 'ACTIVE') {
+            const displayStatus = pDoc.data().status || 'Not Ongoing'
+            return res.status(400).json({
+              error: `Bawal mag-request o mag-release ng vale (Cash Advance) sa proyektong hindi Ongoing ("${pDoc.data().name}"). Ang kasalukuyang status nito ay "${displayStatus}". Bawal bawasan ang budget ng Upcoming o Completed na proyekto.`
+            })
+          }
+
           const pBudget = Number(pDoc.data().budget || 0)
           if (pBudget > 0) {
             const expSnap = await db.collection('expenses').where('project_id', '==', pid).get()
@@ -3103,21 +3135,66 @@ function startServer() {
         }
       }
 
-      // Generate all dates in cutoff range
-      const calendarDates = []
-      const curr = new Date(startDate + 'T00:00:00')
-      const stop = new Date(endDate + 'T00:00:00')
-      while (curr <= stop) {
-        calendarDates.push(curr.toISOString().slice(0, 10))
-        curr.setDate(curr.getDate() + 1)
+      // Guard against invalid or reversed dates
+      let curr = new Date(startDate + 'T00:00:00')
+      let stop = new Date(endDate + 'T00:00:00')
+      if (isNaN(curr.getTime()) || isNaN(stop.getTime())) {
+        return res.status(400).json({ error: 'Invalid startDate or endDate format.' })
+      }
+      if (curr > stop) {
+        const tmp = startDate
+        startDate = endDate
+        endDate = tmp
+        curr = new Date(startDate + 'T00:00:00')
+        stop = new Date(endDate + 'T00:00:00')
       }
 
-      // Check non-working days for all dates
+      // Generate all dates in cutoff range
+      const calendarDates = []
+      const loopCurr = new Date(curr)
+      while (loopCurr <= stop) {
+        calendarDates.push(loopCurr.toISOString().slice(0, 10))
+        loopCurr.setDate(loopCurr.getDate() + 1)
+      }
+
+      // Check non-working days for all dates (batch-optimized to prevent multiple sequential roundtrips)
+      let autoSundaysOff = true
+      try {
+        const settingsDoc = await db.collection('settings').doc('attendance').get()
+        if (settingsDoc.exists && settingsDoc.data().auto_sundays_off !== undefined) {
+          autoSundaysOff = Boolean(settingsDoc.data().auto_sundays_off)
+        }
+      } catch (_) {}
+
       const nonWorkingMap = {}
-      for (const d of calendarDates) {
-        const nw = await isDateNonWorkingDay(d)
-        if (nw.isNonWorking) {
-          nonWorkingMap[d] = nw
+      try {
+        const nwSnap = await db.collection('non_working_days')
+          .where('date', '>=', startDate)
+          .where('date', '<=', endDate)
+          .get()
+        nwSnap.docs.forEach(doc => {
+          const d = doc.data()
+          if (d && d.date) {
+            nonWorkingMap[d.date] = {
+              isNonWorking: true,
+              reason: d.reason || 'Declared Non-Working Day',
+              type: d.type || 'Holiday/Suspension',
+              set_by: d.set_by || 'Admin / Attendance Officer'
+            }
+          }
+        })
+      } catch (_) {}
+
+      if (autoSundaysOff) {
+        for (const d of calendarDates) {
+          const dt = new Date(d + 'T00:00:00')
+          if (dt.getDay() === 0 && !nonWorkingMap[d]) {
+            nonWorkingMap[d] = {
+              isNonWorking: true,
+              reason: 'Sunday Rest Day',
+              type: 'Sunday'
+            }
+          }
         }
       }
 
@@ -3127,18 +3204,22 @@ function startServer() {
         .map(doc => ({ id: doc.id, ...doc.data() }))
         .filter(w => (w.approval_status || 'Approved') !== 'Pending' && w.status !== 'Inactive')
 
-      // Fetch attendance in the date range
-      let attQuery = db.collection('attendance')
+      // Fetch attendance in the date range without compound project_id query (avoids Firestore composite index requirement)
+      const pid = await resolveProjectId(project_id)
+      const attSnap = await db.collection('attendance')
         .where('date', '>=', startDate)
         .where('date', '<=', endDate)
+        .get()
 
-      const pid = await resolveProjectId(project_id)
+      let attDocs = attSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+
+      // Filter by project_id in memory if project is specified
       if (pid) {
-        attQuery = attQuery.where('project_id', '==', pid)
+        attDocs = attDocs.filter(a => {
+          const p = String(a.project_id || a.projectId || '').trim()
+          return p === String(pid)
+        })
       }
-
-      const attSnap = await attQuery.get()
-      const attDocs = attSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }))
 
       // Fetch cash advances (approved and not yet deducted)
       const caSnap = await db.collection('cash_advances')
@@ -3385,6 +3466,25 @@ function startServer() {
         summary, workers, status, notes, created_by
       } = req.body
 
+      // Only ONGOING projects can have salary released or draft saved
+      const pid = await resolveProjectId(project_id)
+      if (pid) {
+        const pDoc = await db.collection('projects').doc(pid).get()
+        if (pDoc.exists) {
+          const pStatus = (pDoc.data().status || '').toUpperCase()
+          if (pStatus !== 'ONGOING' && pStatus !== 'ACTIVE') {
+            const displayStatus = pDoc.data().status || 'Not Ongoing'
+            return res.status(400).json({
+              error: `Bawal mag-release ng salary sa proyektong hindi Ongoing ("${pDoc.data().name}"). Ang status nito ay "${displayStatus}". Sa Ongoing projects lang puwede mag-release ng salary, at kung tapos na ang proyekto ay payroll history na lamang ang maaaring tignan.`
+            })
+          }
+        }
+      } else if ((project_id === 'ALL' || !project_id) && status === 'Paid') {
+        return res.status(400).json({
+          error: 'Bawal mag-release ng salary nang walang napiling Ongoing project. Mangyaring piliin ang Ongoing project sa filter bago mag-release.'
+        })
+      }
+
       const newPayroll = {
         cutoff_start: startDate,
         cutoff_end: endDate,
@@ -3432,6 +3532,7 @@ function startServer() {
         title: `Payroll ${status === 'Paid' ? 'Released' : 'Generated'}`,
         message: `Payroll ${status === 'Paid' ? 'released' : 'generated'} for cutoff ${startDate} to ${endDate} for ${workers?.length || 0} workers (Total Net: ₱${Number(summary?.totalNetPayout || 0).toLocaleString()}).`,
         severity: 'Low',
+        link: '/salary?tab=history',
         action: 'payroll'
       }).catch(() => {})
 
@@ -3477,6 +3578,23 @@ function startServer() {
       if (!docSnap.exists) return res.status(404).json({ error: 'Payroll not found' })
 
       const existingData = docSnap.data()
+
+      // Only ONGOING projects can be set to Paid
+      if (status === 'Paid') {
+        const existingPid = await resolveProjectId(existingData.project_id)
+        if (existingPid) {
+          const pDoc = await db.collection('projects').doc(existingPid).get()
+          if (pDoc.exists) {
+            const pStatus = (pDoc.data().status || '').toUpperCase()
+            if (pStatus !== 'ONGOING' && pStatus !== 'ACTIVE') {
+              return res.status(400).json({
+                error: `Bawal mag-release ng salary sa proyektong hindi Ongoing ("${pDoc.data().name}"). Ang status nito ay "${pDoc.data().status || pStatus}".`
+              })
+            }
+          }
+        }
+      }
+
       await docRef.update({
         status,
         updated_at: FieldValue.serverTimestamp()

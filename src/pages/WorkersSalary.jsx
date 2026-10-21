@@ -1,11 +1,24 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import AdminLayout from '../components/AdminLayout';
 import { api } from '../api';
 
 export default function WorkersSalary() {
-  const [activeTab, setActiveTab] = useState('worksheet'); // 'worksheet' | 'history'
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialTab = searchParams.get('tab') === 'history' ? 'history' : 'worksheet';
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [loading, setLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+
+  // Sync tab with URL search params (e.g. from notification clicks)
+  useEffect(() => {
+    const tabParam = searchParams.get('tab');
+    if (tabParam === 'history') {
+      setActiveTab('history');
+    } else if (tabParam === 'worksheet') {
+      setActiveTab('worksheet');
+    }
+  }, [searchParams]);
 
   // Projects
   const [projects, setProjects] = useState([]);
@@ -38,6 +51,23 @@ export default function WorkersSalary() {
   });
   const [searchWorker, setSearchWorker] = useState('');
   const [selectedWorkerModal, setSelectedWorkerModal] = useState(null);
+  const [calcError, setCalcError] = useState(null);
+
+  // Selected Project Status Helpers (Ongoing / Completed / Upcoming)
+  const selectedProjectObj = useMemo(() => {
+    if (!selectedProject || selectedProject === 'ALL') return null;
+    return projects.find(p => String(p.id) === String(selectedProject)) || null;
+  }, [projects, selectedProject]);
+
+  const projectStatus = useMemo(() => {
+    if (!selectedProjectObj) return 'ALL';
+    return (selectedProjectObj.status || 'ONGOING').toUpperCase();
+  }, [selectedProjectObj]);
+
+  const isProjectOngoing = projectStatus === 'ONGOING' || projectStatus === 'ACTIVE';
+  const isProjectCompleted = projectStatus === 'COMPLETED';
+  const isProjectUpcoming = projectStatus === 'UPCOMING' || projectStatus === 'PLANNING' || projectStatus === 'STANDBY';
+  const canReleaseSalary = isProjectOngoing;
 
   // Past Payrolls
   const [pastPayrolls, setPastPayrolls] = useState([]);
@@ -100,14 +130,16 @@ export default function WorkersSalary() {
   const generatePayroll = async (start = startDate, end = endDate, pid = selectedProject) => {
     setIsGenerating(true);
     setLoading(true);
+    setCalcError(null);
     try {
       const res = await api.get(`/payroll/generate?startDate=${start}&endDate=${end}&project_id=${pid}`);
       if (res && res.workers) {
         setPayrollData(res);
+        setCalcError(null);
       }
     } catch (err) {
       console.error('Failed to generate payroll:', err);
-      alert('An error occurred while calculating the payroll.');
+      setCalcError(err.message || 'An error occurred while calculating the payroll.');
     } finally {
       setIsGenerating(false);
       setLoading(false);
@@ -131,6 +163,17 @@ export default function WorkersSalary() {
 
   // Save Payroll (Draft or Released)
   const handleSavePayroll = async (status = 'Draft') => {
+    if (!canReleaseSalary) {
+      if (isProjectCompleted) {
+        alert('Bawal mag-save o mag-release ng salary sa proyektong tapos na (Completed). Sa Payroll History lamang maaaring suriin ang mga nakaraang talaan.');
+      } else if (isProjectUpcoming) {
+        alert('Bawal mag-release ng payroll sa proyektong Upcoming. Bawal bawasan ang budget hangga\'t hindi pa Ongoing ang proyekto.');
+      } else {
+        alert('Dapat sa isang Ongoing project lamang mag-release ng salary. Mangyaring piliin ang Ongoing project sa filter bago mag-release.');
+      }
+      return;
+    }
+
     if (!payrollData.workers || payrollData.workers.length === 0) {
       alert('No worker data available for this payroll.');
       return;
@@ -220,7 +263,7 @@ export default function WorkersSalary() {
   return (
     <AdminLayout>
       {/* ── HEADER ── */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between pb-3 mb-3 border-b border-gray-200/60 gap-3">
+      <div className="flex flex-col md:flex-row md:items-center justify-between pb-3 mb-3 border-b border-gray-200/60 gap-3 print:hidden">
         <div>
           <span className="text-[9px] font-bold text-[#A63228] tracking-widest uppercase">SALARY & PAYROLL SYSTEM</span>
           <h1 className="text-xl font-extrabold text-gray-900 mt-0.5 tracking-tight flex items-center gap-2">
@@ -238,7 +281,7 @@ export default function WorkersSalary() {
         <div className="flex items-center gap-2 print:hidden">
           <div className="bg-gray-100 p-0.5 rounded-lg flex text-[10px] font-bold">
             <button
-              onClick={() => setActiveTab('worksheet')}
+              onClick={() => { setActiveTab('worksheet'); setSearchParams({}); }}
               className={`px-3 py-1.5 rounded-md transition-all ${
                 activeTab === 'worksheet'
                   ? 'bg-white text-gray-900 shadow-sm'
@@ -248,7 +291,7 @@ export default function WorkersSalary() {
               ⚡ Live Payroll Worksheet
             </button>
             <button
-              onClick={() => setActiveTab('history')}
+              onClick={() => { setActiveTab('history'); setSearchParams({ tab: 'history' }); }}
               className={`px-3 py-1.5 rounded-md transition-all ${
                 activeTab === 'history'
                   ? 'bg-white text-gray-900 shadow-sm'
@@ -317,9 +360,19 @@ export default function WorkersSalary() {
                   className="text-[10px] font-bold border border-gray-200 rounded-lg px-2.5 py-1 text-gray-700 bg-gray-50/50 focus:outline-none focus:border-[#A63228]"
                 >
                   <option value="ALL">All Project Sites</option>
-                  {projects.map(p => (
-                    <option key={p.id} value={String(p.id)}>{p.name}</option>
-                  ))}
+                  {projects.map(p => {
+                    const s = (p.status || 'ONGOING').toUpperCase();
+                    const tag = s === 'ONGOING' || s === 'ACTIVE'
+                      ? ' (Ongoing)'
+                      : s === 'COMPLETED'
+                        ? ' (Completed - History Only)'
+                        : ' (Upcoming - No Payroll)';
+                    return (
+                      <option key={p.id} value={String(p.id)}>
+                        {p.name}{tag}
+                      </option>
+                    );
+                  })}
                 </select>
 
                 <button
@@ -338,8 +391,68 @@ export default function WorkersSalary() {
             </div>
           </div>
 
+          {/* Error Banner */}
+          {calcError && (
+            <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-xl flex items-center justify-between text-xs text-red-700 print:hidden">
+              <div className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-red-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>
+                  <strong>Hindi ma-calculate ang payroll:</strong> {calcError}
+                </span>
+              </div>
+              <button
+                onClick={() => generatePayroll()}
+                className="px-2.5 py-1 bg-red-600 text-white rounded-lg text-[10px] font-bold hover:bg-red-700 transition"
+              >
+                Subukan Muli
+              </button>
+            </div>
+          )}
+
+          {/* COMPLETED PROJECT NOTICE BANNER */}
+          {isProjectCompleted && (
+            <div className="bg-blue-50/90 border border-blue-200 text-blue-900 p-3.5 rounded-xl text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3 shadow-xs print:hidden">
+              <div className="flex items-center gap-2.5">
+                <span className="text-xl">🏁</span>
+                <div>
+                  <div className="font-extrabold text-[11px] uppercase tracking-wide text-blue-950 flex items-center gap-1.5">
+                    {selectedProjectObj?.name} — TAPOS NA ANG PROYEKTO (COMPLETED)
+                    <span className="bg-blue-200/70 text-blue-900 text-[9px] px-2 py-0.5 rounded-full font-bold">Payroll History Only</span>
+                  </div>
+                  <p className="text-[10px] text-blue-800 mt-0.5">
+                    Ang proyektong ito ay opisyal nang natapos. Bawal nang mag-release o mag-draft ng bagong sahod dito. Maaari mo na lamang tignan ang mga nakaraang talaan ng sahod sa <strong>Payroll History</strong>.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => { setActiveTab('history'); setSearchParams({ tab: 'history' }); }}
+                className="px-3 py-1.5 bg-blue-700 hover:bg-blue-800 text-white rounded-lg text-[10px] font-bold shadow-xs transition-all whitespace-nowrap self-start sm:self-auto cursor-pointer"
+              >
+                📋 Tignan ang Payroll History →
+              </button>
+            </div>
+          )}
+
+          {/* UPCOMING PROJECT NOTICE BANNER */}
+          {isProjectUpcoming && (
+            <div className="bg-amber-50/90 border border-amber-200 text-amber-900 p-3.5 rounded-xl text-xs flex items-center gap-2.5 mb-3 shadow-xs print:hidden">
+              <span className="text-xl">⏳</span>
+              <div>
+                <div className="font-extrabold text-[11px] uppercase tracking-wide text-amber-950 flex items-center gap-1.5">
+                  {selectedProjectObj?.name} — PARATING PA LAMANG ANG PROYEKTO (UPCOMING)
+                  <span className="bg-amber-200/70 text-amber-900 text-[9px] px-2 py-0.5 rounded-full font-bold">No Payroll Allowed</span>
+                </div>
+                <p className="text-[10px] text-amber-800 mt-0.5">
+                  Ang proyektong ito ay hindi pa nagsisimula (Upcoming). Bawal mag-release ng sahod, bawal mag-vale (Cash Advance), at bawal bawasan ang budget hangga't hindi pa <strong>ONGOING</strong> ang proyekto.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* ── KPI METRIC CARDS ── */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-2.5 mb-3">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-2.5 mb-3 print:hidden">
             {/* Total Gross Pay */}
             <div className="bg-white rounded-xl border border-gray-100 p-2.5 shadow-xs">
               <span className="text-[8px] font-bold text-gray-400 uppercase tracking-wider block mb-0.5">GROSS EARNED WAGES</span>
@@ -390,7 +503,40 @@ export default function WorkersSalary() {
 
           {/* ── SEARCH & TABLE TOOLBAR ── */}
           <div className="bg-white rounded-xl border border-gray-100 shadow-xs overflow-hidden mb-3">
-            <div className="p-3 border-b border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-2.5">
+            {/* ── PRINT-ONLY OFFICIAL PAYROLL HEADER ── */}
+            <div className="hidden print:block p-4 border-b-2 border-gray-900 mb-2">
+              <div className="flex justify-between items-start">
+                <div className="flex items-center gap-3">
+                  <img src="/logo.png" alt="S-CON Logo" className="h-9 object-contain" />
+                  <div>
+                    <h1 className="text-sm font-extrabold text-gray-900 tracking-wider">S-CON BUILDTRACK</h1>
+                    <p className="text-[9px] text-gray-500 uppercase tracking-widest font-semibold">Official Workers Payroll Sheet</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="inline-block px-2 py-0.5 rounded bg-gray-100 text-[9px] font-extrabold text-gray-800 uppercase tracking-wider">
+                    Payroll Sheet
+                  </span>
+                  <p className="text-[8px] text-gray-500 mt-1">Printed: {new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}</p>
+                </div>
+              </div>
+              <div className="mt-3 pt-2.5 border-t border-gray-200 grid grid-cols-3 gap-2 text-[10px]">
+                <div>
+                  <span className="text-gray-400 font-bold uppercase text-[8px] block">CUTOFF PERIOD:</span>
+                  <strong className="text-gray-900 font-bold">{startDate} to {endDate}</strong>
+                </div>
+                <div>
+                  <span className="text-gray-400 font-bold uppercase text-[8px] block">PROJECT SITE:</span>
+                  <strong className="text-gray-900 font-bold">{selectedProject === 'ALL' ? 'All Projects' : (projects.find(p => String(p.id) === String(selectedProject))?.name || 'Selected Project')}</strong>
+                </div>
+                <div className="text-right">
+                  <span className="text-gray-400 font-bold uppercase text-[8px] block">TOTAL NET PAYOUT:</span>
+                  <strong className="text-[#A63228] font-black text-xs">₱{Number(payrollData.summary.totalNetPayout || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-3 border-b border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-2.5 print:hidden">
               <div className="relative flex-1 max-w-sm">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400">
                   <circle cx="11" cy="11" r="8"></circle>
@@ -431,16 +577,46 @@ export default function WorkersSalary() {
                   Print Summary
                 </button>
 
+                {!canReleaseSalary && (
+                  <span className="text-[9px] text-gray-500 font-medium italic hidden lg:inline">
+                    {isProjectCompleted ? '(Tapos na: History Only)' :
+                     isProjectUpcoming ? '(Upcoming: Bawal mag-release)' :
+                     '(Pumili ng Ongoing Project para mag-release)'}
+                  </span>
+                )}
+
                 <button
                   onClick={() => handleSavePayroll('Draft')}
-                  className="flex items-center gap-1 px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-lg text-[9.5px] font-bold transition-all"
+                  disabled={!canReleaseSalary}
+                  title={
+                    isProjectCompleted ? "Bawal mag-save ng draft: Tapos na (Completed) ang proyektong ito. Sa Payroll History lamang maaaring suriin ang mga nakaraang talaan." :
+                    isProjectUpcoming ? "Bawal mag-save ng draft: Upcoming ang proyektong ito." :
+                    selectedProject === 'ALL' ? "Pumili ng isang Ongoing project sa filter upang mag-save ng draft." :
+                    "Save this payroll as draft"
+                  }
+                  className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[9.5px] font-bold transition-all ${
+                    canReleaseSalary
+                      ? 'bg-gray-100 hover:bg-gray-200 text-gray-800 cursor-pointer'
+                      : 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-60'
+                  }`}
                 >
                   💾 Save Draft
                 </button>
 
                 <button
                   onClick={() => handleSavePayroll('Paid')}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-[#A63228] hover:bg-[#8e2920] text-white rounded-lg text-[9.5px] font-bold shadow-xs transition-all"
+                  disabled={!canReleaseSalary}
+                  title={
+                    isProjectCompleted ? "Bawal mag-release ng salary: Tapos na (Completed) ang proyektong ito. Sa Payroll History lamang maaaring suriin ang mga nakaraang payroll." :
+                    isProjectUpcoming ? "Bawal mag-release ng salary: Upcoming ang proyektong ito. Bawal bawasan ang budget." :
+                    selectedProject === 'ALL' ? "Pumili ng isang Ongoing project sa filter upang mag-release ng sahod." :
+                    "Approve and release payroll"
+                  }
+                  className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-[9.5px] font-bold shadow-xs transition-all ${
+                    canReleaseSalary
+                      ? 'bg-[#A63228] hover:bg-[#8e2920] text-white cursor-pointer'
+                      : 'bg-gray-200 text-gray-400 cursor-not-allowed opacity-60'
+                  }`}
                 >
                   ✅ Approve & Release Payroll
                 </button>
@@ -460,6 +636,7 @@ export default function WorkersSalary() {
                     <th className="py-2.5 px-2 text-right">GROSS EARNED</th>
                     <th className="py-2.5 px-2 text-right">DEDUCTIONS (LATE / CA)</th>
                     <th className="py-2.5 px-3 text-right">NET TAKE-HOME</th>
+                    <th className="py-2.5 px-3 text-center min-w-[110px] hidden print:table-cell">SIGNATURE</th>
                     <th className="py-2.5 px-3 text-center print:hidden">ACTION</th>
                   </tr>
                 </thead>
@@ -572,6 +749,11 @@ export default function WorkersSalary() {
                           </span>
                         </td>
 
+                        {/* Worker Signature */}
+                        <td className="py-2.5 px-3 text-center hidden print:table-cell">
+                          <div className="w-24 border-b border-gray-300 mx-auto my-1.5 print:border-gray-800 print:mt-4"></div>
+                        </td>
+
                         {/* Actions */}
                         <td className="py-2.5 px-3 text-center print:hidden">
                           <button
@@ -593,10 +775,23 @@ export default function WorkersSalary() {
                 </tbody>
               </table>
             </div>
+
+            {/* ── PRINT-ONLY SIGNATURE SECTION ── */}
+            <div className="hidden print:block p-4 border-t border-gray-200">
+              <div className="flex justify-end text-[10px]">
+                <div className="text-right flex flex-col items-end">
+                  <p className="text-gray-600 mb-8 text-[10px] font-semibold">Approved by:</p>
+                  <div className="w-52 border-b border-gray-800"></div>
+                  <p className="font-extrabold text-gray-900 text-[11px] mt-1.5 tracking-wide">Engineer Aldrich Sotalbo</p>
+                  <p className="text-gray-500 text-[8.5px] uppercase tracking-wider font-semibold">Project Engineer / Management</p>
+                  <p className="text-gray-400 text-[8px]">Sotalbo Construction</p>
+                </div>
+              </div>
+            </div>
           </div>
         </>
       ) : (
-        /* ── PAYROLL HISTORY TAB ── */
+        // ── PAYROLL HISTORY TAB ──
         <div className="bg-white rounded-xl border border-gray-100 shadow-xs overflow-hidden">
           <div className="p-3 border-b border-gray-100 flex items-center justify-between">
             <h2 className="text-xs font-extrabold text-gray-900 uppercase tracking-wider">
@@ -838,7 +1033,7 @@ export default function WorkersSalary() {
             </div>
 
             {/* Modal Footer */}
-            <div className="p-3 border-t border-gray-100 bg-gray-50 flex items-center justify-between">
+            <div className="p-3 border-t border-gray-100 bg-gray-50 flex items-center justify-between print:hidden">
               <span className="text-[8.5px] text-gray-400 font-medium">BuildTrack Construction ERP • Verified Attendance Payroll</span>
               <button
                 onClick={() => window.print()}

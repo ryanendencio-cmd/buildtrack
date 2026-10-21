@@ -3,12 +3,12 @@ const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 function getHeaders(customHeaders = {}) {
   const headers = { 'Content-Type': 'application/json', ...customHeaders }
   try {
-    const session = JSON.parse(localStorage.getItem('adminSession') || '{}')
-    const profile = JSON.parse(localStorage.getItem('adminProfile') || '{}')
-    const token = localStorage.getItem('adminToken')
+    const session = JSON.parse(sessionStorage.getItem('adminSession') || localStorage.getItem('adminSession') || '{}')
+    const profile = JSON.parse(sessionStorage.getItem('adminProfile') || localStorage.getItem('adminProfile') || '{}')
+    const token = sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken')
     const name = profile.fullName || session.fullName || profile.name || session.name || session.username || 'Administrator'
     const role = session.role || 'Administrator'
-    const id = session.id || localStorage.getItem('adminId') || ''
+    const id = session.id || sessionStorage.getItem('adminId') || localStorage.getItem('adminId') || ''
 
     if (name) headers['x-actor-name'] = name
     if (role) headers['x-actor-role'] = role

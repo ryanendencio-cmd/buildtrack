@@ -383,7 +383,7 @@ export default function NewPassword() {
               </div>
 
             ) : (
-              /* ── FORM STATE ── */
+              // ── FORM STATE ──
               <>
                 {/* Shield icon header */}
                 <div style={{
