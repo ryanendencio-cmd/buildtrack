@@ -24,7 +24,6 @@ import Expenses from './pages/Expenses'
 import ProjectDetails from './pages/ProjectDetails'
 import Attendance from './pages/Attendance'
 import Assets from './pages/Assets'
-import Materials from './pages/Materials'
 import Reports from './pages/Reports'
 import Profile from './pages/Profile'
 import Workers from './pages/Workers'
@@ -67,8 +66,9 @@ export default function App() {
         <Route path="/assets" element={<PrivateRoute><Assets /></PrivateRoute>} />
         <Route path="/assets/:id" element={<PrivateRoute><Assets /></PrivateRoute>} />
 
-        <Route path="/materials" element={<PrivateRoute><Materials /></PrivateRoute>} />
-        <Route path="/materials/:id" element={<PrivateRoute><Materials /></PrivateRoute>} />
+        {/* Materials redirects to Expenses & Receipts */}
+        <Route path="/materials" element={<Navigate to="/expenses" replace />} />
+        <Route path="/materials/:id" element={<Navigate to="/expenses" replace />} />
 
         <Route path="/workers" element={<PrivateRoute><Workers /></PrivateRoute>} />
         <Route path="/cash-advance" element={<PrivateRoute><CashAdvance /></PrivateRoute>} />

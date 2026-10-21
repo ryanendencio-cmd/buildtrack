@@ -27,7 +27,42 @@ export const resolveNotificationDestination = (notif) => {
     const action = (notif.action || '').toLowerCase();
     const pid = notif.project_id || '';
 
-    // 1. Cash Advance
+    // 1. Staff & Workers (Prioritize worker notifications so roles like "Tools Monitoring" or "Attendance Monitoring" aren't hijacked)
+    const isWorkerSpecific = 
+        title.includes('worker') ||
+        title.includes('workforce') ||
+        action.startsWith('worker_') ||
+        (type.includes('staff') && !title.includes('attendance') && !title.includes('rfid') && !title.includes('material') && !title.includes('cash advance') && !title.includes('payroll') && !title.includes('salary'));
+
+    if (isWorkerSpecific) {
+        let wid = notif.worker_id || notif.target_id || '';
+        let wname = notif.actor_name || notif.target_name || '';
+
+        // Extract worker name from title if format is "Worker Profile Updated: Name" or similar
+        if (!wname && notif.title && notif.title.includes(':')) {
+            wname = notif.title.split(':')[1]?.trim() || '';
+        }
+
+        let targetPath = '/workers';
+        const isApproval = title.includes('registration') || title.includes('approval') || action.includes('registration');
+        const tabParam = isApproval ? '&tab=approval' : '';
+
+        if (wid) {
+            targetPath = `/workers?id=${encodeURIComponent(wid)}${tabParam}`;
+        } else if (wname) {
+            targetPath = `/workers?name=${encodeURIComponent(wname)}${tabParam}`;
+        } else if (isApproval) {
+            targetPath = '/workers?tab=approval';
+        }
+
+        return {
+            path: targetPath,
+            label: 'Go to Workers Directory',
+            module: 'Workers Directory'
+        };
+    }
+
+    // 2. Cash Advance
     if (title.includes('cash advance') || msg.includes('cash advance') || action.includes('cash_advance')) {
         return {
             path: pid ? `/cash-advance/${pid}` : '/cash-advance',
@@ -36,7 +71,7 @@ export const resolveNotificationDestination = (notif) => {
         };
     }
 
-    // 2. Schedule & Check Due Dates / Deliveries
+    // 3. Schedule & Check Due Dates / Deliveries
     if (type.includes('schedule') || title.includes('schedule') || title.includes('due date') || title.includes('check') || title.includes('delivery') || msg.includes('schedule') || msg.includes('delivery')) {
         return {
             path: '/schedules',
@@ -45,7 +80,7 @@ export const resolveNotificationDestination = (notif) => {
         };
     }
 
-    // 3. Expenses / Receipts
+    // 4. Expenses / Receipts
     if (type.includes('expense') || title.includes('expense') || msg.includes('expense') || action.includes('expense')) {
         return {
             path: pid ? `/expenses/${pid}` : '/expenses',
@@ -54,7 +89,7 @@ export const resolveNotificationDestination = (notif) => {
         };
     }
 
-    // 4. Budget / Projects
+    // 5. Budget / Projects
     if (type.includes('budget') || title.includes('budget') || msg.includes('budget') || title.includes('project')) {
         return {
             path: pid ? `/projects/${pid}` : '/projects',
@@ -63,8 +98,8 @@ export const resolveNotificationDestination = (notif) => {
         };
     }
 
-    // 5. Tools & Assets Management
-    if (type.includes('tool') || type.includes('asset') || title.includes('tool') || title.includes('asset') || title.includes('equipment') || title.includes('borrow') || msg.includes('tool') || msg.includes('asset') || msg.includes('borrow') || action.includes('asset') || action.includes('tool') || action.includes('borrow')) {
+    // 6. Tools & Assets Management (Avoid matching msg because worker descriptions might contain "Tools")
+    if (type.includes('tool') || type.includes('asset') || title.includes('tool') || title.includes('asset') || title.includes('equipment') || title.includes('borrow') || action.includes('asset') || action.includes('tool') || action.includes('borrow')) {
         return {
             path: pid ? `/assets/${pid}` : '/assets',
             label: 'Go to Tools Management',
@@ -72,7 +107,7 @@ export const resolveNotificationDestination = (notif) => {
         };
     }
 
-    // 6. Materials
+    // 7. Materials
     if (type.includes('material') || title.includes('material') || msg.includes('material') || action.includes('material')) {
         return {
             path: pid ? `/materials/${pid}` : '/materials',
@@ -81,8 +116,8 @@ export const resolveNotificationDestination = (notif) => {
         };
     }
 
-    // 7. Attendance
-    if (title.includes('attendance') || msg.includes('attendance') || action.includes('attendance')) {
+    // 8. Attendance & RFID taps
+    if (title.includes('attendance') || title.includes('rfid tap') || action.includes('attendance')) {
         return {
             path: pid ? `/attendance/${pid}` : '/attendance',
             label: 'Go to Attendance',
@@ -90,21 +125,12 @@ export const resolveNotificationDestination = (notif) => {
         };
     }
 
-    // 8. Payroll & Wages
+    // 9. Payroll & Wages
     if (title.includes('payroll') || title.includes('salary') || msg.includes('payroll')) {
         return {
             path: '/workers-salary',
             label: 'Go to Payroll',
             module: 'Workers Salary'
-        };
-    }
-
-    // 9. Staff & Workers
-    if (type.includes('staff') || type.includes('worker') || title.includes('worker') || msg.includes('worker')) {
-        return {
-            path: '/workers',
-            label: 'Go to Workers Directory',
-            module: 'Workers Directory'
         };
     }
 
@@ -127,10 +153,6 @@ export default function Notifications() {
             const dest = resolveNotificationDestination(n);
             return dest.module === 'Cash Advance Management' || (n.title || '').includes('Cash Advance');
         }
-        if (filter === 'Materials') {
-            const dest = resolveNotificationDestination(n);
-            return dest.module === 'Materials Management' || (n.title || '').includes('Material');
-        }
         if (filter === 'Tools') {
             const dest = resolveNotificationDestination(n);
             return dest.module === 'Tools Management' || (n.type || '').toLowerCase().includes('tool') || (n.title || '').toLowerCase().includes('tool') || (n.message || '').toLowerCase().includes('borrow');
@@ -150,11 +172,13 @@ export default function Notifications() {
         backgroundSize: '0.8rem 0.8rem'
     };
 
-    const categories = ['All', 'Unread', 'Schedule', 'Cash Advance', 'Staff & Workers', 'Budget', 'Tools', 'Materials', 'Expenses'];
+    const categories = ['All', 'Unread', 'Schedule', 'Cash Advance', 'Staff & Workers', 'Budget', 'Tools', 'Expenses'];
 
-    // Handle clicking Acknowledge: Marks as read AND immediately navigates to the specified target
+    // Handle clicking Acknowledge or View: Marks as read if unread AND navigates directly to target
     const handleAcknowledgeAndNavigate = (notif) => {
-        markAsRead(notif.id);
+        if (!notif.read) {
+            markAsRead(notif.id);
+        }
         const dest = resolveNotificationDestination(notif);
         navigate(dest.path);
     };
@@ -179,7 +203,7 @@ export default function Notifications() {
                         )}
                     </div>
                     <p className="text-[10px] text-gray-500 mt-0.5">
-                        Clicking an acknowledgment will mark the notification as read and direct you straight to its specific record or module.
+                        Clicking any notification will mark it as read and direct you straight to its specific record or module.
                     </p>
                 </div>
                 <button
@@ -289,20 +313,12 @@ export default function Notifications() {
                                         </div>
                                     </div>
 
-                                    {/* Action Button: Only show Acknowledge when unread */}
-                                    {!notif.read && (
-                                        <button
-                                            type="button"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleAcknowledgeAndNavigate(notif);
-                                            }}
-                                            className="text-[9px] font-bold text-gray-700 bg-white border border-gray-200 hover:border-[#A63228] hover:text-[#A63228] hover:bg-red-50/50 px-3 py-1.5 rounded-lg transition-colors shrink-0 ml-2 shadow-2xs cursor-pointer"
-                                            title={`Acknowledge and open ${dest.module}`}
-                                        >
-                                            Acknowledge
-                                        </button>
-                                    )}
+                                    {/* Row navigation indicator */}
+                                    <div className="shrink-0 ml-3 text-gray-300 group-hover:text-[#A63228] group-hover:translate-x-0.5 transition-all self-center hidden sm:block">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                            <path d="M9 18l6-6-6-6"/>
+                                        </svg>
+                                    </div>
                                 </div>
                             );
                         })}

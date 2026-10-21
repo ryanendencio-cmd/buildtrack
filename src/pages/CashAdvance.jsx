@@ -38,20 +38,18 @@ export default function CashAdvance() {
 
     const [mockProjects, setMockProjects] = useState([]);
     const [allExpenses, setAllExpenses] = useState([]);
-    const [allMaterials, setAllMaterials] = useState([]);
     const [workersList, setWorkersList] = useState([]);
     const [isCustomWorker, setIsCustomWorker] = useState(false);
     const [cashAdvances, setCashAdvances] = useState([]);
     const [loading, setLoading] = useState(false);
 
-    // Load projects, expenses, workers, and materials
+    // Load projects, expenses, and workers
     const loadInitialData = () => {
         Promise.all([
             api.get('/projects').catch(() => []),
             api.get('/expenses').catch(() => []),
-            api.get('/workers').catch(() => []),
-            api.get('/materials').catch(() => [])
-        ]).then(([projs, exps, wrks, mats]) => {
+            api.get('/workers').catch(() => [])
+        ]).then(([projs, exps, wrks]) => {
             if (Array.isArray(projs)) {
                 setMockProjects(projs.map(p => ({
                     id: String(p.id),
@@ -65,9 +63,6 @@ export default function CashAdvance() {
             }
             if (Array.isArray(wrks)) {
                 setWorkersList(wrks.filter(w => (w.approval_status || 'Approved') !== 'Pending'));
-            }
-            if (Array.isArray(mats)) {
-                setAllMaterials(mats);
             }
         }).catch(console.error);
     };
@@ -100,20 +95,7 @@ export default function CashAdvance() {
         });
     }, [currentProjectId, mockProjects]);
 
-    // Map of project materials cost to compute remaining project budgets
-    const projectMaterialsMap = useMemo(() => {
-        const map = {};
-        for (const mat of allMaterials) {
-            const pid = String(mat.project_id || '');
-            if (pid) {
-                const cost = Number(mat.qty || mat.quantity || 0) * Number(mat.cost || mat.unit_cost || 0);
-                map[pid] = (map[pid] || 0) + cost;
-            }
-        }
-        return map;
-    }, [allMaterials]);
-
-    // Map of total project spent (receipts + materials) to compute remaining project budgets
+    // Map of total project spent (verified expense receipts) to compute remaining project budgets
     const projectExpensesMap = useMemo(() => {
         const map = {};
         for (const exp of allExpenses) {
@@ -122,11 +104,8 @@ export default function CashAdvance() {
                 map[pid] = (map[pid] || 0) + Number(exp.amount || 0);
             }
         }
-        for (const [pid, matCost] of Object.entries(projectMaterialsMap)) {
-            map[pid] = (map[pid] || 0) + matCost;
-        }
         return map;
-    }, [allExpenses, projectMaterialsMap]);
+    }, [allExpenses]);
 
     // Metrics for the currently viewed project (or all projects)
     const activeProjectInfo = useMemo(() => {
@@ -137,16 +116,14 @@ export default function CashAdvance() {
 
         if (currentProjectId === 'ALL') {
             const totalBudget = mockProjects.reduce((sum, p) => sum + p.budget, 0);
-            const totalExpenseReceipts = allExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
-            const totalMaterialsCost = allMaterials.reduce((sum, m) => sum + (Number(m.qty || m.quantity || 0) * Number(m.cost || m.unit_cost || 0)), 0);
-            const totalSpent = totalExpenseReceipts + totalMaterialsCost;
+            const totalSpent = allExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
             const remaining = Math.max(0, totalBudget - totalSpent);
             return {
                 name: 'All Active Projects',
                 budget: totalBudget,
                 spent: totalSpent,
-                expensesReceipts: totalExpenseReceipts,
-                materialsCost: totalMaterialsCost,
+                expensesReceipts: totalSpent,
+                materialsCost: 0,
                 remaining,
                 advancesTotal: totalAdvances,
                 advancesCount
@@ -155,21 +132,19 @@ export default function CashAdvance() {
             const proj = mockProjects.find(p => String(p.id) === String(currentProjectId));
             const budget = Number(proj?.budget || 0);
             const totalSpent = projectExpensesMap[String(currentProjectId)] || 0;
-            const projMaterialsCost = projectMaterialsMap[String(currentProjectId)] || 0;
-            const projExpenseReceipts = Math.max(0, totalSpent - projMaterialsCost);
             const remaining = Math.max(0, budget - totalSpent);
             return {
                 name: proj?.name || 'Selected Project',
                 budget,
                 spent: totalSpent,
-                expensesReceipts: projExpenseReceipts,
-                materialsCost: projMaterialsCost,
+                expensesReceipts: totalSpent,
+                materialsCost: 0,
                 remaining,
                 advancesTotal: totalAdvances,
                 advancesCount
             };
         }
-    }, [currentProjectId, mockProjects, allExpenses, allMaterials, projectExpensesMap, projectMaterialsMap, cashAdvances]);
+    }, [currentProjectId, mockProjects, allExpenses, projectExpensesMap, cashAdvances]);
 
     // Form: Active Selected Project Details in Modal
     const formSelectedProject = useMemo(() => {
@@ -492,22 +467,10 @@ export default function CashAdvance() {
                         </p>
                     </div>
                     <div className="bg-gray-50/70 p-2 rounded-lg border border-gray-100">
-                        <div className="flex items-center justify-between">
-                            <p className="text-[7.5px] font-bold text-gray-400 uppercase tracking-wider">Total Expenses Spent</p>
-                            {activeProjectInfo.materialsCost > 0 && (
-                                <span className="text-[6.5px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/50 px-1 rounded">
-                                    + Mat. Logs
-                                </span>
-                            )}
-                        </div>
+                        <p className="text-[7.5px] font-bold text-gray-400 uppercase tracking-wider">Total Expenses Spent</p>
                         <p className="text-xs font-extrabold text-gray-800 mt-0.5">
                             ₱{activeProjectInfo.spent.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </p>
-                        {activeProjectInfo.materialsCost > 0 && (
-                            <p className="text-[6.5px] text-gray-400 mt-0.5">
-                                Receipts: ₱{activeProjectInfo.expensesReceipts.toLocaleString(undefined, { maximumFractionDigits: 0 })} | Mat: ₱{activeProjectInfo.materialsCost.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                            </p>
-                        )}
                     </div>
                     <div className="bg-emerald-50/50 p-2 rounded-lg border border-emerald-100">
                         <p className="text-[7.5px] font-bold text-emerald-800 uppercase tracking-wider">Remaining Project Budget</p>

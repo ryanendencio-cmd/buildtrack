@@ -303,9 +303,9 @@ export default function Assets() {
     const handleConfirmAdd = async (e) => {
         e.preventDefault();
         const qty = parseInt(formData.quantity, 10) || 1;
-        const targetProjId = (currentProjectId && currentProjectId !== '1')
-            ? currentProjectId
-            : (dropdownProjects[0]?.id || currentProjectId || null);
+        const targetProjId = currentProjectId || dropdownProjects[0]?.id || null;
+
+
 
         const payload = {
             project_id: targetProjId,
@@ -551,6 +551,16 @@ export default function Assets() {
                 </div>
 
                 <div className="flex items-center gap-2 w-full md:w-auto flex-wrap">
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setFormData({ name: '', status: 'Available', condition: 'Good', user: '', quantity: 1, borrowQty: 1 });
+                            setModalState('ADD');
+                        }}
+                        className="bg-[#E8C547] border border-[#E8C547] text-gray-900 min-w-[110px] h-8 px-3.5 rounded-lg font-bold text-[10px] shadow-xs hover:bg-[#d4b33d] transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                    >
+                        <span>+</span> Add Tools
+                    </button>
                     <button onClick={handleOpenBorrowModal} className="bg-[#A63228] border border-[#A63228] text-white min-w-[110px] h-8 px-3.5 rounded-lg font-bold text-[10px] shadow-xs hover:bg-[#8B1A10] transition-colors flex items-center justify-center">
                         Borrow Tool
                     </button>

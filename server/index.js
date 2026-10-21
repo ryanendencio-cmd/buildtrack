@@ -554,7 +554,7 @@ function startServer() {
     try {
       const pid = await resolveProjectId(project_id)
 
-      // Prevent adding expenses to upcoming/standby projects
+      // Prevent adding expenses to projects that are not ONGOING (e.g. Completed, Upcoming, Standby)
       let targetProjectDoc = null
       if (pid) {
         const pDoc = await db.collection('projects').doc(pid).get()
@@ -566,9 +566,11 @@ function startServer() {
       }
       if (targetProjectDoc) {
         const pStatus = (targetProjectDoc.data().status || '').toUpperCase()
-        if (pStatus === 'UPCOMING' || pStatus === 'STANDBY' || pStatus.includes('UPCOMING') || pStatus.includes('STANDBY')) {
+        const isOngoing = pStatus === 'ONGOING' || pStatus === 'ACTIVE'
+        if (!isOngoing) {
+          const displayStatus = targetProjectDoc.data().status || 'Not Ongoing'
           return res.status(400).json({
-            error: `Cannot add expenses to an upcoming project ("${targetProjectDoc.data().name}"). The project status must be ONGOING first.`
+            error: `Bawal mag-add ng expenses sa proyektong hindi Ongoing ("${targetProjectDoc.data().name}"). Ang kasalukuyang status nito ay "${displayStatus}". Dapat ay ONGOING ang status ng proyekto.`
           })
         }
       }
@@ -820,7 +822,9 @@ function startServer() {
     actor_name = null,
     actor_role = null,
     action = null,
-    link = null
+    link = null,
+    worker_id = null,
+    target_id = null
   }) {
     try {
       const now = new Date()
@@ -836,6 +840,8 @@ function startServer() {
         actor_role: actor_role || null,
         action: action || null,
         link: link || null,
+        worker_id: worker_id || target_id || null,
+        target_id: target_id || worker_id || null,
         date: dateStr,
         time: timeStr,
         read: false,
@@ -1026,6 +1032,9 @@ function startServer() {
           actor_name: d.actor_name || null,
           actor_role: d.actor_role || null,
           action: d.action || null,
+          link: d.link || null,
+          worker_id: d.worker_id || d.target_id || null,
+          target_id: d.target_id || d.worker_id || null,
           timestamp: d.timestamp || (d.created_at?._seconds ? d.created_at._seconds * 1000 : 0)
         }
       })
@@ -1485,21 +1494,42 @@ function startServer() {
     }
   })
 
+  app.get('/api/workers/:id', async (req, res) => {
+    try {
+      const doc = await db.collection('workers').doc(req.params.id).get()
+      if (!doc.exists) return res.status(404).json({ error: 'Worker not found' })
+      const data = doc.data()
+      delete data.password
+      res.json({ id: doc.id, ...data })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
   app.post('/api/workers', async (req, res) => {
-    const { first_name, middle_name, last_name, full_name, birthday, age, phone, address, role, position, daily_rate, password, approval_status, status, project_id, address_obj } = req.body
+    const { first_name, middle_name, last_name, full_name, birthday, age, phone, address, role, position, daily_rate, password, approval_status, status, project_id, address_obj, rfid_uid } = req.body
     const computedFullName = full_name || [first_name, middle_name, last_name].filter(Boolean).join(' ')
     const cleanPassword = (typeof password === 'string' && password.trim().length > 0) ? password.trim() : 'worker123'
     const hashedPassword = await bcrypt.hash(cleanPassword, 10)
     const cleanPosition = Array.isArray(position)
       ? position.filter(Boolean).join(', ')
       : (typeof position === 'string' && position.trim().length > 0 ? position.trim() : null)
+    const cleanRfid = rfid_uid ? String(rfid_uid).trim().replace(/[\s:]/g, '').toUpperCase() : null
     
     try {
+      if (cleanRfid) {
+        const existRfid = await db.collection('workers').where('rfid_uid', '==', cleanRfid).limit(1).get()
+        if (!existRfid.empty) {
+          return res.status(400).json({ error: `RFID card UID (${cleanRfid}) is already assigned to another worker.` })
+        }
+      }
+
       const newWorker = {
         first_name, middle_name: middle_name || null, last_name, full_name: computedFullName, 
         birthday: birthday || null, age: age || null, phone: phone || null, address: address || null, 
         address_obj: address_obj || null,
         role: role || 'Worker', position: cleanPosition, daily_rate: daily_rate || 600, 
+        rfid_uid: cleanRfid || null,
         password: hashedPassword, approval_status: approval_status || 'Approved', 
         status: status || 'Active', project_id: project_id || null,
         created_at: FieldValue.serverTimestamp()
@@ -1512,25 +1542,28 @@ function startServer() {
         severity: 'Low',
         actor_name: computedFullName,
         actor_role: cleanPosition || role || 'Worker',
-        action: 'worker_created'
+        action: 'worker_created',
+        worker_id: docRef.id,
+        target_id: docRef.id,
+        link: `/workers?id=${docRef.id}`
       }).catch(() => {})
       recordAuditLog({
         action: 'WORKER_CREATED',
         module: 'Workers',
-        description: `Created worker profile for "${computedFullName}" (${cleanPosition || role || 'Worker'}, Rate: ₱${daily_rate || 600}/day).`,
+        description: `Created worker profile for "${computedFullName}" (${cleanPosition || role || 'Worker'}, Rate: ₱${daily_rate || 600}/day${cleanRfid ? `, RFID: ${cleanRfid}` : ''}).`,
         target_id: docRef.id,
         target_name: computedFullName,
-        details: { role, position: cleanPosition, daily_rate: daily_rate || 600, status: status || 'Active' },
+        details: { role, position: cleanPosition, daily_rate: daily_rate || 600, status: status || 'Active', rfid_uid: cleanRfid },
         req
       }).catch(() => {})
-      res.json({ id: docRef.id, ...req.body, position: cleanPosition, full_name: computedFullName, approval_status: approval_status || 'Approved' })
+      res.json({ id: docRef.id, ...req.body, position: cleanPosition, full_name: computedFullName, rfid_uid: cleanRfid, approval_status: approval_status || 'Approved' })
     } catch (err) {
       res.status(500).json({ error: err.message })
     }
   })
 
   app.put('/api/workers/:id', async (req, res) => {
-    const { first_name, middle_name, last_name, full_name, birthday, age, phone, address, role, position, daily_rate, password, approval_status, status, project_id, address_obj } = req.body
+    const { first_name, middle_name, last_name, full_name, birthday, age, phone, address, role, position, daily_rate, password, approval_status, status, project_id, address_obj, rfid_uid } = req.body
     const computedFullName = full_name || [first_name, middle_name, last_name].filter(Boolean).join(' ')
     const cleanPosition = Array.isArray(position)
       ? position.filter(Boolean).join(', ')
@@ -1549,6 +1582,16 @@ function startServer() {
       if (address_obj !== undefined) {
         updateData.address_obj = address_obj
       }
+      if (rfid_uid !== undefined) {
+        const cleanRfid = rfid_uid ? String(rfid_uid).trim().replace(/[\s:]/g, '').toUpperCase() : null
+        if (cleanRfid) {
+          const existRfid = await db.collection('workers').where('rfid_uid', '==', cleanRfid).limit(1).get()
+          if (!existRfid.empty && existRfid.docs[0].id !== req.params.id) {
+            return res.status(400).json({ error: `RFID card UID (${cleanRfid}) is already assigned to another worker.` })
+          }
+        }
+        updateData.rfid_uid = cleanRfid || null
+      }
       if (typeof password === 'string' && password.trim().length > 0) {
         const trimmedPass = password.trim()
         // If password is already a bcrypt hash ($2a$ or $2b$), do NOT re-hash it!
@@ -1564,7 +1607,10 @@ function startServer() {
         severity: 'Low',
         actor_name: computedFullName,
         actor_role: cleanPosition || role || 'Worker',
-        action: 'worker_updated'
+        action: 'worker_updated',
+        worker_id: req.params.id,
+        target_id: req.params.id,
+        link: `/workers?id=${req.params.id}`
       }).catch(() => {})
       recordAuditLog({
         action: 'WORKER_UPDATED',
@@ -1941,6 +1987,416 @@ function startServer() {
     }
   })
 
+  // ── HARDWARE RFID SCAN & LIVE PAIRING (FOR ESP32 / PHYSICAL TERMINALS) ──
+  let latestRfidScan = { uid: null, timestamp: 0, terminal_id: null }
+
+  app.get('/api/rfid/latest-scan', (req, res) => {
+    res.json(latestRfidScan)
+  })
+
+  app.post('/api/attendance/scan', async (req, res) => {
+    const { rfid_uid, terminal_id } = req.body
+    const cleanUid = rfid_uid ? String(rfid_uid).trim().replace(/[\s:]/g, '').toUpperCase() : null
+    const terminalId = terminal_id || 'ESP32-GATE-TERMINAL'
+
+    if (!cleanUid) {
+      return res.status(400).json({ success: false, error: 'RFID UID is required.' })
+    }
+
+    // Cache the latest scan so admin UI can auto-detect and populate newly tapped cards
+    latestRfidScan = {
+      uid: cleanUid,
+      timestamp: Date.now(),
+      terminal_id: terminalId
+    }
+
+    try {
+      // 1. Look up worker by rfid_uid
+      const workerSnap = await db.collection('workers').where('rfid_uid', '==', cleanUid).limit(1).get()
+      if (workerSnap.empty) {
+        recordAuditLog({
+          action: 'RFID_SCAN_UNREGISTERED',
+          module: 'Attendance',
+          description: `Unregistered RFID card tapped [UID: ${cleanUid}] at terminal "${terminalId}".`,
+          actor_name: 'Unknown / RFID Card',
+          actor_role: 'Anonymous',
+          status: 'FAILED',
+          details: { rfid_uid: cleanUid, terminal_id: terminalId },
+          req
+        }).catch(() => {})
+
+        return res.status(404).json({
+          success: false,
+          error: `Unregistered RFID card (${cleanUid}). Please assign this card to a worker first.`,
+          rfid_uid: cleanUid
+        })
+      }
+
+      const workerDoc = workerSnap.docs[0]
+      const worker = workerDoc.data()
+      const workerId = workerDoc.id
+      const workerName = worker.full_name || [worker.first_name, worker.last_name].filter(Boolean).join(' ') || 'Worker'
+      const workerRole = worker.role || 'Worker'
+      const workerRate = Number(worker.daily_rate) || 600
+      const projectId = worker.project_id || (await resolveProjectId('1')) || null
+
+      // Check worker status
+      if (worker.approval_status && worker.approval_status !== 'Approved') {
+        return res.status(403).json({
+          success: false,
+          error: `Worker "${workerName}" is pending admin approval.`,
+          worker_name: workerName
+        })
+      }
+
+      if (worker.status && worker.status === 'Inactive') {
+        return res.status(403).json({
+          success: false,
+          error: `Worker "${workerName}" is set to Inactive.`,
+          worker_name: workerName
+        })
+      }
+
+      // 2. Check Date & Terminal Schedule Settings
+      const now = new Date()
+      const timeString = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+      const todayISO = now.toISOString().slice(0, 10)
+      const minutes = parseTimeToMinutes(timeString)
+
+      const nwCheck = await isDateNonWorkingDay(todayISO)
+      if (nwCheck.isNonWorking) {
+        return res.status(400).json({
+          success: false,
+          error: `Today is marked as a Non-Working Day (${nwCheck.reason || 'Rest Day'}). Attendance is closed.`,
+          worker_name: workerName
+        })
+      }
+
+      // Check shift terminal settings
+      const settingsDoc = await db.collection('settings').doc('attendance').get()
+      if (settingsDoc.exists) {
+        const sData = settingsDoc.data()
+        if (sData.manual_override === 'CLOSED') {
+          return res.status(400).json({
+            success: false,
+            error: 'Attendance kiosk is currently manually closed by Admin.',
+            worker_name: workerName
+          })
+        }
+        if (sData.auto_schedule && sData.manual_override !== 'OPEN') {
+          const openM = parseTimeToMinutes(sData.open_time || '07:00') || (7 * 60)
+          const closeM = parseTimeToMinutes(sData.close_time || '17:30') || (17 * 60 + 30)
+          if (minutes < openM) {
+            return res.status(400).json({
+              success: false,
+              error: `Attendance is closed before shift. Opens at ${sData.open_time}.`,
+              worker_name: workerName
+            })
+          }
+          if (minutes > closeM) {
+            return res.status(400).json({
+              success: false,
+              error: `Shift cutoff reached (${sData.close_time}). Terminal is closed.`,
+              worker_name: workerName
+            })
+          }
+        }
+      }
+
+      // 3. Find today's attendance record for this worker
+      let attSnap = await db.collection('attendance')
+        .where('date', '==', todayISO)
+        .where('worker_id', '==', workerId)
+        .limit(1)
+        .get()
+
+      if (attSnap.empty) {
+        const nameQuery = await db.collection('attendance')
+          .where('date', '==', todayISO)
+          .where('worker_name', '==', workerName)
+          .limit(1)
+          .get()
+        if (!nameQuery.empty) attSnap = nameQuery
+      }
+
+      let action = ''
+      let finalStatus = 'Present'
+      let earnedAmount = workerRate
+
+      if (!attSnap.empty) {
+        // Existing record for today -> Update shift
+        const existingDoc = attSnap.docs[0]
+        const existing = existingDoc.data()
+        let mIn = existing.morning_in
+        let mOut = existing.morning_out
+        let aIn = existing.afternoon_in
+        let aOut = existing.afternoon_out
+
+        if (minutes !== null && minutes < 12 * 60 + 30) {
+          // Morning session (before 12:30 PM)
+          if (mIn === '—' || !mIn) {
+            // Check if tapping during Lunch Out window (11:30 AM - 12:30 PM) without having Timed In
+            if (minutes >= 11 * 60 + 30) {
+              return res.status(400).json({
+                success: false,
+                error: `Bawal mag-Time Out: Walang naitalang Morning Time In para kay ${workerName}.`,
+                worker_name: workerName,
+                action: 'NO_TIME_IN'
+              })
+            }
+            mIn = timeString
+            action = 'MORNING TIME IN'
+          } else if (mOut === '—' || !mOut) {
+            // Anti-double-tap: Prevent accidental immediate checkout within 3 minutes of Time In
+            const mInMin = parseTimeToMinutes(mIn)
+            if (mInMin !== null && Math.abs(minutes - mInMin) < 3) {
+              return res.status(400).json({
+                success: false,
+                error: `Kaka-Time In lang ni ${workerName}. Maghintay sandali bago mag-Time Out.`,
+                worker_name: workerName,
+                action: 'TOO_SOON'
+              })
+            }
+            mOut = timeString
+            action = 'MORNING TIME OUT (12 PM)'
+          } else {
+            return res.status(400).json({
+              success: false,
+              error: `Morning shift already completed for ${workerName}.`,
+              worker_name: workerName,
+              action: 'ALREADY_COMPLETED'
+            })
+          }
+        } else {
+          // Afternoon session (12:30 PM onwards)
+          if (minutes >= 15 * 60 + 30) {
+            // Dismissal / Uwian Period (3:30 PM onwards)
+            const hasActiveTimeIn = (aIn && aIn !== '—') || (mIn && mIn !== '—' && (!mOut || mOut === '—'))
+            if (!hasActiveTimeIn) {
+              return res.status(400).json({
+                success: false,
+                error: `Bawal mag-Time Out: Walang naitalang Time In para kay ${workerName} ngayong araw.`,
+                worker_name: workerName,
+                action: 'NO_TIME_IN'
+              })
+            }
+            if (aOut && aOut !== '—') {
+              return res.status(400).json({
+                success: false,
+                error: `Naka-Time Out na si ${workerName} ngayong araw (Time Out: ${aOut}).`,
+                worker_name: workerName,
+                action: 'ALREADY_COMPLETED'
+              })
+            }
+
+            // Anti-double-tap check if they just timed in in the afternoon
+            const aInMin = parseTimeToMinutes(aIn)
+            if (aInMin !== null && Math.abs(minutes - aInMin) < 3) {
+              return res.status(400).json({
+                success: false,
+                error: `Kaka-Time In lang ni ${workerName}. Maghintay sandali bago mag-Time Out.`,
+                worker_name: workerName,
+                action: 'TOO_SOON'
+              })
+            }
+
+            aOut = timeString
+            action = 'AFTERNOON TIME OUT (5 PM)'
+          } else {
+            // Afternoon entry window (12:30 PM to 3:30 PM)
+            if (aIn === '—' || !aIn) {
+              aIn = timeString
+              action = 'AFTERNOON TIME IN (1 PM)'
+            } else if (aOut === '—' || !aOut) {
+              const aInMin = parseTimeToMinutes(aIn)
+              if (aInMin !== null && Math.abs(minutes - aInMin) < 3) {
+                return res.status(400).json({
+                  success: false,
+                  error: `Kaka-Time In lang ni ${workerName}. Maghintay sandali bago mag-Time Out.`,
+                  worker_name: workerName,
+                  action: 'TOO_SOON'
+                })
+              }
+              aOut = timeString
+              action = 'AFTERNOON TIME OUT (5 PM)'
+            } else {
+              return res.status(400).json({
+                success: false,
+                error: `Afternoon shift already completed for ${workerName}.`,
+                worker_name: workerName,
+                action: 'ALREADY_COMPLETED'
+              })
+            }
+          }
+        }
+
+        const evalRes = evaluateTwoSessions(mIn, aIn, workerRate)
+        finalStatus = evalRes.status
+        earnedAmount = evalRes.earnedAmount
+
+        const updateData = {
+          morning_in: mIn || '—',
+          morning_out: mOut || '—',
+          afternoon_in: aIn || '—',
+          afternoon_out: aOut || '—',
+          morning_status: evalRes.morningStatus,
+          afternoon_status: evalRes.afternoonStatus,
+          status: finalStatus,
+          earned_amount: earnedAmount,
+          time_in: mIn || aIn || '—',
+          time_out: aOut || mOut || '—'
+        }
+
+        await existingDoc.ref.update(updateData)
+
+        recordNotification({
+          type: 'Staff & Workers',
+          title: `RFID Tap: ${workerName}`,
+          message: `Recorded ${action} for ${workerName} (${workerRole}) via terminal "${terminalId}". Status: ${finalStatus}.`,
+          severity: (finalStatus === 'Late' || finalStatus === 'Double Late') ? 'Medium' : 'Low',
+          actor_name: workerName,
+          actor_role: workerRole,
+          action: 'rfid_tap'
+        }).catch(() => {})
+
+        recordAuditLog({
+          action: 'RFID_ATTENDANCE_LOGGED',
+          module: 'Attendance',
+          description: `Worker "${workerName}" (${workerRole}) logged ${action} at terminal "${terminalId}" (Time: ${timeString}, Status: ${finalStatus}).`,
+          actor_name: workerName,
+          actor_role: workerRole,
+          actor_id: workerId,
+          target_id: existingDoc.id,
+          target_name: workerName,
+          details: { action, time: timeString, status: finalStatus, rfid_uid: cleanUid, terminal_id: terminalId },
+          req
+        }).catch(() => {})
+
+        return res.json({
+          success: true,
+          action,
+          worker_name: workerName,
+          role: workerRole,
+          time: timeString,
+          status: finalStatus,
+          earned_amount: earnedAmount,
+          rfid_uid: cleanUid,
+          terminal_id: terminalId
+        })
+      } else {
+        // First tap of the day -> Create attendance record
+        // First tap of the day -> Check if worker is attempting to Time Out without ever Timing In!
+        // 1. If tapping during Lunch Out window (11:30 AM - 12:30 PM) without having Timed In
+        if (minutes !== null && minutes >= 11 * 60 + 30 && minutes < 12 * 60 + 30) {
+          return res.status(400).json({
+            success: false,
+            error: `Bawal mag-Time Out: Walang naitalang Morning Time In para kay ${workerName}.`,
+            worker_name: workerName,
+            action: 'NO_TIME_IN'
+          })
+        }
+
+        // 2. If tapping during Afternoon Dismissal / Uwian window (3:30 PM onwards) without having Timed In
+        if (minutes !== null && minutes >= 15 * 60 + 30) {
+          recordAuditLog({
+            action: 'RFID_TIMEOUT_REJECTED_NO_TIMEIN',
+            module: 'Attendance',
+            description: `Tinanggihan ang Time Out para kay "${workerName}" sa terminal "${terminalId}": Walang naitalang Time In ngayong araw.`,
+            actor_name: workerName,
+            actor_role: workerRole,
+            actor_id: workerId,
+            status: 'FAILED',
+            details: { rfid_uid: cleanUid, terminal_id: terminalId, time: timeString },
+            req
+          }).catch(() => {})
+
+          return res.status(400).json({
+            success: false,
+            error: `Bawal mag-Time Out: Walang naitalang Time In para kay ${workerName} ngayong araw.`,
+            worker_name: workerName,
+            action: 'NO_TIME_IN'
+          })
+        }
+
+        let mIn = '—'
+        let aIn = '—'
+
+        if (minutes !== null && minutes < 12 * 60 + 30) {
+          mIn = timeString
+          action = 'MORNING TIME IN'
+        } else {
+          aIn = timeString
+          action = 'AFTERNOON TIME IN (1 PM)'
+        }
+
+        const evalRes = evaluateTwoSessions(mIn, aIn, workerRate)
+        finalStatus = evalRes.status
+        earnedAmount = evalRes.earnedAmount
+
+        const newAttendance = {
+          project_id: projectId || null,
+          worker_id: workerId,
+          worker_name: workerName,
+          date: todayISO,
+          role: workerRole,
+          status: finalStatus,
+          morning_in: mIn,
+          morning_out: '—',
+          afternoon_in: aIn,
+          afternoon_out: '—',
+          morning_status: evalRes.morningStatus,
+          afternoon_status: evalRes.afternoonStatus,
+          rate: workerRate,
+          earned_amount: earnedAmount,
+          advance: 0,
+          time_in: mIn !== '—' ? mIn : aIn,
+          time_out: '—',
+          created_at: FieldValue.serverTimestamp()
+        }
+
+        const newDoc = await db.collection('attendance').add(newAttendance)
+
+        recordNotification({
+          type: 'Staff & Workers',
+          title: `RFID Tap: ${workerName}`,
+          message: `Recorded ${action} for ${workerName} (${workerRole}) via terminal "${terminalId}". Status: ${finalStatus}.`,
+          severity: (finalStatus === 'Late' || finalStatus === 'Double Late') ? 'Medium' : 'Low',
+          actor_name: workerName,
+          actor_role: workerRole,
+          action: 'rfid_tap'
+        }).catch(() => {})
+
+        recordAuditLog({
+          action: 'RFID_ATTENDANCE_LOGGED',
+          module: 'Attendance',
+          description: `Worker "${workerName}" (${workerRole}) logged ${action} at terminal "${terminalId}" (Time: ${timeString}, Status: ${finalStatus}).`,
+          actor_name: workerName,
+          actor_role: workerRole,
+          actor_id: workerId,
+          target_id: newDoc.id,
+          target_name: workerName,
+          details: { action, time: timeString, status: finalStatus, rfid_uid: cleanUid, terminal_id: terminalId },
+          req
+        }).catch(() => {})
+
+        return res.json({
+          success: true,
+          action,
+          worker_name: workerName,
+          role: workerRole,
+          time: timeString,
+          status: finalStatus,
+          earned_amount: earnedAmount,
+          rfid_uid: cleanUid,
+          terminal_id: terminalId
+        })
+      }
+    } catch (err) {
+      console.error('RFID Scan Error:', err)
+      return res.status(500).json({ success: false, error: err.message })
+    }
+  })
+
   // Update attendance (for Morning Out, Afternoon In, Afternoon Out)
   app.put('/api/attendance/:id', async (req, res) => {
     const {
@@ -1960,6 +2416,14 @@ function startServer() {
       const aIn = afternoonIn !== undefined ? afternoonIn : existing.afternoon_in
       const aOut = afternoonOut !== undefined ? afternoonOut : existing.afternoon_out
       const baseRate = rate !== undefined ? Number(rate) : Number(existing.rate || 0)
+
+      // Validate: Cannot set Time Out without a corresponding Time In
+      if (mOut && mOut !== '—' && (!mIn || mIn === '—')) {
+        return res.status(400).json({ error: 'Bawal mag-Time Out sa umaga kung walang naitalang Morning Time In.' })
+      }
+      if (aOut && aOut !== '—' && (!aIn || aIn === '—') && (!mIn || mIn === '—')) {
+        return res.status(400).json({ error: 'Bawal mag-Time Out sa hapon kung walang naitalang Time In.' })
+      }
 
       const evaluated = evaluateTwoSessions(mIn, aIn, baseRate)
       const finalStatus = status || evaluated.status
@@ -3127,7 +3591,10 @@ function startServer() {
         severity: 'High',
         actor_name: fullName,
         actor_role: position || role || 'Worker',
-        action: 'worker_registration'
+        action: 'worker_registration',
+        worker_id: docRef.id,
+        target_id: docRef.id,
+        link: `/workers?id=${docRef.id}&tab=approval`
       }).catch(() => {})
 
       recordAuditLog({

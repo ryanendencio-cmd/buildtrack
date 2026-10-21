@@ -27,6 +27,17 @@ export default function Attendance() {
         api.get(`/attendance/${currentProjectId}`).then(setAllWorkers).catch(console.error);
     }, [currentProjectId]);
 
+    // Live sync for physical ESP32 RFID scanner taps
+    useEffect(() => {
+        if (!currentProjectId || selectedDate !== todayISO) return;
+        const timer = setInterval(() => {
+            api.get(`/attendance/${currentProjectId}`).then(data => {
+                if (Array.isArray(data)) setAllWorkers(data);
+            }).catch(console.error);
+        }, 4000);
+        return () => clearInterval(timer);
+    }, [currentProjectId, selectedDate, todayISO]);
+
     // ── ATTENDANCE SETTINGS & NON-WORKING DAYS STATE ──
     const [attendanceSettings, setAttendanceSettings] = useState({
         auto_schedule: true,
@@ -370,16 +381,21 @@ export default function Attendance() {
 
             if (existingIndex >= 0) {
                 const existingWorker = allWorkers[existingIndex];
-                let mIn = existingWorker.morningIn;
-                let mOut = existingWorker.morningOut;
-                let aIn = existingWorker.afternoonIn;
-                let aOut = existingWorker.afternoonOut;
+                let mIn = existingWorker.morningIn || existingWorker.morning_in;
+                let mOut = existingWorker.morningOut || existingWorker.morning_out;
+                let aIn = existingWorker.afternoonIn || existingWorker.afternoon_in;
+                let aOut = existingWorker.afternoonOut || existingWorker.afternoon_out;
                 let action = '';
 
                 // Determine session from time
                 if (minutes !== null && minutes < 12 * 60 + 30) {
                     // Morning session
                     if (mIn === '—' || !mIn) {
+                        if (minutes >= 11 * 60 + 30) {
+                            setScannedData({ name: workerName, message: 'Bawal mag-Time Out: Walang naitalang Morning Time In.' });
+                            setRfidState('ERROR');
+                            return;
+                        }
                         mIn = timeString;
                         action = 'MORNING TIME IN';
                     } else if (mOut === '—' || !mOut) {
@@ -392,16 +408,33 @@ export default function Attendance() {
                     }
                 } else {
                     // Afternoon session
-                    if (aIn === '—' || !aIn) {
-                        aIn = timeString;
-                        action = 'AFTERNOON TIME IN (1 PM)';
-                    } else if (aOut === '—' || !aOut) {
+                    if (minutes >= 15 * 60 + 30) {
+                        // Dismissal Period (3:30 PM onwards)
+                        const hasActiveTimeIn = (aIn && aIn !== '—') || (mIn && mIn !== '—' && (!mOut || mOut === '—'));
+                        if (!hasActiveTimeIn) {
+                            setScannedData({ name: workerName, message: 'Bawal mag-Time Out: Walang naitalang Time In ngayong araw.' });
+                            setRfidState('ERROR');
+                            return;
+                        }
+                        if (aOut && aOut !== '—') {
+                            setScannedData({ name: workerName, message: 'Naka-Time Out na ang worker ngayong hapon.' });
+                            setRfidState('ERROR');
+                            return;
+                        }
                         aOut = timeString;
                         action = 'AFTERNOON TIME OUT (5 PM)';
                     } else {
-                        setScannedData({ name: workerName, message: 'Afternoon shift already completed for today.' });
-                        setRfidState('ERROR');
-                        return;
+                        if (aIn === '—' || !aIn) {
+                            aIn = timeString;
+                            action = 'AFTERNOON TIME IN (1 PM)';
+                        } else if (aOut === '—' || !aOut) {
+                            aOut = timeString;
+                            action = 'AFTERNOON TIME OUT (5 PM)';
+                        } else {
+                            setScannedData({ name: workerName, message: 'Afternoon shift already completed for today.' });
+                            setRfidState('ERROR');
+                            return;
+                        }
                     }
                 }
 
@@ -431,7 +464,18 @@ export default function Attendance() {
                 setScannedData({ name: workerName, displayRole: existingWorker.role, time: timeString, action, status: evalRes.status });
                 setRfidState('SUCCESS_IN');
             } else {
-                // First tap of the day
+                // First tap of the day -> Check if attempting to Time Out without Timing In
+                if (minutes !== null && minutes >= 11 * 60 + 30 && minutes < 12 * 60 + 30) {
+                    setScannedData({ name: workerName, message: 'Bawal mag-Time Out: Walang naitalang Morning Time In.' });
+                    setRfidState('ERROR');
+                    return;
+                }
+                if (minutes !== null && minutes >= 15 * 60 + 30) {
+                    setScannedData({ name: workerName, message: 'Bawal mag-Time Out: Walang naitalang Time In ngayong araw.' });
+                    setRfidState('ERROR');
+                    return;
+                }
+
                 let mIn = '—';
                 let aIn = '—';
                 let action = '';
@@ -506,6 +550,62 @@ export default function Attendance() {
 
     const totalAdvances = displayedWorkers.reduce((sum, w) => sum + (w.advance || 0), 0);
     const totalManpowerExpense = (skilledTotal + laborTotal) - totalAdvances;
+
+    // Export Daily Attendance to CSV
+    const handleExportCSV = () => {
+        if (!displayedWorkers || displayedWorkers.length === 0) {
+            alert('No attendance records available to export for this date.');
+            return;
+        }
+
+        const headers = [
+            'Date',
+            'Worker Name',
+            'Role',
+            'Status',
+            'Morning In',
+            'Morning Out',
+            'Afternoon In',
+            'Afternoon Out',
+            'Daily Rate (PHP)',
+            'Earned Wage (PHP)',
+            'Cash Advance (PHP)'
+        ];
+
+        const rows = displayedWorkers.map(w => {
+            const wage = getWorkerWage(w);
+            const mIn = w.morningIn || w.morning_in || '—';
+            const mOut = w.morningOut || w.morning_out || '—';
+            const aIn = w.afternoonIn || w.afternoon_in || '—';
+            const aOut = w.afternoonOut || w.afternoon_out || '—';
+            const statusLabel = isNonWorkingDay ? 'Rest Day / Off' : (w.status || 'Present');
+
+            return [
+                `"${selectedDate}"`,
+                `"${(w.worker_name || w.name || '').replace(/"/g, '""')}"`,
+                `"${(w.role || '').replace(/"/g, '""')}"`,
+                `"${statusLabel}"`,
+                `"${mIn}"`,
+                `"${mOut}"`,
+                `"${aIn}"`,
+                `"${aOut}"`,
+                Number(w.rate || 0),
+                wage,
+                Number(w.advance || 0)
+            ];
+        });
+
+        const currentProj = mockProjects.find(p => p.id === currentProjectId);
+        const projLabel = currentProj?.name ? `_${currentProj.name.replace(/[^\w-]/g, '_')}` : '';
+        const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement('a');
+        link.setAttribute('href', encodedUri);
+        link.setAttribute('download', `Attendance_${selectedDate}${projLabel}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
 
     const selectStyles = {
         backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3e%3cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3e%3c/svg%3e")`,
@@ -621,6 +721,17 @@ export default function Attendance() {
                 </div>
 
                 <div className="flex items-center gap-2 w-full md:w-auto mt-2 md:mt-0">
+                    <button
+                        type="button"
+                        onClick={handleExportCSV}
+                        title="Download current attendance records as CSV for Excel"
+                        className="flex-1 md:flex-none border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 px-3.5 py-1.5 rounded-lg font-bold text-[11px] shadow-2xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                        <svg className="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <span>Export CSV</span>
+                    </button>
                     <button
                         onClick={() => {
                             if (isNonWorkingDay) {
@@ -853,8 +964,13 @@ export default function Attendance() {
 
                         <div className="flex flex-col items-center justify-center p-6 pb-4 text-center">
                             <div className="w-20 h-20 bg-[#fce8e6] rounded-full flex items-center justify-center text-[#A63228] font-extrabold text-sm mb-4">RFID</div>
-                            <h3 className="text-[13px] font-extrabold text-gray-900 mb-1.5">Waiting for Card...</h3>
-                            <p className="text-[9px] text-gray-500 max-w-[200px] mb-4">Tap the worker's registered RFID/NFC ID card on the ESP32 scanner.</p>
+                            <h3 className="text-[13px] font-extrabold text-gray-900 mb-1">Waiting for Card...</h3>
+                            <p className="text-[9px] text-gray-500 max-w-[220px] mb-2">Tap the worker's registered RFID/NFC ID card on the ESP32 scanner.</p>
+                            
+                            <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-[8px] font-bold px-2.5 py-1 rounded-full mb-3">
+                                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                <span>ESP32 Hardware Endpoint Online</span>
+                            </div>
 
                             {/* Developer Tools for Simulation */}
                             <div className="w-full mt-2 p-3 bg-gray-50 border border-dashed border-gray-300 rounded-lg">

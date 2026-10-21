@@ -10,7 +10,6 @@ export default function ProjectDetails() {
     const [project, setProject] = useState(null)
     const [expenses, setExpenses] = useState([])
     const [attendance, setAttendance] = useState([])
-    const [materials, setMaterials] = useState([])
     const [assets, setAssets] = useState([])
     const [additions, setAdditions] = useState([])
     const [loading, setLoading] = useState(true)
@@ -27,16 +26,14 @@ export default function ProjectDetails() {
             api.get(`/projects`).catch(() => []),
             api.get(`/expenses/${id}`).catch(() => []),
             api.get(`/attendance/${id}`).catch(() => []),
-            api.get(`/materials/${id}`).catch(() => []),
             api.get(`/assets/${id}`).catch(() => []),
             api.get(`/projects/${id}/budget-additions`).catch(() => [])
-        ]).then(([projs, exp, att, mat, ast, added]) => {
+        ]).then(([projs, exp, att, ast, added]) => {
             const projectList = Array.isArray(projs) ? projs : []
             const found = projectList.find(p => String(p.id) === String(id))
             setProject(found || null)
             setExpenses(Array.isArray(exp) ? exp : [])
             setAttendance(Array.isArray(att) ? att : [])
-            setMaterials(Array.isArray(mat) ? mat : [])
             setAssets(Array.isArray(ast) ? ast : [])
             setAdditions(Array.isArray(added) ? added : [])
         }).catch(console.error)
@@ -84,31 +81,6 @@ export default function ProjectDetails() {
     const inUseAssets = assets.filter(a => a.status === 'In Use')
     const recentExpenses = [...expenses].slice(0, 3)
 
-    const expensesMaterials = expenses
-        .filter(e => (e.category || '').toUpperCase() === 'MATERIALS')
-        .flatMap(e => (e.items || []).map(item => ({
-            name: item.description,
-            quantity: item.qty,
-            unit: item.unit || 'pc/s',
-            unit_cost: item.price
-        })));
-
-    const combinedMaterials = [
-        ...materials.map(m => ({
-            name: m.name,
-            quantity: m.qty || m.quantity || 0,
-            unit: m.unit || '',
-            unit_cost: m.cost || m.unit_cost || 0
-        })),
-        ...expensesMaterials
-    ];
-
-    const totalMaterialCost = combinedMaterials.reduce((s, m) => s + (Number(m.quantity || 0) * Number(m.unit_cost || 0)), 0);
-
-    // Materials logged via Materials Management (not from expense receipts) — these are "unreceipted"
-    const unreceiptedMaterials = materials // `materials` state = only manually logged ones from Materials module
-    const unreceiptedTotal = unreceiptedMaterials.reduce((s, m) => s + (Number(m.qty || m.quantity || 0) * Number(m.cost || m.unit_cost || 0)), 0)
-
     const formatDate = (d) => {
         if (!d) return '—'
         return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -117,9 +89,6 @@ export default function ProjectDetails() {
     const isOngoing = (project.status || '').toUpperCase() !== 'COMPLETED'
 
     // ── BUDGET BREAKDOWN ──
-    // Materials from Materials Management (direct logs)
-    const materialsCost = materials.reduce((s, m) => s + (Number(m.qty || m.quantity || 0) * Number(m.cost || m.unit_cost || 0)), 0)
-
     // Expenses breakdown by category
     const expensesByCategory = {
         Materials: 0,
@@ -135,8 +104,8 @@ export default function ProjectDetails() {
         else expensesByCategory.Other += Number(e.amount || 0)
     })
 
-    // Total cost = materials logged + all expense receipts
-    const totalCombinedCost = materialsCost + totalSpent
+    // Total cost = all verified expense receipts
+    const totalCombinedCost = totalSpent
     const remainingBudget = budget - totalCombinedCost
     const usedPercent = budget > 0 ? Math.min(Math.round((totalCombinedCost / budget) * 100), 100) : 0
     const isOverBudget = remainingBudget < 0
@@ -245,16 +214,7 @@ export default function ProjectDetails() {
                     </div>
 
                     {/* ── COST BREAKDOWN ROW ── */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 pt-2.5 border-t border-white/10">
-                        {/* Materials from Materials Management */}
-                        <div className="bg-white/10 rounded-lg p-2">
-                            <div className="flex items-center gap-1 mb-1">
-                                <div className="w-1.5 h-1.5 rounded-full bg-[#E8C547]" />
-                                <p className="text-[7.5px] font-bold text-white/60 uppercase tracking-wide">Materials Used</p>
-                            </div>
-                            <p className="text-[11px] font-extrabold text-white">₱{materialsCost.toLocaleString()}</p>
-                            <p className="text-[7px] text-white/40 mt-0.5">{materials.length} item{materials.length !== 1 ? 's' : ''} logged</p>
-                        </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2.5 border-t border-white/10">
                         {/* Materials from Expenses */}
                         <div className="bg-white/10 rounded-lg p-2">
                             <div className="flex items-center gap-1 mb-1">
@@ -262,7 +222,7 @@ export default function ProjectDetails() {
                                 <p className="text-[7.5px] font-bold text-white/60 uppercase tracking-wide">Material Receipts</p>
                             </div>
                             <p className="text-[11px] font-extrabold text-white">₱{expensesByCategory.Materials.toLocaleString()}</p>
-                            <p className="text-[7px] text-white/40 mt-0.5">from receipts/expenses</p>
+                            <p className="text-[7px] text-white/40 mt-0.5">from verified receipts</p>
                         </div>
                         {/* Manpower */}
                         <div className="bg-white/10 rounded-lg p-2">
@@ -285,8 +245,8 @@ export default function ProjectDetails() {
                     </div>
                 </div>
 
-                {/* ── 2x2 GRID ── */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+                {/* ── 3-COLUMN GRID ── */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
                     {/* MANPOWER */}
                     <div className="bg-white rounded-xl p-3.5 shadow-sm flex flex-col border border-gray-100">
                         <h4 className="font-extrabold text-[11px] text-gray-900 mb-2">Manpower</h4>
@@ -296,37 +256,6 @@ export default function ProjectDetails() {
                             <div className="flex justify-between text-[9px] pb-1"><span className="text-gray-500 font-medium">Today's Daily Wages</span><strong className="text-[#A63228] font-bold">₱{todayWage.toLocaleString()}</strong></div>
                         </div>
                         <Link to={`/attendance/${id}`} className="text-[#A63228] text-[9px] font-bold text-right mt-2 hover:underline">View Attendance →</Link>
-                    </div>
-
-                    {/* MATERIALS */}
-                    <div className="bg-white rounded-xl p-3.5 shadow-sm flex flex-col border border-gray-100">
-                        <div className="flex justify-between items-center mb-2">
-                            <h4 className="font-extrabold text-[11px] text-gray-900">Materials</h4>
-                            <span className="text-[8px] font-bold text-[#A63228] bg-red-50 px-1.5 py-0.5 rounded">
-                                Total: ₱{materialsCost.toLocaleString()}
-                            </span>
-                        </div>
-                        <div className="flex flex-col gap-2 flex-1">
-                            {materials.length === 0 ? (
-                                <p className="text-[9px] text-gray-400 italic">No materials logged yet.</p>
-                            ) : materials.slice(0, 3).map((mat, i) => (
-                                <div key={i} className="flex justify-between text-[9px] border-b border-gray-50 pb-1">
-                                    <span className="text-gray-500 font-medium">{mat.name}</span>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-gray-700">{mat.qty || mat.quantity} {mat.unit}</span>
-                                        <strong className="text-[#A63228] font-bold">₱{(Number(mat.qty || mat.quantity || 0) * Number(mat.cost || mat.unit_cost || 0)).toLocaleString()}</strong>
-                                    </div>
-                                </div>
-                            ))}
-                            {materials.length > 3 && (
-                                <p className="text-[8px] text-gray-400 italic">+{materials.length - 3} more items...</p>
-                            )}
-                            <div className="flex justify-between text-[9px] pt-1 border-t border-gray-100">
-                                <span className="text-gray-500 font-medium">Budget Impact</span>
-                                <strong className="text-[#A63228] font-extrabold">- ₱{materialsCost.toLocaleString()}</strong>
-                            </div>
-                        </div>
-                        <Link to={`/materials/${id}`} className="text-[#A63228] text-[9px] font-bold text-right mt-2 hover:underline">View Material Log →</Link>
                     </div>
 
                     {/* EQUIPMENT */}

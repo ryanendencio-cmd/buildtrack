@@ -27,7 +27,6 @@ export default function Reports() {
         const params = `?project_id=${selectedProject}&month=${selectedMonth}`;
         const endpoint = reportType === 'Expenses' ? `/reports/expenses${params}`
             : reportType === 'Manpower' ? `/reports/manpower${params}`
-            : reportType === 'Materials' ? `/reports/materials?project_id=${selectedProject}`
             : `/reports/assets?project_id=${selectedProject}`;
         api.get(endpoint).then(data => { setReportData(data); setLoading(false); }).catch(() => setLoading(false));
     }, [selectedProject, selectedMonth, reportType]);
@@ -54,11 +53,6 @@ export default function Reports() {
             { label: 'PRESENT', value: `${reportData.present || 0} Workers`, color: 'text-[#2e7d32]' },
             { label: 'ABSENT', value: `${reportData.absent || 0} Workers`, color: 'text-gray-900' },
         ];
-        if (reportType === 'Materials') return [
-            { label: 'TOTAL MATERIAL COST', value: `₱${Number(reportData.totalCost || 0).toLocaleString()}`, color: 'text-[#A63228]' },
-            { label: 'ITEMS LOGGED', value: `${reportData.itemCount || 0} Items`, color: 'text-gray-900' },
-            { label: 'ACTIVE SITES', value: `${projects.length} Sites`, color: 'text-[#2e7d32]' },
-        ];
         if (reportType === 'Assets') return [
             { label: 'IN USE', value: `${reportData.inUse || 0} Tools`, color: 'text-[#A63228]' },
             { label: 'AVAILABLE', value: `${reportData.available || 0} Tools`, color: 'text-[#2e7d32]' },
@@ -72,7 +66,6 @@ export default function Reports() {
             ? ['DATE', 'PROJECT', 'RECEIPT NO.', 'CATEGORY', 'AMOUNT']
             : ['DATE', 'RECEIPT NO.', 'CATEGORY', 'AMOUNT'];
         if (reportType === 'Manpower') return ['DATE', 'WORKER', 'ROLE', 'STATUS', 'DAILY RATE'];
-        if (reportType === 'Materials') return ['PROJECT', 'MATERIAL NAME', 'QTY', 'UNIT', 'UNIT COST', 'TOTAL'];
         if (reportType === 'Assets') return ['PROJECT', 'EQUIPMENT', 'TYPE', 'ASSIGNED TO', 'STATUS'];
         return [];
     };
@@ -89,14 +82,6 @@ export default function Reports() {
             id: r.id,
             cols: [r.date, r.worker_name, r.role || '—', r.status, `₱${Number(r.daily_rate || 0).toLocaleString()}`]
         }));
-        if (reportType === 'Materials') return reportData.rows.map(r => {
-            const q = Number(r.qty ?? r.quantity ?? 0);
-            const c = Number(r.cost ?? r.unit_cost ?? 0);
-            return {
-                id: r.id,
-                cols: [r.project_name || '—', r.name, q, r.unit || 'pcs', `₱${c.toLocaleString()}`, `₱${(q * c).toLocaleString()}`]
-            };
-        });
         if (reportType === 'Assets') return reportData.rows.map(r => ({
             id: r.id,
             cols: [r.project_name || '—', r.name, r.type || '—', r.assigned_to || '—', r.status]
@@ -113,8 +98,26 @@ export default function Reports() {
     };
 
     const handleExport = () => {
+        const rowsData = getRows();
+        if (!rowsData || rowsData.length === 0) {
+            alert('No records available to export for the selected filters.');
+            return;
+        }
+
         setModalState('LOADING_EXPORT');
-        setTimeout(() => setModalState('SUCCESS_EXPORT'), 1500);
+
+        const csvHeaders = getHeaders();
+        const csvRows = rowsData.map(r => r.cols.map(c => `"${String(c || '').replace(/"/g, '""')}"`));
+        const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [csvHeaders.join(','), ...csvRows.map(e => e.join(','))].join('\n');
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement('a');
+        link.setAttribute('href', encodedUri);
+        link.setAttribute('download', `BuildTrack_${reportType}_Report_${selectedMonth}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        setTimeout(() => setModalState('SUCCESS_EXPORT'), 800);
     };
 
     const selectStyles = {
@@ -165,7 +168,6 @@ export default function Reports() {
                     <select value={reportType} onChange={e => setReportType(e.target.value)} className="w-full bg-[#f4f1ee] border border-transparent rounded-lg pl-3 pr-8 py-1.5 text-[10px] font-bold text-gray-800 outline-none appearance-none" style={selectStyles}>
                         <option value="Expenses">Expenses & Budget</option>
                         <option value="Manpower">Attendance & Manpower</option>
-                        <option value="Materials">Material Usage</option>
                         <option value="Assets">Assets & Equipment</option>
                     </select>
                 </div>

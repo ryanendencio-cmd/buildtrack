@@ -12,9 +12,19 @@ export default function Dashboard() {
   const [projects, setProjects] = useState([]);
   const [selectedProjectId, setSelectedProjectId] = useState('ALL');
   const [activityFilter, setActivityFilter] = useState('ALL'); // 'ALL' | 'RECEIPT' | 'MATERIAL'
+  const [pieChartProjectId, setPieChartProjectId] = useState('ALL');
+  const [pieChartViewMode, setPieChartViewMode] = useState('UTILIZATION'); // 'UTILIZATION' | 'BY_PROJECT'
+
+  // Sync pie chart project when global filter changes
+  useEffect(() => {
+    if (selectedProjectId !== 'ALL') {
+      setPieChartProjectId(selectedProjectId);
+    } else {
+      setPieChartProjectId('ALL');
+    }
+  }, [selectedProjectId]);
 
   const [rawExpenses, setRawExpenses] = useState([]);
-  const [rawMaterials, setRawMaterials] = useState([]);
   const [rawWorkers, setRawWorkers] = useState([]);
   const [equipment, setEquipment] = useState({ available: 0, inUse: 0, maintenance: 0 });
 
@@ -40,20 +50,13 @@ export default function Dashboard() {
     return rawExpenses.filter(e => isProjectMatch(e, targetProject));
   }, [rawExpenses, selectedProjectId, targetProject]);
 
-  const scopedMaterials = useMemo(() => {
-    if (selectedProjectId === 'ALL') return rawMaterials;
-    return rawMaterials.filter(m => isProjectMatch(m, targetProject));
-  }, [rawMaterials, selectedProjectId, targetProject]);
-
   const scopedWorkers = useMemo(() => {
     if (selectedProjectId === 'ALL') return rawWorkers;
     return rawWorkers.filter(w => isProjectMatch(w, targetProject));
   }, [rawWorkers, selectedProjectId, targetProject]);
 
   const scopedFinancials = useMemo(() => {
-    const receiptsSpent = scopedExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
-    const materialsSpent = scopedMaterials.reduce((sum, m) => sum + (Number(m.qty || m.quantity || 0) * Number(m.cost || m.unit_cost || 0)), 0);
-    const totalSpent = receiptsSpent + materialsSpent;
+    const totalSpent = scopedExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
 
     let totalBudget = 0;
     if (selectedProjectId === 'ALL') {
@@ -70,21 +73,17 @@ export default function Dashboard() {
       const c = e.category || 'Uncategorized';
       catMap[c] = (catMap[c] || 0) + Number(e.amount || 0);
     });
-    if (materialsSpent > 0) {
-      catMap['Materials'] = (catMap['Materials'] || 0) + materialsSpent;
-    }
     const categories = Object.keys(catMap).map(category => ({ category, total: catMap[category] }));
 
     return {
-      receiptsSpent,
-      materialsSpent,
+      receiptsSpent: totalSpent,
       totalSpent,
       totalBudget,
       remaining,
       percent,
       categories
     };
-  }, [scopedExpenses, scopedMaterials, selectedProjectId, targetProject, projects]);
+  }, [scopedExpenses, selectedProjectId, targetProject, projects]);
 
   const scopedMonthlyData = useMemo(() => {
     const months = Array(12).fill(0);
@@ -97,19 +96,11 @@ export default function Dashboard() {
         }
       }
     });
-    scopedMaterials.forEach(m => {
-      if (m.date) {
-        const d = new Date(m.date);
-        if (d.getFullYear() === currentYear) {
-          months[d.getMonth()] += (Number(m.qty || m.quantity || 0) * Number(m.cost || m.unit_cost || 0));
-        }
-      }
-    });
     return months;
-  }, [scopedExpenses, scopedMaterials]);
+  }, [scopedExpenses]);
 
   const scopedRecentActivities = useMemo(() => {
-    const formattedExpenses = scopedExpenses.map(e => ({
+    return scopedExpenses.map(e => ({
       id: e.id,
       type: 'expense',
       category: e.category || 'Expense',
@@ -117,28 +108,10 @@ export default function Dashboard() {
       amount: Number(e.amount || 0),
       date: e.date,
       project_id: e.project_id
-    }));
-
-    const formattedMaterials = scopedMaterials.map(m => {
-      const qty = Number(m.qty || m.quantity || 0);
-      const cost = Number(m.cost || m.unit_cost || 0);
-      const unitStr = m.unit ? ` ${m.unit}` : '';
-      return {
-        id: m.id,
-        type: 'material',
-        category: 'Materials',
-        name: m.name || 'Material Item',
-        description: m.name ? `${m.name} (${qty}${unitStr})` : 'Material Usage Log',
-        amount: qty * cost,
-        date: m.date,
-        project_id: m.project_id
-      };
-    });
-
-    return [...formattedExpenses, ...formattedMaterials]
+    }))
       .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
       .slice(0, 20);
-  }, [scopedExpenses, scopedMaterials]);
+  }, [scopedExpenses]);
 
   const filteredActivities = useMemo(() => {
     if (activityFilter === 'RECEIPT') return scopedRecentActivities.filter(e => e.type !== 'material');
@@ -180,9 +153,7 @@ export default function Dashboard() {
   const projectSummaries = useMemo(() => {
     return projects.map(p => {
       const pExpenses = rawExpenses.filter(e => isProjectMatch(e, p));
-      const pMaterials = rawMaterials.filter(m => isProjectMatch(m, p));
-      const spent = pExpenses.reduce((s, e) => s + Number(e.amount || 0), 0) +
-                    pMaterials.reduce((s, m) => s + (Number(m.qty || m.quantity || 0) * Number(m.cost || m.unit_cost || 0)), 0);
+      const spent = pExpenses.reduce((s, e) => s + Number(e.amount || 0), 0);
       const budget = Number(p.budget || p.contract || 0);
       const workersCount = rawWorkers.filter(w => isProjectMatch(w, p)).length;
       const pct = budget > 0 ? Math.round((spent / budget) * 100) : 0;
@@ -194,7 +165,35 @@ export default function Dashboard() {
         pct
       };
     });
-  }, [projects, rawExpenses, rawMaterials, rawWorkers]);
+  }, [projects, rawExpenses, rawWorkers]);
+
+  const activePieProject = useMemo(() => {
+    if (pieChartProjectId === 'ALL') {
+      const totalBudget = projects.reduce((sum, p) => sum + Number(p.budget || p.contract || 0), 0);
+      const totalSpent = rawExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+      return {
+        id: 'ALL',
+        name: 'All Projects',
+        budget: totalBudget,
+        spent: totalSpent
+      };
+    }
+    const found = projectSummaries.find(p => String(p.id) === String(pieChartProjectId));
+    if (found) {
+      return {
+        id: found.id,
+        name: found.name || found.title || 'Selected Project',
+        budget: Number(found.budget || 0),
+        spent: Number(found.spent || 0)
+      };
+    }
+    return {
+      id: 'ALL',
+      name: 'All Projects',
+      budget: projects.reduce((sum, p) => sum + Number(p.budget || p.contract || 0), 0),
+      spent: rawExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0)
+    };
+  }, [pieChartProjectId, projects, rawExpenses, projectSummaries]);
 
   // General Input & Profile Fetch
   const [adminName, setAdminName] = useState(() => {
@@ -211,13 +210,11 @@ export default function Dashboard() {
   const fetchDashboardData = () => {
     Promise.all([
       api.get('/expenses').catch(() => []),
-      api.get('/materials/ALL').catch(() => []),
       api.get('/workers').catch(() => []),
       api.get('/projects').catch(() => []),
       api.get('/assets/summary').catch(() => ({ available: 0, inUse: 0, maintenance: 0 }))
-    ]).then(([exps, mats, wrks, projs, assetData]) => {
+    ]).then(([exps, wrks, projs, assetData]) => {
       setRawExpenses(Array.isArray(exps) ? exps : []);
-      setRawMaterials(Array.isArray(mats) ? mats : []);
       setRawWorkers(Array.isArray(wrks) ? wrks : []);
       if (Array.isArray(projs)) {
         setProjects(projs);
@@ -389,7 +386,7 @@ export default function Dashboard() {
           </div>
           <div className="flex justify-between items-center pt-2 border-t border-gray-50 text-[8px]">
             <p className="text-gray-400 font-medium truncate pr-1">
-              Receipts: ₱{scopedFinancials.receiptsSpent.toLocaleString()} · Mat: ₱{scopedFinancials.materialsSpent.toLocaleString()}
+              Verified Receipts: ₱{scopedFinancials.totalSpent.toLocaleString()}
             </p>
             <span className="font-bold text-[#A63228] group-hover:underline shrink-0">
               View All →
@@ -483,8 +480,8 @@ export default function Dashboard() {
             <h3 className="text-sm font-extrabold">Expense vs Budget</h3>
             <span className="text-[10px] text-white/70">
               {selectedProjectId === 'ALL'
-                ? 'All Projects · Expenses & Materials'
-                : `${targetProject?.name || targetProject?.title} · Site Spending & Materials`}
+                ? 'All Projects · Expenses & Receipts'
+                : `${targetProject?.name || targetProject?.title} · Site Spending & Receipts`}
             </span>
           </div>
 
@@ -604,6 +601,7 @@ export default function Dashboard() {
         const currentMonth = new Date().getMonth(); // 0-indexed
         const maxVal = Math.max(...scopedMonthlyData, 1);
         const fmt = (v) => v >= 1000000 ? `${(v/1000000).toFixed(1)}M` : v >= 1000 ? `${Math.round(v/1000)}k` : v;
+        const fmtFull = (v) => Number(v || 0).toLocaleString();
 
         // Linear Regression Calculation for Time-Based Trendline
         const activePoints = scopedMonthlyData
@@ -634,15 +632,49 @@ export default function Dashboard() {
         const trendY2Val = Math.max(0, bIntercept + (mSlope * (lastIdx + 1)));
         const trendY2 = Math.max(-20, Math.min(130, 110 - Math.round((trendY2Val / maxVal) * 100)));
 
-        // Clustered Comparison Data: Project Budget vs Actual Spent
-        const activeProjectsList = projectSummaries
-          .filter(p => !isUpcomingStatus(p.status))
-          .slice(0, 4);
-        const displayProjects = activeProjectsList.length > 0 ? activeProjectsList : projectSummaries.slice(0, 4);
-        const maxClusterVal = Math.max(
-          ...displayProjects.map(p => Math.max(Number(p.budget || 0), Number(p.spent || 0))),
-          1000
-        );
+        // Pie / Donut Chart Parameters (Budget vs Actual Cost)
+        const pieR = 36;
+        const pieC = 2 * Math.PI * pieR; // ~226.195
+        const pieBudget = Number(activePieProject.budget || 0);
+        const pieSpent = Number(activePieProject.spent || 0);
+        const isOverBudget = pieSpent > pieBudget && pieBudget > 0;
+        const pieRemaining = Math.max(0, pieBudget - pieSpent);
+        const pieOverrun = Math.max(0, pieSpent - pieBudget);
+        const spentPct = pieBudget > 0 ? Math.round((pieSpent / pieBudget) * 100) : (pieSpent > 0 ? 100 : 0);
+        const remPct = Math.max(0, 100 - spentPct);
+
+        let spentDash = 0;
+        let remDash = 0;
+        let overrunDash = 0;
+
+        if (pieBudget === 0 && pieSpent === 0) {
+          spentDash = 0;
+          remDash = 0;
+        } else if (isOverBudget) {
+          spentDash = (pieBudget / pieSpent) * pieC;
+          overrunDash = (pieOverrun / pieSpent) * pieC;
+        } else {
+          spentDash = pieBudget > 0 ? (pieSpent / pieBudget) * pieC : pieC;
+          remDash = Math.max(0, pieC - spentDash);
+        }
+
+        // Project Breakdown for BY_PROJECT view mode
+        const projectsWithSpent = projectSummaries
+          .filter(p => Number(p.spent || 0) > 0)
+          .sort((a, b) => Number(b.spent || 0) - Number(a.spent || 0));
+        const totalAllSpent = projectSummaries.reduce((s, p) => s + Number(p.spent || 0), 0);
+        const PROJECT_PIE_COLORS = ['#8B1A10', '#2563EB', '#059669', '#D97706', '#7C3AED', '#0891B2', '#EA580C'];
+
+        let cumulativeProjDash = 0;
+        const projectSlices = projectsWithSpent.map((p, idx) => {
+          const pSpent = Number(p.spent || 0);
+          const dash = totalAllSpent > 0 ? (pSpent / totalAllSpent) * pieC : 0;
+          const offset = -cumulativeProjDash;
+          cumulativeProjDash += dash;
+          const pct = totalAllSpent > 0 ? Math.round((pSpent / totalAllSpent) * 100) : 0;
+          const color = PROJECT_PIE_COLORS[idx % PROJECT_PIE_COLORS.length];
+          return { ...p, pSpent, dash, offset, pct, color };
+        });
 
         return (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-4">
@@ -746,80 +778,289 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* CHART 2: CLUSTERED COLUMN CHART (PROJECT BUDGET VS ACTUAL SPENT) */}
+            {/* CHART 2: PIE / DONUT CHART (PROJECT BUDGET VS ACTUAL COST) */}
             <div className="bg-white rounded-xl shadow-xs border border-gray-100 p-4 flex flex-col justify-between">
-              <div className="flex justify-between items-start mb-3">
+              {/* Header */}
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-2 pb-2 border-b border-gray-50">
                 <div>
                   <h3 className="text-xs font-extrabold text-gray-900">Project Budget vs. Actual Cost</h3>
                   <p className="text-[9px] text-gray-400 font-medium mt-0.5">
-                    Clustered comparison across active projects.
+                    {pieChartViewMode === 'UTILIZATION'
+                      ? (activePieProject.id === 'ALL'
+                          ? 'Total budget utilization across all projects.'
+                          : `Budget utilization for "${activePieProject.name}".`)
+                      : 'Distribution of actual costs across projects.'}
                   </p>
                 </div>
-                {/* Legend */}
-                <div className="flex items-center gap-2.5 text-[8px] font-bold">
-                  <span className="flex items-center gap-1 text-slate-500">
-                    <span className="w-2 h-2 bg-slate-300 rounded-2xs inline-block"></span>
-                    Budget
-                  </span>
-                  <span className="flex items-center gap-1 text-[#8B1A10]">
-                    <span className="w-2 h-2 bg-[#8B1A10] rounded-2xs inline-block"></span>
-                    Spent
-                  </span>
+
+                <div className="flex items-center gap-1.5">
+                  {/* View Mode Toggle: Budget vs Cost or By Project */}
+                  <div className="flex items-center bg-gray-100 p-0.5 rounded-lg text-[8px] font-bold">
+                    <button
+                      type="button"
+                      onClick={() => setPieChartViewMode('UTILIZATION')}
+                      className={`px-2 py-0.5 rounded-md transition-all cursor-pointer ${
+                        pieChartViewMode === 'UTILIZATION'
+                          ? 'bg-white shadow-2xs text-[#8B1A10] font-black'
+                          : 'text-gray-500 hover:text-gray-900'
+                      }`}
+                    >
+                      Budget vs Cost
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPieChartViewMode('BY_PROJECT')}
+                      className={`px-2 py-0.5 rounded-md transition-all cursor-pointer ${
+                        pieChartViewMode === 'BY_PROJECT'
+                          ? 'bg-white shadow-2xs text-[#8B1A10] font-black'
+                          : 'text-gray-500 hover:text-gray-900'
+                      }`}
+                    >
+                      By Project
+                    </button>
+                  </div>
+
+                  {/* Project Selector (UTILIZATION mode) */}
+                  {pieChartViewMode === 'UTILIZATION' && (
+                    <select
+                      value={pieChartProjectId}
+                      onChange={(e) => setPieChartProjectId(e.target.value)}
+                      className="text-[8.5px] font-bold bg-gray-50 border border-gray-200 text-gray-700 rounded-md px-1.5 py-0.5 hover:border-gray-300 focus:outline-none focus:border-[#8B1A10] max-w-[125px] truncate cursor-pointer"
+                      title="Filter Budget vs Cost for a specific project"
+                    >
+                      <option value="ALL">All Projects</option>
+                      {projects.map(p => (
+                        <option key={p.id} value={p.id}>{p.name || p.title}</option>
+                      ))}
+                    </select>
+                  )}
                 </div>
               </div>
 
-              {displayProjects.length === 0 ? (
-                <div className="h-28 flex items-center justify-center text-[10px] text-gray-400">
-                  No projects available for comparison
-                </div>
-              ) : (
-                <div className="relative h-28 w-full flex flex-col justify-end">
-                  <div className="flex items-end justify-around h-24 px-2 border-b border-gray-100 pb-1">
-                    {displayProjects.map((p, idx) => {
-                      const budgetH = maxClusterVal > 0 ? Math.min(100, Math.round((Number(p.budget || 0) / maxClusterVal) * 95)) : 0;
-                      const spentH = maxClusterVal > 0 ? Math.min(100, Math.round((Number(p.spent || 0) / maxClusterVal) * 95)) : 0;
-                      const isOverBudget = Number(p.spent || 0) > Number(p.budget || 0) && Number(p.budget || 0) > 0;
+              {/* Chart Body */}
+              {pieChartViewMode === 'UTILIZATION' ? (
+                /* ── MODE 1: BUDGET VS ACTUAL COST (SPENT VS REMAINING) ── */
+                <div className="flex items-center justify-between gap-3 h-28 w-full">
+                  {/* Left: SVG Pie/Donut Chart */}
+                  <div className="relative w-24 h-24 sm:w-28 sm:h-28 shrink-0 flex items-center justify-center">
+                    <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90 transform">
+                      {/* Base Track */}
+                      <circle
+                        cx="50"
+                        cy="50"
+                        r={pieR}
+                        fill="transparent"
+                        stroke="#f1f5f9"
+                        strokeWidth="12"
+                      />
 
-                      return (
-                        <div key={p.id || idx} className="w-[22%] flex flex-col items-center h-full justify-end group relative">
-                          {/* Tooltip on hover */}
-                          <div className="absolute -top-7 hidden group-hover:flex flex-col items-center bg-gray-900 text-white text-[7px] py-1 px-1.5 rounded shadow-lg z-20 pointer-events-none whitespace-nowrap">
-                            <span className="font-bold">{p.name || p.title}</span>
-                            <span>Budget: ₱{fmt(p.budget)} · Spent: ₱{fmt(p.spent)} ({p.pct}%)</span>
-                          </div>
+                      {pieBudget === 0 && pieSpent === 0 ? null : isOverBudget ? (
+                        <>
+                          {/* Budget portion (Utilized 100%) */}
+                          <circle
+                            cx="50"
+                            cy="50"
+                            r={pieR}
+                            fill="transparent"
+                            stroke="#8B1A10"
+                            strokeWidth="12"
+                            strokeDasharray={`${spentDash} ${pieC}`}
+                            strokeDashoffset={0}
+                          >
+                            <title>{`Budget: ₱${fmtFull(pieBudget)} (100% Utilized)`}</title>
+                          </circle>
+                          {/* Overrun portion */}
+                          <circle
+                            cx="50"
+                            cy="50"
+                            r={pieR}
+                            fill="transparent"
+                            stroke="#dc2626"
+                            strokeWidth="12"
+                            strokeDasharray={`${overrunDash} ${pieC}`}
+                            strokeDashoffset={-spentDash}
+                          >
+                            <title>{`Budget Overrun: +₱${fmtFull(pieOverrun)} (${spentPct - 100}% over)`}</title>
+                          </circle>
+                        </>
+                      ) : (
+                        <>
+                          {/* Actual Cost / Spent */}
+                          {spentDash > 0 && (
+                            <circle
+                              cx="50"
+                              cy="50"
+                              r={pieR}
+                              fill="transparent"
+                              stroke="#8B1A10"
+                              strokeWidth="12"
+                              strokeDasharray={`${spentDash} ${pieC}`}
+                              strokeDashoffset={0}
+                            >
+                              <title>{`Actual Cost: ₱${fmtFull(pieSpent)} (${spentPct}%)`}</title>
+                            </circle>
+                          )}
+                          {/* Remaining Budget */}
+                          {remDash > 0 && (
+                            <circle
+                              cx="50"
+                              cy="50"
+                              r={pieR}
+                              fill="transparent"
+                              stroke="#10b981"
+                              strokeWidth="12"
+                              strokeDasharray={`${remDash} ${pieC}`}
+                              strokeDashoffset={-spentDash}
+                            >
+                              <title>{`Remaining Budget: ₱${fmtFull(pieRemaining)} (${remPct}%)`}</title>
+                            </circle>
+                          )}
+                        </>
+                      )}
+                    </svg>
 
-                          <div className="w-full flex items-end justify-center gap-1.5 h-full">
-                            {/* Budget Bar */}
-                            <div
-                              className="w-[42%] bg-slate-200 hover:bg-slate-300 rounded-t-sm transition-all"
-                              style={{ height: `${Math.max(budgetH, 4)}%` }}
-                              title={`Budget: ₱${Number(p.budget || 0).toLocaleString()}`}
-                            />
-                            {/* Spent Bar */}
-                            <div
-                              className={`w-[42%] rounded-t-sm transition-all ${
-                                isOverBudget ? 'bg-amber-600 hover:bg-amber-700' : 'bg-[#8B1A10] hover:bg-[#A63228]'
-                              }`}
-                              style={{ height: `${Math.max(spentH, 4)}%` }}
-                              title={`Spent: ₱${Number(p.spent || 0).toLocaleString()} (${p.pct}%)`}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
+                    {/* Donut Center Label */}
+                    <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
+                      <span className={`text-sm sm:text-base font-black leading-none ${isOverBudget ? 'text-red-600' : 'text-gray-900'}`}>
+                        {pieBudget === 0 && pieSpent === 0 ? '0%' : `${spentPct}%`}
+                      </span>
+                      <span className={`text-[6.5px] font-extrabold uppercase tracking-wider mt-0.5 ${isOverBudget ? 'text-red-600' : 'text-gray-400'}`}>
+                        {pieBudget === 0 && pieSpent === 0 ? 'NO DATA' : isOverBudget ? 'OVERRUN' : 'SPENT'}
+                      </span>
+                    </div>
                   </div>
 
-                  {/* Project Labels on X-axis */}
-                  <div className="flex justify-around px-2 text-[7px] font-bold text-gray-500 uppercase mt-2">
-                    {displayProjects.map((p, idx) => {
-                      const words = (p.name || p.title || `P${idx+1}`).split(' ');
-                      const displayLabel = words.slice(0, 2).join(' ');
-                      return (
-                        <span key={p.id || idx} className="w-[22%] text-center truncate" title={p.name || p.title}>
-                          {displayLabel}
+                  {/* Right: Financial Breakdown & Legend */}
+                  <div className="flex-1 min-w-0 flex flex-col justify-center gap-1.5 pl-1">
+                    {/* Total Budget */}
+                    <div className="flex items-center justify-between text-[9px]">
+                      <span className="text-gray-500 font-medium flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-2xs bg-slate-300 shrink-0"></span>
+                        <span className="truncate">Total Budget</span>
+                      </span>
+                      <span className="font-extrabold text-gray-900 shrink-0">₱{fmtFull(pieBudget)}</span>
+                    </div>
+
+                    {/* Actual Cost */}
+                    <div className="flex items-center justify-between text-[9px]">
+                      <span className="text-gray-700 font-medium flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-2xs bg-[#8B1A10] shrink-0"></span>
+                        <span className="truncate">Actual Cost</span>
+                      </span>
+                      <span className="font-extrabold text-[#8B1A10] shrink-0">
+                        ₱{fmtFull(pieSpent)} <span className="text-[7.5px] font-semibold text-gray-400">({spentPct}%)</span>
+                      </span>
+                    </div>
+
+                    {/* Remaining or Overrun */}
+                    {isOverBudget ? (
+                      <div className="flex items-center justify-between text-[9px]">
+                        <span className="text-red-600 font-medium flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-2xs bg-red-600 shrink-0"></span>
+                          <span className="truncate">Overrun</span>
                         </span>
-                      );
-                    })}
+                        <span className="font-extrabold text-red-600 shrink-0">
+                          +₱{fmtFull(pieOverrun)}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between text-[9px]">
+                        <span className="text-emerald-700 font-medium flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-2xs bg-emerald-500 shrink-0"></span>
+                          <span className="truncate">Remaining</span>
+                        </span>
+                        <span className="font-extrabold text-emerald-600 shrink-0">
+                          ₱{fmtFull(pieRemaining)} <span className="text-[7.5px] font-semibold text-gray-400">({remPct}%)</span>
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Health Status Pill */}
+                    <div className="pt-1 mt-0.5 border-t border-gray-100 flex items-center justify-between text-[8px]">
+                      <span className="text-gray-400 font-medium">Status</span>
+                      {pieBudget === 0 && pieSpent === 0 ? (
+                        <span className="font-bold text-gray-500 bg-gray-50 border border-gray-200 px-1.5 py-0.2 rounded">
+                          No Activity
+                        </span>
+                      ) : isOverBudget ? (
+                        <span className="font-bold text-red-700 bg-red-50 border border-red-200 px-1.5 py-0.2 rounded">
+                          Budget Exceeded
+                        </span>
+                      ) : spentPct >= 85 ? (
+                        <span className="font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.2 rounded">
+                          Near Cap ({spentPct}%)
+                        </span>
+                      ) : (
+                        <span className="font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded">
+                          Within Budget
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* ── MODE 2: BY PROJECT COST DISTRIBUTION ── */
+                <div className="flex items-center justify-between gap-3 h-28 w-full">
+                  {/* Left: Multi-Slice Donut */}
+                  <div className="relative w-24 h-24 sm:w-28 sm:h-28 shrink-0 flex items-center justify-center">
+                    <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90 transform">
+                      <circle
+                        cx="50"
+                        cy="50"
+                        r={pieR}
+                        fill="transparent"
+                        stroke="#f1f5f9"
+                        strokeWidth="12"
+                      />
+                      {projectSlices.map((s, idx) => (
+                        <circle
+                          key={s.id || idx}
+                          cx="50"
+                          cy="50"
+                          r={pieR}
+                          fill="transparent"
+                          stroke={s.color}
+                          strokeWidth="12"
+                          strokeDasharray={`${s.dash} ${pieC}`}
+                          strokeDashoffset={s.offset}
+                        >
+                          <title>{`${s.name || s.title}: ₱${fmtFull(s.pSpent)} (${s.pct}%)`}</title>
+                        </circle>
+                      ))}
+                    </svg>
+
+                    <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
+                      <span className="text-xs sm:text-sm font-black text-gray-900 leading-none">
+                        ₱{fmt(totalAllSpent)}
+                      </span>
+                      <span className="text-[6.5px] font-extrabold text-gray-400 uppercase tracking-wider mt-0.5">
+                        TOTAL COST
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Right: Projects List & Share */}
+                  <div className="flex-1 min-w-0 flex flex-col justify-center gap-1 pl-1">
+                    <div className="flex items-center justify-between text-[8px] pb-1 border-b border-gray-100">
+                      <span className="text-gray-400 font-bold uppercase tracking-wider">Top Projects by Cost</span>
+                      <span className="text-gray-900 font-extrabold">₱{fmtFull(totalAllSpent)}</span>
+                    </div>
+                    <div className="flex flex-col gap-1 max-h-20 overflow-y-auto pr-0.5">
+                      {projectSlices.slice(0, 3).map((s, idx) => (
+                        <div key={s.id || idx} className="flex items-center justify-between text-[8.5px]">
+                          <span className="text-gray-700 truncate font-medium flex items-center gap-1.5 mr-1.5 min-w-0">
+                            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: s.color }}></span>
+                            <span className="truncate" title={s.name || s.title}>{s.name || s.title}</span>
+                          </span>
+                          <span className="font-extrabold text-gray-900 shrink-0">
+                            ₱{fmt(s.pSpent)} <span className="text-[7.5px] font-semibold text-gray-400">({s.pct}%)</span>
+                          </span>
+                        </div>
+                      ))}
+                      {projectSlices.length === 0 && (
+                        <div className="text-[9px] text-gray-400 py-1">No project expenses logged.</div>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
@@ -889,72 +1130,32 @@ export default function Dashboard() {
           </table>
         </div>
 
-        {/* Recent Activity List: Expenses & Material Logs */}
+        {/* Recent Activity List: Expense Receipts */}
         <div className="flex-1 bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between min-h-[220px]">
           <div>
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-2.5">
               <div>
-                <h3 className="text-sm font-extrabold text-gray-900 leading-tight">Recent Activity</h3>
-                <p className="text-[8.5px] text-gray-400 font-medium">Expenses & Material Usage</p>
+                <h3 className="text-sm font-extrabold text-gray-900 leading-tight">Recent Receipts</h3>
+                <p className="text-[8.5px] text-gray-400 font-medium">Logged Project Expenses & Receipts</p>
               </div>
 
-              {/* Filter Pills */}
-              <div className="flex items-center gap-1 bg-gray-100/80 p-0.5 rounded-lg border border-gray-200/60 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setActivityFilter('ALL')}
-                  className={`text-[8px] font-bold px-2 py-0.5 rounded-md transition-all cursor-pointer ${
-                    activityFilter === 'ALL'
-                      ? 'bg-white text-gray-900 shadow-xs'
-                      : 'text-gray-500 hover:text-gray-900'
-                  }`}
-                >
-                  All ({scopedRecentActivities.length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActivityFilter('RECEIPT')}
-                  className={`text-[8px] font-bold px-2 py-0.5 rounded-md transition-all cursor-pointer ${
-                    activityFilter === 'RECEIPT'
-                      ? 'bg-white text-[#A63228] shadow-xs'
-                      : 'text-gray-500 hover:text-gray-900'
-                  }`}
-                >
-                  Receipts ({scopedRecentActivities.filter(e => e.type !== 'material').length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActivityFilter('MATERIAL')}
-                  className={`text-[8px] font-bold px-2 py-0.5 rounded-md transition-all cursor-pointer ${
-                    activityFilter === 'MATERIAL'
-                      ? 'bg-white text-emerald-800 shadow-xs'
-                      : 'text-gray-500 hover:text-gray-900'
-                  }`}
-                >
-                  Materials ({scopedRecentActivities.filter(e => e.type === 'material').length})
-                </button>
-              </div>
+              {/* Count Badge */}
+              <span className="text-[8px] font-bold px-2 py-0.5 rounded-md bg-gray-100 text-gray-700">
+                {scopedRecentActivities.length} Recent Receipt{scopedRecentActivities.length !== 1 ? 's' : ''}
+              </span>
             </div>
 
             {/* Scrollable Container with max height (prevents card from stretching the dashboard) */}
             <div className="flex flex-col max-h-[170px] overflow-y-auto pr-1.5 scrollbar-custom divide-y divide-gray-50">
-              {filteredActivities.length === 0 ? (
+              {scopedRecentActivities.length === 0 ? (
                 <p className="text-[10px] text-gray-400 text-center py-6">
-                  {activityFilter === 'MATERIAL' 
-                    ? 'No material usage logs.' 
-                    : activityFilter === 'RECEIPT' 
-                      ? 'No expense receipts.' 
-                      : 'No recent activity.'}
+                  No expense receipts recorded yet.
                 </p>
-              ) : filteredActivities.map((item, i) => (
+              ) : scopedRecentActivities.map((item, i) => (
                 <div key={i} className="flex justify-between items-center py-1.5 hover:bg-gray-50/50 px-1 rounded transition-colors">
                   <div className="flex items-center gap-2 min-w-0 pr-2">
-                    <span className={`text-[7px] font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0 ${
-                      item.type === 'material' 
-                        ? 'bg-emerald-50 text-emerald-800 border border-emerald-200/60' 
-                        : 'bg-red-50 text-[#A63228] border border-red-100'
-                    }`}>
-                      {item.type === 'material' ? 'Material' : 'Receipt'}
+                    <span className="text-[7px] font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0 bg-red-50 text-[#A63228] border border-red-100">
+                      Receipt
                     </span>
                     <div className="min-w-0">
                       <h4 className="text-[10px] font-bold text-gray-900 leading-tight truncate">
@@ -975,9 +1176,7 @@ export default function Dashboard() {
           <div className="pt-2 border-t border-gray-100 flex justify-between items-center mt-1 text-[8.5px]">
             <span className="text-gray-400 font-medium">Scroll to view more records</span>
             <div className="flex items-center gap-2 font-bold">
-              <Link to="/expenses" className="text-[#A63228] hover:underline">Expenses →</Link>
-              <span className="text-gray-300">|</span>
-              <Link to="/materials" className="text-emerald-700 hover:underline">Materials →</Link>
+              <Link to="/expenses" className="text-[#A63228] hover:underline">View All Expenses & Receipts →</Link>
             </div>
           </div>
         </div>

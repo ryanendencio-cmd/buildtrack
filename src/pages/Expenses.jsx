@@ -225,6 +225,10 @@ export default function Expenses() {
         }
     }, [isCameraOn, stream]);
 
+    const isOngoingStatus = (statusStr) => {
+        const s = (statusStr || '').toUpperCase();
+        return s === 'ONGOING' || s === 'ACTIVE';
+    };
     const isUpcomingStatus = (statusStr) => {
         const s = (statusStr || '').toUpperCase();
         return s === 'UPCOMING' || s === 'STANDBY' || s.includes('UPCOMING') || s.includes('STANDBY');
@@ -244,11 +248,12 @@ export default function Expenses() {
         }).catch(console.error);
     }, []);
 
-    const activeProject = mockProjects.find(p => !isUpcomingStatus(p.status)) || mockProjects[0];
+    const activeProject = mockProjects.find(p => isOngoingStatus(p.status)) || mockProjects[0];
     const currentProjectId = id || (activeProject?.id ?? (mockProjects[0]?.id ?? "1"));
     const currentProjectData = mockProjects.find(p => p.id === currentProjectId);
     const currentProjectName = currentProjectData?.name || '';
-    const isCurrentProjectUpcoming = isUpcomingStatus(currentProjectData?.status);
+    const isCurrentProjectOngoing = isOngoingStatus(currentProjectData?.status);
+    const isCurrentProjectUpcoming = !isCurrentProjectOngoing;
 
     const [expensesList, setExpensesList] = useState([]);
 
@@ -269,8 +274,8 @@ export default function Expenses() {
         const { name, value } = e.target;
         if (name === 'project') {
             const matched = mockProjects.find(p => p.name === value);
-            if (isUpcomingStatus(matched?.status)) {
-                alert('Cannot add expenses to an upcoming project.');
+            if (matched && !isOngoingStatus(matched?.status)) {
+                alert(`Bawal mag-add ng expenses sa proyektong hindi Ongoing ("${matched.name}").`);
                 return;
             }
         }
@@ -407,8 +412,8 @@ export default function Expenses() {
     const handleInitialSubmit = (e) => {
         e.preventDefault();
         const selectedProj = mockProjects.find(p => p.name === formData.project || p.id === String(currentProjectId));
-        if (isUpcomingStatus(selectedProj?.status)) {
-            setAmountError('Cannot add expenses to an upcoming project. The project must be ONGOING first.');
+        if (selectedProj && !isOngoingStatus(selectedProj?.status)) {
+            setAmountError(`Bawal mag-add ng expenses sa proyektong hindi Ongoing ("${selectedProj?.name || 'Project'}"). Dapat ay ONGOING ang status nito.`);
             return;
         }
         const amt = computedTotal;
@@ -446,8 +451,8 @@ export default function Expenses() {
 
     const handleConfirmAdd = () => {
         const proj = mockProjects.find(p => p.id === String(currentProjectId) || p.name === formData.project);
-        if (isUpcomingStatus(proj?.status)) {
-            alert('Cannot add expenses to an upcoming project. The project must be ONGOING first.');
+        if (proj && !isOngoingStatus(proj?.status)) {
+            alert(`Bawal mag-add ng expenses sa proyektong hindi Ongoing ("${proj?.name || 'Project'}"). Dapat ay ONGOING ang status nito.`);
             return;
         }
         const resolvedItems = formData.items.map(it => ({
@@ -483,8 +488,8 @@ export default function Expenses() {
     const handleScanDetailsSubmit = (e) => {
         e.preventDefault();
         const selectedProj = mockProjects.find(p => p.name === formData.project || p.id === String(currentProjectId));
-        if (isUpcomingStatus(selectedProj?.status)) {
-            setAmountError('Cannot add expenses to an upcoming project. The project must be ONGOING first.');
+        if (selectedProj && !isOngoingStatus(selectedProj?.status)) {
+            setAmountError(`Bawal mag-add ng expenses sa proyektong hindi Ongoing ("${selectedProj?.name || 'Project'}"). Dapat ay ONGOING ang status nito.`);
             return;
         }
         const amt = parseFloat(formData.amount || 0);
@@ -830,7 +835,7 @@ export default function Expenses() {
                             <select value={currentProjectId} onChange={handleProjectChange} className="w-full bg-white border border-gray-100 shadow-sm rounded-lg pl-2.5 pr-6 py-1.5 text-[10px] font-extrabold text-gray-800 outline-none appearance-none" style={selectStyles}>
                                 {mockProjects.map(p => (
                                     <option key={p.id} value={p.id}>
-                                        {p.name} {isUpcomingStatus(p.status) ? '— (UPCOMING / Standby)' : ''}
+                                        {p.name} {!isOngoingStatus(p.status) ? `— (${(p.status || 'Not Ongoing').toUpperCase()})` : ''}
                                     </option>
                                 ))}
                             </select>
@@ -843,7 +848,7 @@ export default function Expenses() {
                                     setModalState('ADD');
                                 }}
                                 disabled={isCurrentProjectUpcoming}
-                                title={isCurrentProjectUpcoming ? "Cannot add expenses to an upcoming project." : "Add Expense"}
+                                title={!isCurrentProjectOngoing ? `Bawal mag-add ng expenses: Ang proyektong ito ay ${currentProjectData?.status || 'hindi Ongoing'}.` : "Add Expense"}
                                 className={isCurrentProjectUpcoming
                                     ? "bg-gray-100 text-gray-400 border border-gray-200 px-3 py-1.5 rounded-lg font-bold text-[10px] shadow-sm cursor-not-allowed opacity-75 flex items-center justify-center gap-1 flex-1 md:flex-none"
                                     : "bg-[#E8C547] text-gray-900 px-3 py-1.5 rounded-lg font-bold text-[10px] shadow-sm hover:bg-[#d4b33d] transition-colors flex items-center justify-center gap-1 flex-1 md:flex-none"
@@ -858,7 +863,7 @@ export default function Expenses() {
                                     setPhotoData(null);
                                 }}
                                 disabled={isCurrentProjectUpcoming}
-                                title={isCurrentProjectUpcoming ? "Cannot scan receipts for an upcoming project." : "Scan Receipt"}
+                                title={!isCurrentProjectOngoing ? `Bawal mag-scan ng resibo: Ang proyektong ito ay ${currentProjectData?.status || 'hindi Ongoing'}.` : "Scan Receipt"}
                                 className={isCurrentProjectUpcoming
                                     ? "bg-gray-100 text-gray-400 border border-gray-200 px-3 py-1.5 rounded-lg font-bold text-[10px] shadow-sm cursor-not-allowed opacity-75 flex-1 md:flex-none"
                                     : "bg-white border border-[#A63228] text-[#A63228] px-3 py-1.5 rounded-lg font-bold text-[10px] shadow-sm hover:bg-red-50 transition-colors flex-1 md:flex-none"
@@ -869,15 +874,15 @@ export default function Expenses() {
                         </div>
                     </div>
 
-                    {isCurrentProjectUpcoming && (
+                    {!isCurrentProjectOngoing && (
                         <div className="bg-[#fffbeb] border border-[#fde68a] text-[#92400e] px-3.5 py-2.5 rounded-xl text-xs flex items-center gap-2.5 mb-3 shadow-xs">
                             <svg className="w-4 h-4 text-[#d97706] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                             </svg>
                             <div className="flex-1">
-                                <span className="font-extrabold uppercase text-[9px] tracking-wider text-[#b45309] mr-1.5">UPCOMING PROJECT:</span>
+                                <span className="font-extrabold uppercase text-[9px] tracking-wider text-[#b45309] mr-1.5">{(currentProjectData?.status || 'HINDI ONGOING').toUpperCase()} PROJECT:</span>
                                 <span className="text-[10px] font-medium text-amber-900">
-                                    This project is currently in <strong>UPCOMING (Standby)</strong> status. Expenses cannot be added until the project is set to <strong>ONGOING</strong>.
+                                    Ang proyektong ito ay may status na <strong>{(currentProjectData?.status || 'Hindi Ongoing').toUpperCase()}</strong>. Bawal magdagdag o mag-scan ng gastusin (expenses) hangga't hindi ito naka-set sa <strong>ONGOING</strong>.
                                 </span>
                             </div>
                         </div>
@@ -1460,8 +1465,8 @@ export default function Expenses() {
                                             style={selectStyles}
                                         >
                                             {mockProjects.map(p => (
-                                                <option key={p.id} value={p.name} disabled={isUpcomingStatus(p.status)}>
-                                                    {p.name} {isUpcomingStatus(p.status) ? '— (Upcoming / Standby - Disabled)' : ''}
+                                                <option key={p.id} value={p.name} disabled={!isOngoingStatus(p.status)}>
+                                                    {p.name} {!isOngoingStatus(p.status) ? `— (${p.status || 'Not Ongoing'} - Disabled)` : ''}
                                                 </option>
                                             ))}
                                         </select>
@@ -1801,8 +1806,8 @@ export default function Expenses() {
                                         <label className="block text-[9px] font-bold text-gray-700 mb-1.5 uppercase">PROJECT</label>
                                         <select name="project" value={formData.project} onChange={handleInputChange} className="w-full bg-[#f4f1ee] border border-transparent rounded-lg pl-3 pr-8 py-2.5 text-xs font-medium focus:border-[#A63228] outline-none appearance-none" style={selectStyles}>
                                             {mockProjects.map(p => (
-                                                <option key={p.id} value={p.name} disabled={isUpcomingStatus(p.status)}>
-                                                    {p.name} {isUpcomingStatus(p.status) ? '— (Upcoming / Standby - Disabled)' : ''}
+                                                <option key={p.id} value={p.name} disabled={!isOngoingStatus(p.status)}>
+                                                    {p.name} {!isOngoingStatus(p.status) ? `— (${p.status || 'Not Ongoing'} - Disabled)` : ''}
                                                 </option>
                                             ))}
                                         </select>

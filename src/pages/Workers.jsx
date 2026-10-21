@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import PhilippineAddressSelector from '../components/PhilippineAddressSelector'
 import { parseLocationToAddress } from '../services/psgc'
@@ -18,6 +19,7 @@ const parsePositions = (pos) => {
 };
 
 export default function Workers() {
+    const [searchParams, setSearchParams] = useSearchParams();
     const [workers, setWorkers] = useState([]);
 
     useEffect(() => {
@@ -44,10 +46,92 @@ export default function Workers() {
         positions: ['Worker'],
         position: 'Worker',
         daily_rate: 600,
+        rfid_uid: '',
         password: '',
         status: 'Active'
     });
     const [successMsg, setSuccessMsg] = useState('');
+    const [modalOpenedAt, setModalOpenedAt] = useState(0);
+    const [tapAlert, setTapAlert] = useState(null);
+    const [viewWorker, setViewWorker] = useState(null);
+
+    // Auto-detect RFID card taps from hardware scanner while Add/Edit modal is open
+    useEffect(() => {
+        if (modalState !== 'ADD' && modalState !== 'EDIT') return;
+
+        const interval = setInterval(() => {
+            api.get('/rfid/latest-scan').then(data => {
+                if (data && data.uid && data.timestamp > modalOpenedAt) {
+                    setFormData(prev => {
+                        if (prev.rfid_uid === data.uid) return prev;
+                        setTapAlert(`Card scanned! UID: ${data.uid} auto-filled.`);
+                        return { ...prev, rfid_uid: data.uid };
+                    });
+                }
+            }).catch(() => {});
+        }, 1200);
+
+        return () => clearInterval(interval);
+    }, [modalState, modalOpenedAt]);
+
+    const handleCloseProfileModal = () => {
+        setViewWorker(null);
+        if (searchParams.get('id') || searchParams.get('name')) {
+            const nextParams = new URLSearchParams(searchParams);
+            nextParams.delete('id');
+            nextParams.delete('name');
+            setSearchParams(nextParams, { replace: true });
+        }
+    };
+
+    // Auto-open worker profile modal from notification navigation link (e.g. ?id=xyz or ?name=Juan)
+    useEffect(() => {
+        const targetId = searchParams.get('id');
+        const targetName = searchParams.get('name');
+        const targetTab = searchParams.get('tab');
+
+        if (targetTab === 'approval') {
+            setActiveTab('APPROVAL');
+        }
+
+        if (!targetId && !targetName) return;
+
+        // 1. Try to find in already loaded workers
+        if (workers.length > 0) {
+            const found = workers.find(w => {
+                if (targetId && String(w.id).trim().toLowerCase() === String(targetId).trim().toLowerCase()) return true;
+                if (targetName) {
+                    const normTarget = String(targetName).trim().toLowerCase().replace(/[(),]/g, '');
+                    const fullName = String(w.full_name || `${w.first_name || ''} ${w.last_name || ''}`).trim().toLowerCase();
+                    const firstName = String(w.first_name || '').trim().toLowerCase();
+                    const lastName = String(w.last_name || '').trim().toLowerCase();
+                    if (
+                        fullName === normTarget ||
+                        fullName.includes(normTarget) ||
+                        normTarget.includes(fullName) ||
+                        (firstName && lastName && normTarget.includes(firstName) && normTarget.includes(lastName))
+                    ) {
+                        return true;
+                    }
+                }
+                return false;
+            });
+
+            if (found) {
+                setViewWorker(found);
+                return;
+            }
+        }
+
+        // 2. Direct fetch if not yet found in current list
+        if (targetId) {
+            api.get(`/workers/${targetId}`).then(data => {
+                if (data && !data.error && data.id) {
+                    setViewWorker(data);
+                }
+            }).catch(() => {});
+        }
+    }, [searchParams, workers]);
 
     const capitalizeWords = (str) => {
         if (!str) return '';
@@ -167,6 +251,7 @@ export default function Workers() {
             ? formData.positions.join(', ')
             : (formData.position || 'Worker');
 
+        const cleanRfid = (formData.rfid_uid || '').replace(/[\s:]/g, '').toUpperCase();
         const payload = {
             first_name: formattedFirstName,
             middle_name: formattedMiddleName,
@@ -180,6 +265,7 @@ export default function Workers() {
             role: formData.role,
             position: joinedPosition,
             daily_rate: Number(formData.daily_rate) || 600,
+            rfid_uid: cleanRfid,
             status: formData.status,
             approval_status: 'Approved'
         };
@@ -193,13 +279,19 @@ export default function Workers() {
                 setWorkers(prev => [{ ...newWorker, ...payload, id: newWorker.id || prev.length + 1 }, ...prev]);
                 setSuccessMsg('New worker successfully registered and approved into the system.');
                 setModalState('SUCCESS');
-            }).catch(console.error);
+            }).catch(err => {
+                console.error(err);
+                alert(err.message || 'Failed to register worker. Check if RFID card is already assigned to someone else.');
+            });
         } else if (modalState === 'EDIT') {
             api.put(`/workers/${formData.id}`, payload).then(() => {
                 setWorkers(prev => prev.map(w => w.id === formData.id ? { ...w, ...payload } : w));
                 setSuccessMsg('Worker profile updated successfully.');
                 setModalState('SUCCESS');
-            }).catch(console.error);
+            }).catch(err => {
+                console.error(err);
+                alert(err.message || 'Failed to update worker. Check if RFID card is already assigned to someone else.');
+            });
         }
     };
 
@@ -219,13 +311,18 @@ export default function Workers() {
             positions: ['Worker'],
             position: 'Worker',
             daily_rate: 600,
+            rfid_uid: '',
             password: '',
             status: 'Active'
         });
+        setModalOpenedAt(Date.now());
+        setTapAlert(null);
         setModalState('ADD');
     };
 
     const openEditModal = async (worker) => {
+        setModalOpenedAt(Date.now());
+        setTapAlert(null);
         const parsed = parseFullName(worker.full_name || '');
         const initialPositions = parsePositions(worker.position);
         const initialData = {
@@ -243,6 +340,7 @@ export default function Workers() {
             positions: initialPositions,
             position: initialPositions.join(', '),
             daily_rate: worker.daily_rate || 600,
+            rfid_uid: worker.rfid_uid || '',
             password: '',
             status: worker.status || 'Active'
         };
@@ -437,14 +535,29 @@ export default function Workers() {
                             </thead>
                             <tbody>
                                 {filteredWorkers.length > 0 ? filteredWorkers.map((worker) => (
-                                    <tr key={worker.id} className="hover:bg-gray-50/30 transition-colors">
-                                        <td className="py-1.5 pl-4 border-b border-gray-50">
-                                            <p className="text-[9px] font-extrabold text-gray-900">{worker.full_name}</p>
+                                    <tr 
+                                        key={worker.id} 
+                                        onClick={() => setViewWorker(worker)}
+                                        className="hover:bg-amber-50/40 transition-colors cursor-pointer group"
+                                        title="Click to view full worker profile"
+                                    >
+                                        <td className="py-2 pl-4 border-b border-gray-50">
+                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                <p className="text-[9px] font-extrabold text-gray-900 group-hover:text-[#A63228] transition-colors flex items-center gap-1">
+                                                    <span>{worker.full_name}</span>
+                                                    <span className="text-[7.5px] text-gray-400 group-hover:text-[#A63228] opacity-0 group-hover:opacity-100 transition-opacity">👁️</span>
+                                                </p>
+                                                {worker.rfid_uid && (
+                                                    <span className="inline-flex items-center gap-0.5 text-[7px] font-mono font-bold bg-amber-50 text-amber-800 px-1.5 py-0.5 rounded border border-amber-200/80" title={`RFID UID: ${worker.rfid_uid}`}>
+                                                        💳 {worker.rfid_uid}
+                                                    </span>
+                                                )}
+                                            </div>
                                             <p className="text-[8px] text-gray-500 font-medium mt-0.5">
                                                 {worker.role}{worker.position ? ` · ${worker.position}` : ''}{worker.phone ? ` · ${worker.phone}` : ''}
                                             </p>
                                         </td>
-                                        <td className="py-1.5 border-b border-gray-50 text-center">
+                                        <td className="py-2 border-b border-gray-50 text-center">
                                             <div className="flex flex-col items-center gap-0.5">
                                                 <span className="text-[8px] text-gray-900 font-bold">{worker.role || 'Worker'}</span>
                                                 {worker.position && (
@@ -454,18 +567,26 @@ export default function Workers() {
                                                 )}
                                             </div>
                                         </td>
-                                        <td className="py-1.5 border-b border-gray-50 text-center">
+                                        <td className="py-2 border-b border-gray-50 text-center">
                                             <span className={`inline-flex items-center justify-center px-1.5 py-0.5 rounded-full text-[8px] font-extrabold uppercase tracking-wider ${worker.status === 'Active' ? 'bg-[#e6f4ea] text-[#2e7d32]' : 'bg-gray-100 text-gray-500'}`}>
                                                 {worker.status}
                                             </span>
                                         </td>
-                                        <td className="py-1.5 border-b border-gray-50 text-center">
+                                        <td className="py-2 border-b border-gray-50 text-center">
                                             <span className={`inline-flex items-center justify-center px-1.5 py-0.5 rounded-full text-[8px] font-extrabold uppercase tracking-wider ${approvalBadgeStyles(worker.approval_status || 'Pending')}`}>
                                                 {worker.approval_status || 'Pending'}
                                             </span>
                                         </td>
-                                        <td className="py-1.5 border-b border-gray-50 pr-4">
-                                            <div className="flex items-center justify-center gap-1.5">
+                                        <td className="py-2 border-b border-gray-50 pr-4" onClick={(e) => e.stopPropagation()}>
+                                            <div className="flex items-center justify-center gap-1">
+                                                <button 
+                                                    onClick={() => setViewWorker(worker)} 
+                                                    className="bg-white border border-gray-200 text-gray-700 px-2 py-1 rounded-sm text-[8px] font-bold hover:bg-gray-50 hover:border-gray-300 transition-colors flex items-center gap-0.5"
+                                                    title="View Profile"
+                                                >
+                                                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                                                    View
+                                                </button>
                                                 <button onClick={() => openEditModal(worker)} className="bg-white border border-gray-200 text-gray-700 px-2 py-1 rounded-sm text-[8px] font-bold hover:bg-gray-50 transition-colors">
                                                     Edit
                                                 </button>
@@ -478,7 +599,7 @@ export default function Workers() {
                                                 >
                                                     {worker.status === 'Active' ? 'Deactivate' : 'Reactivate'}
                                                 </button>
-                                                <button onClick={() => handleDeleteWorker(worker.id)} className="bg-white border border-gray-200 text-gray-400 px-2 py-1 rounded-sm text-[8px] font-bold hover:text-red-600 hover:border-red-300 transition-colors">
+                                                <button onClick={() => handleDeleteWorker(worker.id)} className="bg-white border border-gray-200 text-gray-400 px-1.5 py-1 rounded-sm text-[8px] font-bold hover:text-red-600 hover:border-red-300 transition-colors">
                                                     Delete
                                                 </button>
                                             </div>
@@ -513,9 +634,17 @@ export default function Workers() {
                         </thead>
                         <tbody>
                             {pendingWorkers.length > 0 ? pendingWorkers.map((worker) => (
-                                <tr key={worker.id} className="hover:bg-gray-50/30 transition-colors">
+                                <tr 
+                                    key={worker.id} 
+                                    onClick={() => setViewWorker(worker)} 
+                                    className="hover:bg-amber-50/40 transition-colors cursor-pointer group"
+                                    title="Click to view full worker registration profile"
+                                >
                                     <td className="py-1.5 pl-4 border-b border-gray-50">
-                                        <p className="text-[9px] font-extrabold text-gray-900">{worker.full_name}</p>
+                                        <p className="text-[9px] font-extrabold text-gray-900 group-hover:text-[#A63228] transition-colors flex items-center gap-1">
+                                            <span>{worker.full_name}</span>
+                                            <span className="text-[7.5px] text-gray-400 group-hover:text-[#A63228] opacity-0 group-hover:opacity-100 transition-opacity">👁️</span>
+                                        </p>
                                         <p className="text-[8px] text-gray-500 font-medium mt-0.5">{worker.address || 'No address on file'}</p>
                                     </td>
                                     <td className="py-1.5 border-b border-gray-50 text-center">
@@ -529,7 +658,7 @@ export default function Workers() {
                                             {worker.created_at ? new Date(worker.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
                                         </span>
                                     </td>
-                                    <td className="py-1.5 border-b border-gray-50 pr-4">
+                                    <td className="py-1.5 border-b border-gray-50 pr-4" onClick={(e) => e.stopPropagation()}>
                                         <div className="flex flex-col items-center gap-1.5">
                                             <div className="flex items-center gap-1">
                                                 <select
@@ -735,6 +864,41 @@ export default function Workers() {
                                                 <option value="Inactive">Inactive (Resigned/Blocked)</option>
                                             </select>
                                         </div>
+                                        <div>
+                                            <label className="block text-[8px] font-bold text-gray-700 mb-0.5 uppercase flex items-center justify-between">
+                                                <span>RFID Card UID</span>
+                                                <span className="text-[7.5px] text-amber-700 font-semibold flex items-center gap-1">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                                                    <span>Tap card on ESP32 to auto-fill</span>
+                                                </span>
+                                            </label>
+                                            <div className="relative">
+                                                <input
+                                                    type="text"
+                                                    name="rfid_uid"
+                                                    value={formData.rfid_uid || ''}
+                                                    onChange={(e) => setFormData(prev => ({ ...prev, rfid_uid: e.target.value.toUpperCase() }))}
+                                                    placeholder="Tap card or enter UID"
+                                                    className={`w-full bg-[#f4f1ee] border rounded-md px-2 py-1.5 text-[9px] font-mono font-bold text-gray-800 tracking-wider outline-none transition-all ${
+                                                        tapAlert ? 'border-emerald-500 bg-emerald-50/50 ring-1 ring-emerald-400' : 'border-transparent focus:border-[#A63228]'
+                                                    }`}
+                                                />
+                                                {formData.rfid_uid && (
+                                                    <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[7.5px] font-bold text-emerald-700 bg-emerald-50 px-1 py-0.5 rounded border border-emerald-200">
+                                                        LINKED
+                                                    </span>
+                                                )}
+                                            </div>
+                                            {tapAlert ? (
+                                                <p className="text-[7.5px] font-bold text-emerald-700 mt-1 flex items-center gap-1">
+                                                    <span>✅</span> {tapAlert}
+                                                </p>
+                                            ) : (
+                                                <p className="text-[7px] text-gray-400 mt-0.5">
+                                                    Scan with hardware reader or type UID manually.
+                                                </p>
+                                            )}
+                                        </div>
                                         <div className="sm:col-span-2">
                                             <label className="block text-[8px] font-bold text-gray-700 mb-1 uppercase flex items-center justify-between">
                                                 <span>Position / Roles (Select all that apply) <span className="text-[#A63228]">*</span></span>
@@ -816,6 +980,176 @@ export default function Workers() {
                         <button onClick={() => setModalState('NONE')} className="w-full py-1.5 bg-[#8B1A10] text-white rounded-lg text-[9px] font-bold hover:bg-[#72150d] transition-colors">
                             Done
                         </button>
+                    </div>
+                </div>
+            )}
+
+            {/* ═════════ FULL WORKER PROFILE MODAL ═════════ */}
+            {viewWorker && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 transition-all animate-fadeIn">
+                    <div className="bg-white rounded-xl w-full max-w-[440px] shadow-2xl relative overflow-hidden flex flex-col max-h-[92vh]">
+                        {/* Header Banner */}
+                        <div className="bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 text-white p-4 relative">
+                            <button 
+                                onClick={handleCloseProfileModal} 
+                                className="absolute top-3 right-3 text-gray-400 hover:text-white bg-white/10 hover:bg-white/20 p-1.5 rounded-full transition-colors"
+                                title="Close"
+                            >
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                            </button>
+                            <div className="flex items-center gap-3">
+                                <div className="w-12 h-12 rounded-full bg-[#E8C547] text-gray-900 font-black text-sm flex items-center justify-center shadow-md shrink-0 border-2 border-white/20">
+                                    {viewWorker.full_name ? viewWorker.full_name.split(' ').filter(Boolean).map(n => n[0]).slice(0, 2).join('').toUpperCase() : 'W'}
+                                </div>
+                                <div className="pr-6">
+                                    <h3 className="text-sm font-extrabold text-white leading-tight">{viewWorker.full_name}</h3>
+                                    <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                                        <span className="text-[7.5px] bg-white/20 text-white px-2 py-0.5 rounded font-bold uppercase tracking-wider">
+                                            {viewWorker.role || 'Worker'}
+                                        </span>
+                                        <span className={`text-[7.5px] px-2 py-0.5 rounded font-extrabold uppercase tracking-wider ${
+                                            viewWorker.status === 'Active' ? 'bg-[#e6f4ea] text-[#2e7d32]' : 'bg-gray-700 text-gray-300'
+                                        }`}>
+                                            {viewWorker.status || 'Active'}
+                                        </span>
+                                        <span className={`text-[7.5px] px-2 py-0.5 rounded font-extrabold uppercase tracking-wider ${approvalBadgeStyles(viewWorker.approval_status || 'Pending')}`}>
+                                            {viewWorker.approval_status || 'Pending'}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Profile Body */}
+                        <div className="overflow-y-auto p-4 flex flex-col gap-3 text-gray-700 text-[9px]">
+                            {/* Compensation & RFID Summary */}
+                            <div className="grid grid-cols-2 gap-2 bg-[#f8f6f3] p-2.5 rounded-lg border border-gray-200/70">
+                                <div>
+                                    <span className="text-[7.5px] uppercase font-bold text-gray-400 block mb-0.5">Daily Salary Rate</span>
+                                    <span className="text-xs font-black text-[#A63228]">
+                                        ₱{Number(viewWorker.daily_rate || 600).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                    </span>
+                                    <span className="text-[7px] text-gray-400 block mt-0.5">per regular 8h workday</span>
+                                </div>
+                                <div>
+                                    <span className="text-[7.5px] uppercase font-bold text-gray-400 block mb-0.5">Physical RFID Card</span>
+                                    {viewWorker.rfid_uid ? (
+                                        <div className="flex items-center gap-1 flex-wrap mt-0.5">
+                                            <span className="font-mono font-extrabold text-[8.5px] text-amber-900 bg-amber-100 px-1.5 py-0.5 rounded border border-amber-300">
+                                                💳 {viewWorker.rfid_uid}
+                                            </span>
+                                            <span className="text-[7px] text-emerald-700 font-bold bg-emerald-50 px-1 py-0.5 rounded border border-emerald-200">
+                                                LINKED
+                                            </span>
+                                        </div>
+                                    ) : (
+                                        <span className="text-[8px] text-gray-400 italic font-medium block mt-1">
+                                            No RFID card linked
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Job Positions / Specializations */}
+                            <div>
+                                <h4 className="text-[7.5px] font-extrabold text-gray-400 uppercase tracking-widest mb-1 pb-0.5 border-b border-gray-100">
+                                    Specializations & Roles
+                                </h4>
+                                <div className="flex flex-wrap gap-1 mt-1">
+                                    {viewWorker.position ? (
+                                        viewWorker.position.split(',').map((pos, i) => (
+                                            <span key={i} className="bg-red-50 text-[#A63228] border border-red-100 px-2 py-0.5 rounded text-[8px] font-bold">
+                                                {pos.trim()}
+                                            </span>
+                                        ))
+                                    ) : (
+                                        <span className="text-gray-400 italic">Worker</span>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Personal Details */}
+                            <div>
+                                <h4 className="text-[7.5px] font-extrabold text-gray-400 uppercase tracking-widest mb-1.5 pb-0.5 border-b border-gray-100">
+                                    Personal Details
+                                </h4>
+                                <div className="grid grid-cols-2 gap-2 bg-gray-50 p-2.5 rounded-lg border border-gray-100">
+                                    <div>
+                                        <span className="text-[7.5px] text-gray-400 font-bold uppercase block">Contact Phone</span>
+                                        <span className="text-[9px] font-extrabold text-gray-900 mt-0.5 block">
+                                            {viewWorker.phone || '—'}
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <span className="text-[7.5px] text-gray-400 font-bold uppercase block">Age</span>
+                                        <span className="text-[9px] font-extrabold text-gray-900 mt-0.5 block">
+                                            {viewWorker.age ? `${viewWorker.age} years old` : '—'}
+                                        </span>
+                                    </div>
+                                    <div className="col-span-2">
+                                        <span className="text-[7.5px] text-gray-400 font-bold uppercase block">Birth Date</span>
+                                        <span className="text-[9px] font-bold text-gray-900 mt-0.5 block">
+                                            {viewWorker.birthday ? new Date(viewWorker.birthday).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '—'}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Address Details */}
+                            <div>
+                                <h4 className="text-[7.5px] font-extrabold text-gray-400 uppercase tracking-widest mb-1.5 pb-0.5 border-b border-gray-100">
+                                    Residential Address
+                                </h4>
+                                <div className="bg-gray-50 p-2.5 rounded-lg border border-gray-100">
+                                    <p className="text-[8.5px] font-semibold text-gray-800 leading-relaxed flex items-start gap-1">
+                                        <span className="shrink-0">📍</span>
+                                        <span>{viewWorker.address || 'No complete address on file.'}</span>
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Metadata Footer */}
+                            <div className="flex justify-between items-center text-[7.5px] text-gray-400 pt-1.5 border-t border-gray-100">
+                                <span>Worker Reference ID: #{viewWorker.id}</span>
+                                <span>
+                                    {viewWorker.created_at ? `Registered: ${new Date(viewWorker.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : ''}
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* Actions Footer */}
+                        <div className="p-3 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-1.5 shrink-0">
+                            <button
+                                onClick={() => {
+                                    const target = viewWorker;
+                                    setViewWorker(null);
+                                    openEditModal(target);
+                                }}
+                                className="px-3 py-1.5 bg-[#E8C547] text-gray-900 rounded-md text-[8.5px] font-extrabold hover:bg-[#d4b33d] transition-colors shadow-sm flex items-center gap-1"
+                            >
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                Edit Profile
+                            </button>
+                            <button
+                                onClick={() => {
+                                    toggleWorkerStatus(viewWorker);
+                                    setViewWorker(prev => ({ ...prev, status: prev.status === 'Active' ? 'Inactive' : 'Active' }));
+                                }}
+                                className={`px-2.5 py-1.5 rounded-md text-[8.5px] font-bold border transition-colors ${
+                                    viewWorker.status === 'Active'
+                                        ? 'bg-white border-[#A63228] text-[#A63228] hover:bg-red-50'
+                                        : 'bg-[#e6f4ea] border-[#2e7d32] text-[#2e7d32] hover:bg-green-100'
+                                }`}
+                            >
+                                {viewWorker.status === 'Active' ? 'Deactivate' : 'Reactivate'}
+                            </button>
+                            <button
+                                onClick={handleCloseProfileModal}
+                                className="px-3 py-1.5 bg-gray-200 text-gray-700 rounded-md text-[8.5px] font-bold hover:bg-gray-300 transition-colors"
+                            >
+                                Close
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
