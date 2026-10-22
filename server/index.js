@@ -390,9 +390,14 @@ function startServer() {
   // Monthly totals for graphs — MUST be before /:project_id
   app.get('/api/expenses/monthly', async (req, res) => {
     const year = new Date().getFullYear()
+    const { project_id } = req.query
     try {
-      const snapshot = await db.collection('expenses').get()
-      const mSnapshot = await db.collection('materials').get()
+      const pid = await resolveProjectId(project_id)
+      let query = db.collection('expenses')
+      if (pid) {
+        query = query.where('project_id', '==', pid)
+      }
+      const snapshot = await query.get()
       const months = Array(12).fill(0)
       
       snapshot.docs.forEach(doc => {
@@ -405,52 +410,44 @@ function startServer() {
         }
       })
 
-      mSnapshot.docs.forEach(doc => {
-        const data = doc.data()
-        if (data.date) {
-          const d = new Date(data.date)
-          if (d.getFullYear() === year) {
-            months[d.getMonth()] += (Number(data.qty || data.quantity || 0) * Number(data.cost || data.unit_cost || 0))
-          }
-        }
-      })
       res.json(months)
     } catch (err) {
       res.status(500).json({ error: err.message })
     }
   })
 
-  // Budget summary for Hero Card
+  // Budget summary for Hero Card & Analytics (Strictly matched with Expenses records)
   app.get('/api/expenses/budget-summary', async (req, res) => {
+    const { project_id } = req.query
     try {
-      const pSnap = await db.collection('projects').get()
-      const totalBudget = pSnap.docs.reduce((sum, doc) => sum + Number(doc.data().budget || 0), 0)
+      const pid = await resolveProjectId(project_id)
+      let totalBudget = 0
+      if (pid) {
+        const pDoc = await db.collection('projects').doc(pid).get()
+        if (pDoc.exists) totalBudget = Number(pDoc.data().budget || 0)
+      } else {
+        const pSnap = await db.collection('projects').get()
+        totalBudget = pSnap.docs.reduce((sum, doc) => sum + Number(doc.data().budget || 0), 0)
+      }
       
-      const eSnap = await db.collection('expenses').get()
+      let eQuery = db.collection('expenses')
+      if (pid) {
+        eQuery = eQuery.where('project_id', '==', pid)
+      }
+      const eSnap = await eQuery.get()
       const expenses = eSnap.docs.map(d => d.data())
-      const totalExpensesSpent = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0)
+      const totalSpent = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0)
 
-      const mSnap = await db.collection('materials').get()
-      const materials = mSnap.docs.map(d => d.data())
-      const totalMaterialsCost = materials.reduce((sum, m) => sum + (Number(m.qty || m.quantity || 0) * Number(m.cost || m.unit_cost || 0)), 0)
-
-      const totalSpent = totalExpensesSpent + totalMaterialsCost
-      
       const catMap = {}
       expenses.forEach(e => {
         const cat = e.category || 'Uncategorized'
         catMap[cat] = (catMap[cat] || 0) + Number(e.amount || 0)
       })
-      if (totalMaterialsCost > 0) {
-        catMap['Materials'] = (catMap['Materials'] || 0) + totalMaterialsCost
-      }
       const categories = Object.keys(catMap).map(category => ({ category, total: catMap[category] }))
 
       res.json({
         totalBudget,
         totalSpent,
-        totalExpensesOnly: totalExpensesSpent,
-        totalMaterialsOnly: totalMaterialsCost,
         remaining: totalBudget - totalSpent,
         percent: totalBudget > 0 ? Math.round((totalSpent / totalBudget) * 100) : 0,
         categories
