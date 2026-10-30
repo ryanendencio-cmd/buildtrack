@@ -600,7 +600,7 @@ export default function Dashboard() {
         const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
         const currentMonth = new Date().getMonth(); // 0-indexed
         const maxVal = Math.max(...scopedMonthlyData, 1);
-        const fmt = (v) => v >= 1000000 ? `${(v/1000000).toFixed(1)}M` : v >= 1000 ? `${Math.round(v/1000)}k` : v;
+        const fmt = (v) => v >= 1000000 ? `${(v/1000000).toFixed(1).replace(/\.0$/, '')}M` : v >= 1000 ? `${(v/1000).toFixed(1).replace(/\.0$/, '')}k` : String(Math.round(v));
         const fmtFull = (v) => Number(v || 0).toLocaleString();
 
         // Linear Regression Calculation for Time-Based Trendline
@@ -729,7 +729,7 @@ export default function Dashboard() {
                       />
                     )}
 
-                    {/* Actual Polyline */}
+                    {/* Actual Polyline - draw if 2+ points */}
                     {pointsWithData.length > 1 && (
                       <polyline
                         points={polylinePoints}
@@ -740,6 +740,25 @@ export default function Dashboard() {
                         strokeLinejoin="round"
                       />
                     )}
+
+                    {/* Single point: draw a short horizontal segment so it doesn't look like just a dot */}
+                    {pointsWithData.length === 1 && (() => {
+                      const p = pointsWithData[0];
+                      const cx = p.i * 100;
+                      const cy = 110 - Math.round((p.y / maxVal) * 100);
+                      return (
+                        <line
+                          x1={Math.max(0, cx - 80)}
+                          y1={cy}
+                          x2={Math.min(1100, cx + 80)}
+                          y2={cy}
+                          stroke="#8B1A10"
+                          strokeWidth="5"
+                          strokeLinecap="round"
+                          opacity="0.5"
+                        />
+                      );
+                    })()}
 
                     {/* Points */}
                     {pointsWithData.map((p, idx) => {
@@ -1243,7 +1262,246 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* ══════════════════════════════════════════════════════════
+          ANALYTICS OVERVIEW — Descriptive · Predictive · Prescriptive
+         ══════════════════════════════════════════════════════════ */}
+      <div className="mt-4 mb-2">
+        {/* Section Header */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#8B1A10] to-[#A63228] flex items-center justify-center shadow-sm">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-[8.5px] font-bold text-[#A63228] tracking-widest uppercase">Intelligence Center</p>
+              <h2 className="text-sm font-extrabold text-gray-900 leading-tight">Project Analytics Overview</h2>
+            </div>
+          </div>
+          <Link
+            to={`/reports?tab=ai${selectedProjectId !== 'ALL' ? `&project_id=${selectedProjectId}` : ''}`}
+            className="text-[10px] font-bold text-[#A63228] hover:underline flex items-center gap-1 transition-colors"
+          >
+            View Full Analytics →
+          </Link>
+        </div>
 
+        {/* Project Scope Indicator */}
+        {selectedProjectId !== 'ALL' && (
+          <div className="flex items-center gap-2 mb-3 px-3 py-2 bg-[#FDF2F0] border border-[#8B1A10]/20 rounded-xl">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8B1A10" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+            </svg>
+            <span className="text-[8.5px] font-bold text-[#8B1A10] tracking-wide uppercase">Filtering analytics for:</span>
+            <span className="text-[8.5px] font-extrabold text-gray-900 truncate">
+              {targetProject?.name || targetProject?.title || 'Selected Project'}
+            </span>
+            <button
+              type="button"
+              onClick={() => setSelectedProjectId('ALL')}
+              className="ml-auto text-[8px] font-bold text-[#A63228] hover:underline shrink-0 cursor-pointer"
+            >
+              ✕ Clear
+            </button>
+          </div>
+        )}
+
+        {/* Analytics Cards Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+
+          {/* ── DESCRIPTIVE ANALYTICS CARD ── */}
+          <Link
+            to={`/reports?tab=ai${selectedProjectId !== 'ALL' ? `&project_id=${selectedProjectId}` : ''}`}
+            className="group relative bg-white rounded-2xl border border-gray-100 shadow-xs hover:shadow-lg hover:-translate-y-1 hover:border-[#A63228]/30 transition-all duration-300 overflow-hidden cursor-pointer"
+          >
+            {/* Top accent bar */}
+            <div className="h-1 w-full bg-gradient-to-r from-[#8B1A10] via-[#A63228] to-[#C45248]" />
+            <div className="p-4">
+              {/* Icon + Badge */}
+              <div className="flex items-start justify-between mb-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#FDF2F0] to-[#fce8e6] border border-[#8B1A10]/10 flex items-center justify-center group-hover:from-[#8B1A10] group-hover:to-[#A63228] transition-all duration-300 shadow-2xs">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8B1A10" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="group-hover:stroke-white transition-colors duration-300">
+                    <rect x="3" y="3" width="7" height="7" rx="1" />
+                    <rect x="14" y="3" width="7" height="7" rx="1" />
+                    <rect x="3" y="14" width="7" height="7" rx="1" />
+                    <rect x="14" y="14" width="7" height="7" rx="1" />
+                  </svg>
+                </div>
+                <span className="text-[7.5px] font-extrabold uppercase tracking-wider text-[#A63228] bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">
+                  Descriptive
+                </span>
+              </div>
+
+              {/* Content */}
+              <h3 className="text-sm font-extrabold text-gray-900 mb-1 group-hover:text-[#A63228] transition-colors">
+                Historical Breakdown
+              </h3>
+              <p className="text-[9px] text-gray-500 leading-relaxed mb-3">
+                Examines past and current transactions — expense share pie chart, monthly volume columns, and budget composition by category.
+              </p>
+
+              {/* Mini visual hint — horizontal bars */}
+              <div className="flex flex-col gap-1.5 mb-3">
+                {[{ w: '75%', label: 'Materials' }, { w: '52%', label: 'Labor' }, { w: '33%', label: 'Operations' }].map((b, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <span className="text-[7.5px] text-gray-400 font-medium w-14 truncate">{b.label}</span>
+                    <div className="flex-1 bg-gray-100 rounded-full h-1.5">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-[#8B1A10] to-[#D96B60] transition-all duration-700"
+                        style={{ width: b.w }}
+                      />
+                    </div>
+                    <span className="text-[7.5px] font-bold text-gray-500 w-6 text-right">{b.w}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* CTA */}
+              <div className="flex items-center justify-between pt-2.5 border-t border-gray-100">
+                <span className="text-[8.5px] text-gray-400 font-medium">What happened?</span>
+                <span className="text-[8.5px] font-extrabold text-[#A63228] group-hover:underline flex items-center gap-0.5">
+                  View Analysis
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>
+                </span>
+              </div>
+            </div>
+          </Link>
+
+          {/* ── PREDICTIVE ANALYTICS CARD ── */}
+          <Link
+            to={`/reports?tab=ai${selectedProjectId !== 'ALL' ? `&project_id=${selectedProjectId}` : ''}`}
+            className="group relative bg-white rounded-2xl border border-gray-100 shadow-xs hover:shadow-lg hover:-translate-y-1 hover:border-[#6366f1]/30 transition-all duration-300 overflow-hidden cursor-pointer"
+          >
+            {/* Top accent bar */}
+            <div className="h-1 w-full bg-gradient-to-r from-[#4f46e5] via-[#6366f1] to-[#818cf8]" />
+            <div className="p-4">
+              {/* Icon + Badge */}
+              <div className="flex items-start justify-between mb-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-50 to-indigo-100 border border-indigo-200/50 flex items-center justify-center group-hover:from-[#4f46e5] group-hover:to-[#6366f1] transition-all duration-300 shadow-2xs">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="group-hover:stroke-white transition-colors duration-300">
+                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                  </svg>
+                </div>
+                <span className="text-[7.5px] font-extrabold uppercase tracking-wider text-indigo-600 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full">
+                  Predictive
+                </span>
+              </div>
+
+              {/* Content */}
+              <h3 className="text-sm font-extrabold text-gray-900 mb-1 group-hover:text-indigo-600 transition-colors">
+                Spend Forecast
+              </h3>
+              <p className="text-[9px] text-gray-500 leading-relaxed mb-3">
+                Linear regression model projecting 15-month expense trajectory — forecast future spending patterns based on historical data.
+              </p>
+
+              {/* Mini visual hint — ascending line dots */}
+              <div className="relative h-10 mb-3 overflow-hidden">
+                <svg viewBox="0 0 200 40" className="w-full h-full">
+                  <defs>
+                    <linearGradient id="predictGrad" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stopColor="#4f46e5" />
+                      <stop offset="100%" stopColor="#818cf8" />
+                    </linearGradient>
+                  </defs>
+                  {/* Historical solid line */}
+                  <polyline points="0,32 30,28 60,24 90,20 120,17" fill="none" stroke="url(#predictGrad)" strokeWidth="2.5" strokeLinecap="round" />
+                  {/* Forecast dashed line */}
+                  <polyline points="120,17 150,13 180,9 200,6" fill="none" stroke="#818cf8" strokeWidth="2" strokeDasharray="5,3" strokeLinecap="round" />
+                  {/* Data points */}
+                  {[0, 30, 60, 90, 120].map((x, i) => (
+                    <circle key={i} cx={x} cy={32 - i * 4} r="3" fill="#4f46e5" />
+                  ))}
+                  {/* Forecast points */}
+                  {[150, 180, 200].map((x, i) => (
+                    <circle key={i} cx={x} cy={13 - i * 3.5} r="2.5" fill="#818cf8" opacity="0.6" />
+                  ))}
+                </svg>
+              </div>
+
+              {/* CTA */}
+              <div className="flex items-center justify-between pt-2.5 border-t border-gray-100">
+                <span className="text-[8.5px] text-gray-400 font-medium">What will happen?</span>
+                <span className="text-[8.5px] font-extrabold text-indigo-600 group-hover:underline flex items-center gap-0.5">
+                  View Forecast
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>
+                </span>
+              </div>
+            </div>
+          </Link>
+
+          {/* ── PRESCRIPTIVE ANALYTICS CARD ── */}
+          <Link
+            to={`/reports?tab=ai${selectedProjectId !== 'ALL' ? `&project_id=${selectedProjectId}` : ''}`}
+            className="group relative bg-white rounded-2xl border border-gray-100 shadow-xs hover:shadow-lg hover:-translate-y-1 hover:border-emerald-500/30 transition-all duration-300 overflow-hidden cursor-pointer"
+          >
+            {/* Top accent bar */}
+            <div className="h-1 w-full bg-gradient-to-r from-[#059669] via-[#10b981] to-[#34d399]" />
+            <div className="p-4">
+              {/* Icon + Badge */}
+              <div className="flex items-start justify-between mb-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-50 to-emerald-100 border border-emerald-200/50 flex items-center justify-center group-hover:from-[#059669] group-hover:to-[#10b981] transition-all duration-300 shadow-2xs">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="group-hover:stroke-white transition-colors duration-300">
+                    <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                    <path d="M2 17l10 5 10-5" />
+                    <path d="M2 12l10 5 10-5" />
+                  </svg>
+                </div>
+                <span className="text-[7.5px] font-extrabold uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                  Prescriptive
+                </span>
+              </div>
+
+              {/* Content */}
+              <h3 className="text-sm font-extrabold text-gray-900 mb-1 group-hover:text-emerald-700 transition-colors">
+                Budget Recommendations
+              </h3>
+              <p className="text-[9px] text-gray-500 leading-relaxed mb-3">
+                Compares actual vs. target benchmarks per cost center — identifies over-budget categories and prescribes corrective action.
+              </p>
+
+              {/* Mini visual hint — actual vs target bars */}
+              <div className="flex flex-col gap-1.5 mb-3">
+                {[
+                  { label: 'Materials', actual: 82, target: 70 },
+                  { label: 'Labor', actual: 55, target: 60 },
+                  { label: 'Operations', actual: 40, target: 45 },
+                ].map((b, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <span className="text-[7.5px] text-gray-400 font-medium w-14 truncate">{b.label}</span>
+                    <div className="flex-1 relative bg-gray-100 rounded-full h-1.5">
+                      {/* Target marker */}
+                      <div
+                        className="absolute top-0 bottom-0 w-0.5 bg-gray-400 rounded-full z-10"
+                        style={{ left: `${b.target}%` }}
+                      />
+                      {/* Actual bar */}
+                      <div
+                        className={`h-full rounded-full transition-all duration-700 ${b.actual > b.target ? 'bg-gradient-to-r from-[#059669] to-red-400' : 'bg-gradient-to-r from-[#059669] to-[#34d399]'}`}
+                        style={{ width: `${Math.min(b.actual, 100)}%` }}
+                      />
+                    </div>
+                    <span className={`text-[7.5px] font-bold w-6 text-right ${b.actual > b.target ? 'text-red-500' : 'text-emerald-600'}`}>
+                      {b.actual > b.target ? '↑' : '✓'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {/* CTA */}
+              <div className="flex items-center justify-between pt-2.5 border-t border-gray-100">
+                <span className="text-[8.5px] text-gray-400 font-medium">What should we do?</span>
+                <span className="text-[8.5px] font-extrabold text-emerald-700 group-hover:underline flex items-center gap-0.5">
+                  View Insights
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>
+                </span>
+              </div>
+            </div>
+          </Link>
+
+        </div>
+      </div>
 
       {/* ═════════ PROJECT PICKER MODAL (Interactive Drill-Down by Project) ═════════ */}
       {isProjectPickerOpen && (

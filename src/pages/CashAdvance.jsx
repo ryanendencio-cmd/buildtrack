@@ -318,7 +318,7 @@ export default function CashAdvance() {
         if (formSelectedProject) {
             const pStatus = (formSelectedProject.status || '').toUpperCase();
             if (pStatus !== 'ONGOING' && pStatus !== 'ACTIVE') {
-                setFormError(`Bawal mag-vale sa proyektong hindi Ongoing ("${formSelectedProject.name}"). Ang status nito ay "${formSelectedProject.status || pStatus}". Bawal bawasan ang budget ng Upcoming o Completed na proyekto.`);
+                setFormError(`Cannot request cash advance for a non-Ongoing project ("${formSelectedProject.name}"). The project status is "${formSelectedProject.status || pStatus}". Budget cannot be reduced for Upcoming or Completed projects.`);
                 return;
             }
         }
@@ -440,7 +440,7 @@ export default function CashAdvance() {
                         {mockProjects.map(p => {
                             const isOng = (p.status || '').toUpperCase() === 'ONGOING' || (p.status || '').toUpperCase() === 'ACTIVE';
                             const isComp = (p.status || '').toUpperCase() === 'COMPLETED';
-                            const tag = isOng ? ' (Ongoing)' : isComp ? ' (Completed - Bawal)' : ' (Upcoming - Bawal)';
+                            const tag = isOng ? ' (Ongoing)' : isComp ? ' (Completed - Not Allowed)' : ' (Upcoming - Not Allowed)';
                             return (
                                 <option key={p.id} value={p.id}>{p.name}{tag}</option>
                             );
@@ -467,8 +467,8 @@ export default function CashAdvance() {
                             setModalState('ADD');
                         }}
                         title={
-                            isCurrentCompleted ? "Bawal mag-vale: Tapos na (Completed) ang proyektong ito." :
-                            isCurrentUpcoming ? "Bawal mag-vale: Upcoming pa lamang ang proyektong ito. Bawal bawasan ang budget." :
+                            isCurrentCompleted ? "Cannot request cash advance: This project is already Completed." :
+                            isCurrentUpcoming ? "Cannot request cash advance: This project is Upcoming. Budget cannot be reduced." :
                             "Add Cash Advance"
                         }
                         className={
@@ -487,9 +487,9 @@ export default function CashAdvance() {
                 <div className="bg-blue-50 border border-blue-200 text-blue-900 p-3 rounded-xl text-xs flex items-center gap-2.5 mb-3 shadow-xs">
                     <span className="text-xl">🏁</span>
                     <div>
-                        <strong className="text-[11px] uppercase tracking-wide text-blue-950 block">Tapos Na Ang Proyektong Ito (COMPLETED)</strong>
+                        <strong className="text-[11px] uppercase tracking-wide text-blue-950 block">This Project is Completed</strong>
                         <span className="text-[10px] text-blue-800">
-                            Ang <strong>{currentProjectObj?.name}</strong> ay opisyal nang tapos. Bawal nang mag-request o mag-release ng bagong vale (Cash Advance) dito.
+                            <strong>{currentProjectObj?.name}</strong> has officially ended. Requesting or releasing new cash advances for this project is no longer allowed.
                         </span>
                     </div>
                 </div>
@@ -499,9 +499,9 @@ export default function CashAdvance() {
                 <div className="bg-amber-50 border border-amber-200 text-amber-900 p-3 rounded-xl text-xs flex items-center gap-2.5 mb-3 shadow-xs">
                     <span className="text-xl">⏳</span>
                     <div>
-                        <strong className="text-[11px] uppercase tracking-wide text-amber-950 block">Parating Pa Lamang Ang Proyektong Ito (UPCOMING)</strong>
+                        <strong className="text-[11px] uppercase tracking-wide text-amber-950 block">This Project is Upcoming</strong>
                         <span className="text-[10px] text-amber-800">
-                            Ang <strong>{currentProjectObj?.name}</strong> ay Upcoming pa lamang. Bawal mag-vale (Cash Advance) at bawal bawasan ang budget hangga't hindi pa <strong>ONGOING</strong> ang proyekto.
+                            <strong>{currentProjectObj?.name}</strong> is still Upcoming. Cash advances are not allowed and the budget cannot be reduced until the project is set to <strong>ONGOING</strong>.
                         </span>
                     </div>
                 </div>
@@ -747,7 +747,7 @@ export default function CashAdvance() {
                                     <option value="">-- Choose a Project --</option>
                                     {mockProjects.map(p => {
                                         const isOng = (p.status || '').toUpperCase() === 'ONGOING' || (p.status || '').toUpperCase() === 'ACTIVE';
-                                        const statusLabel = isOng ? '' : ` (${p.status || 'Not Ongoing'} - Bawal)`;
+                                        const statusLabel = isOng ? '' : ` (${p.status || 'Not Ongoing'} - Not Allowed)`;
                                         return (
                                             <option key={p.id} value={p.id} disabled={!isOng}>
                                                 {p.name} {p.budget ? `(Budget: ₱${p.budget.toLocaleString()})` : ''}{statusLabel}

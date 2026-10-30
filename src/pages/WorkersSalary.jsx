@@ -165,11 +165,11 @@ export default function WorkersSalary() {
   const handleSavePayroll = async (status = 'Draft') => {
     if (!canReleaseSalary) {
       if (isProjectCompleted) {
-        alert('Bawal mag-save o mag-release ng salary sa proyektong tapos na (Completed). Sa Payroll History lamang maaaring suriin ang mga nakaraang talaan.');
+        alert('Cannot save or release salary for a Completed project. Please check Payroll History for past payroll records.');
       } else if (isProjectUpcoming) {
-        alert('Bawal mag-release ng payroll sa proyektong Upcoming. Bawal bawasan ang budget hangga\'t hindi pa Ongoing ang proyekto.');
+        alert('Cannot release payroll for an Upcoming project. Budget cannot be reduced until the project is set to Ongoing.');
       } else {
-        alert('Dapat sa isang Ongoing project lamang mag-release ng salary. Mangyaring piliin ang Ongoing project sa filter bago mag-release.');
+        alert('Salary can only be released for an Ongoing project. Please select an Ongoing project in the filter before releasing.');
       }
       return;
     }
@@ -399,14 +399,14 @@ export default function WorkersSalary() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <span>
-                  <strong>Hindi ma-calculate ang payroll:</strong> {calcError}
+                  <strong>Cannot calculate payroll:</strong> {calcError}
                 </span>
               </div>
               <button
                 onClick={() => generatePayroll()}
                 className="px-2.5 py-1 bg-red-600 text-white rounded-lg text-[10px] font-bold hover:bg-red-700 transition"
               >
-                Subukan Muli
+                Retry
               </button>
             </div>
           )}
@@ -418,11 +418,11 @@ export default function WorkersSalary() {
                 <span className="text-xl">🏁</span>
                 <div>
                   <div className="font-extrabold text-[11px] uppercase tracking-wide text-blue-950 flex items-center gap-1.5">
-                    {selectedProjectObj?.name} — TAPOS NA ANG PROYEKTO (COMPLETED)
+                    {selectedProjectObj?.name} — THIS PROJECT IS COMPLETED
                     <span className="bg-blue-200/70 text-blue-900 text-[9px] px-2 py-0.5 rounded-full font-bold">Payroll History Only</span>
                   </div>
                   <p className="text-[10px] text-blue-800 mt-0.5">
-                    Ang proyektong ito ay opisyal nang natapos. Bawal nang mag-release o mag-draft ng bagong sahod dito. Maaari mo na lamang tignan ang mga nakaraang talaan ng sahod sa <strong>Payroll History</strong>.
+                    This project has officially ended. Releasing or drafting new payroll is no longer allowed. You may only view past payroll records in <strong>Payroll History</strong>.
                   </p>
                 </div>
               </div>
@@ -430,7 +430,7 @@ export default function WorkersSalary() {
                 onClick={() => { setActiveTab('history'); setSearchParams({ tab: 'history' }); }}
                 className="px-3 py-1.5 bg-blue-700 hover:bg-blue-800 text-white rounded-lg text-[10px] font-bold shadow-xs transition-all whitespace-nowrap self-start sm:self-auto cursor-pointer"
               >
-                📋 Tignan ang Payroll History →
+                📋 View Payroll History →
               </button>
             </div>
           )}
@@ -441,11 +441,11 @@ export default function WorkersSalary() {
               <span className="text-xl">⏳</span>
               <div>
                 <div className="font-extrabold text-[11px] uppercase tracking-wide text-amber-950 flex items-center gap-1.5">
-                  {selectedProjectObj?.name} — PARATING PA LAMANG ANG PROYEKTO (UPCOMING)
+                  {selectedProjectObj?.name} — THIS PROJECT IS UPCOMING
                   <span className="bg-amber-200/70 text-amber-900 text-[9px] px-2 py-0.5 rounded-full font-bold">No Payroll Allowed</span>
                 </div>
                 <p className="text-[10px] text-amber-800 mt-0.5">
-                  Ang proyektong ito ay hindi pa nagsisimula (Upcoming). Bawal mag-release ng sahod, bawal mag-vale (Cash Advance), at bawal bawasan ang budget hangga't hindi pa <strong>ONGOING</strong> ang proyekto.
+                  This project has not yet started (Upcoming). Releasing salary, requesting cash advances, and reducing the budget are not allowed until the project is set to <strong>ONGOING</strong>.
                 </p>
               </div>
             </div>
@@ -579,9 +579,9 @@ export default function WorkersSalary() {
 
                 {!canReleaseSalary && (
                   <span className="text-[9px] text-gray-500 font-medium italic hidden lg:inline">
-                    {isProjectCompleted ? '(Tapos na: History Only)' :
-                     isProjectUpcoming ? '(Upcoming: Bawal mag-release)' :
-                     '(Pumili ng Ongoing Project para mag-release)'}
+                    {isProjectCompleted ? '(Completed: History Only)' :
+                     isProjectUpcoming ? '(Upcoming: Release Not Allowed)' :
+                     '(Select an Ongoing Project to release)'}
                   </span>
                 )}
 
@@ -589,9 +589,9 @@ export default function WorkersSalary() {
                   onClick={() => handleSavePayroll('Draft')}
                   disabled={!canReleaseSalary}
                   title={
-                    isProjectCompleted ? "Bawal mag-save ng draft: Tapos na (Completed) ang proyektong ito. Sa Payroll History lamang maaaring suriin ang mga nakaraang talaan." :
-                    isProjectUpcoming ? "Bawal mag-save ng draft: Upcoming ang proyektong ito." :
-                    selectedProject === 'ALL' ? "Pumili ng isang Ongoing project sa filter upang mag-save ng draft." :
+                    isProjectCompleted ? "Cannot save draft: This project is already Completed. Check Payroll History for past records." :
+                    isProjectUpcoming ? "Cannot save draft: This project is Upcoming." :
+                    selectedProject === 'ALL' ? "Please select an Ongoing project in the filter to save a draft." :
                     "Save this payroll as draft"
                   }
                   className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[9.5px] font-bold transition-all ${
@@ -607,9 +607,9 @@ export default function WorkersSalary() {
                   onClick={() => handleSavePayroll('Paid')}
                   disabled={!canReleaseSalary}
                   title={
-                    isProjectCompleted ? "Bawal mag-release ng salary: Tapos na (Completed) ang proyektong ito. Sa Payroll History lamang maaaring suriin ang mga nakaraang payroll." :
-                    isProjectUpcoming ? "Bawal mag-release ng salary: Upcoming ang proyektong ito. Bawal bawasan ang budget." :
-                    selectedProject === 'ALL' ? "Pumili ng isang Ongoing project sa filter upang mag-release ng sahod." :
+                    isProjectCompleted ? "Cannot release salary: This project is already Completed. Check Payroll History for past records." :
+                    isProjectUpcoming ? "Cannot release salary: This project is Upcoming. Budget cannot be reduced." :
+                    selectedProject === 'ALL' ? "Please select an Ongoing project in the filter to release salary." :
                     "Approve and release payroll"
                   }
                   className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-[9.5px] font-bold shadow-xs transition-all ${

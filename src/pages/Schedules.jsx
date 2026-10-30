@@ -156,7 +156,7 @@ export default function Schedules() {
     <AdminLayout>
       {/* Top Header */}
       <div className="mb-3">
-        <span className="text-[9px] font-bold text-[#A63228] tracking-widest uppercase">MONITORING & PLANNING</span>
+        <span className="text-[9px] font-bold text-[#A63228] tracking-widest uppercase">MONITORING &amp; PLANNING</span>
         <h1 className="text-lg font-extrabold text-gray-900">Schedule Management</h1>
         <p className="text-[10px] text-gray-500">Click any date on the calendar to log material deliveries, supplier check due dates, or project milestones.</p>
       </div>
@@ -182,10 +182,10 @@ export default function Schedules() {
         {/* Toolbar */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2.5 p-3 border-b border-gray-100">
           <div className="flex items-center gap-2">
-            <button onClick={() => shiftMonth(-1)} className="w-7 h-7 flex items-center justify-center rounded-md border border-gray-200 text-gray-500 hover:bg-gray-50 text-xs font-bold" title="Previous Month">‹</button>
-            <h2 className="text-sm font-extrabold text-gray-900 w-36 text-center">{monthLabel}</h2>
-            <button onClick={() => shiftMonth(1)} className="w-7 h-7 flex items-center justify-center rounded-md border border-gray-200 text-gray-500 hover:bg-gray-50 text-xs font-bold" title="Next Month">›</button>
-            <button onClick={goToday} className="ml-1 px-2.5 py-1 rounded-md border border-gray-200 text-[9px] font-bold text-gray-600 hover:bg-gray-50">Today</button>
+            <button onClick={() => shiftMonth(-1)} className="w-7 h-7 flex items-center justify-center rounded-md border border-gray-200 text-gray-500 hover:bg-gray-50 text-sm font-bold" title="Previous Month">‹</button>
+            <h2 className="text-base font-extrabold text-gray-900 w-40 text-center">{monthLabel}</h2>
+            <button onClick={() => shiftMonth(1)} className="w-7 h-7 flex items-center justify-center rounded-md border border-gray-200 text-gray-500 hover:bg-gray-50 text-sm font-bold" title="Next Month">›</button>
+            <button onClick={goToday} className="ml-1 px-2.5 py-1 rounded-md border border-gray-200 text-xs font-bold text-gray-600 hover:bg-gray-50">Today</button>
           </div>
 
           {/* Filter Tabs */}
@@ -200,7 +200,7 @@ export default function Schedules() {
                   key={tab.val}
                   type="button"
                   onClick={() => setCategoryFilter(tab.val)}
-                  className={`px-2.5 py-1 rounded-md text-[8.5px] font-bold transition-colors ${categoryFilter === tab.val ? 'bg-white text-[#A63228] shadow-xs' : 'text-gray-500 hover:text-gray-800'}`}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-colors ${categoryFilter === tab.val ? 'bg-white text-[#A63228] shadow-xs' : 'text-gray-500 hover:text-gray-800'}`}
                 >
                   {tab.label}
                 </button>
@@ -215,7 +215,7 @@ export default function Schedules() {
             <thead>
               <tr className="bg-gray-50/70">
                 {WEEKDAYS.map(w => (
-                  <th key={w} className="w-[14.28%] p-2 text-center text-[8px] font-extrabold text-gray-400 tracking-wider border border-gray-100 uppercase">
+                  <th key={w} className="w-[14.28%] p-2 text-center text-[11px] font-extrabold text-gray-400 tracking-wider border border-gray-100 uppercase">
                     {w}
                   </th>
                 ))}
@@ -232,18 +232,18 @@ export default function Schedules() {
                       <td
                         key={key}
                         onClick={() => date && show(null, key)}
-                        className={`align-top border border-gray-100 p-1.5 h-24 transition-colors ${date ? 'cursor-pointer hover:bg-amber-50/30 group' : 'bg-gray-50/30'}`}
+                        className={`align-top border border-gray-100 p-1.5 h-28 transition-colors ${date ? 'cursor-pointer hover:bg-amber-50/30 group' : 'bg-gray-50/30'}`}
                         title={date ? `Click to add schedule for ${key}` : ''}
                       >
                         {date && (
                           <>
                             <div className="flex justify-between items-center mb-1">
                               {dayItems.some(it => it.category === 'Supplier Check / Payment Due') ? (
-                                <span className="text-[6.5px] font-extrabold text-amber-800 bg-amber-100 border border-amber-200 px-1 py-0.2 rounded uppercase tracking-wider">
+                                <span className="text-[9px] font-extrabold text-amber-800 bg-amber-100 border border-amber-200 px-1 py-0.2 rounded uppercase tracking-wider">
                                   Check Due
                                 </span>
-                              ) : <span className="text-[8px] font-bold text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity">+ Add</span>}
-                              <span className={`text-[9px] font-bold w-5 h-5 flex items-center justify-center rounded-full ${isToday ? 'bg-[#A63228] text-white shadow-xs' : 'text-gray-500'}`}>
+                              ) : <span className="text-[10px] font-bold text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity">+ Add</span>}
+                              <span className={`text-sm font-bold w-6 h-6 flex items-center justify-center rounded-full ${isToday ? 'bg-[#A63228] text-white shadow-xs' : 'text-gray-500'}`}>
                                 {date.getDate()}
                               </span>
                             </div>
@@ -252,12 +252,12 @@ export default function Schedules() {
                                 <button
                                   key={it.id}
                                   onClick={(e) => { e.stopPropagation(); show(it) }}
-                                  className={`text-left px-1.5 py-1 rounded text-[7px] font-bold truncate border flex flex-col ${color(it.status)} hover:shadow-xs transition-all`}
+                                  className={`text-left px-1.5 py-1 rounded text-[10px] font-bold truncate border flex flex-col ${color(it.status)} hover:shadow-xs transition-all`}
                                   title={`${it.title} · ${it.supplier_name || ''}`}
                                 >
                                   <div className="truncate font-semibold">{it.title}</div>
                                   {it.supplier_name && (
-                                    <span className="font-medium opacity-80 truncate text-[6.5px]">
+                                    <span className="font-medium opacity-80 truncate text-[9px]">
                                       {it.supplier_name} {it.amount ? `· ₱${Number(it.amount).toLocaleString()}` : ''}
                                     </span>
                                   )}
@@ -266,7 +266,7 @@ export default function Schedules() {
                               {dayItems.length > MAX_VISIBLE && (
                                 <button
                                   onClick={(e) => { e.stopPropagation(); setDayModal(key) }}
-                                  className="text-left px-1 text-[7px] font-bold text-gray-400 hover:text-[#A63228]"
+                                  className="text-left px-1 text-[10px] font-bold text-gray-400 hover:text-[#A63228]"
                                 >
                                   +{dayItems.length - MAX_VISIBLE} more
                                 </button>

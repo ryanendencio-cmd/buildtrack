@@ -392,7 +392,7 @@ export default function Attendance() {
                     // Morning session
                     if (mIn === '—' || !mIn) {
                         if (minutes >= 11 * 60 + 30) {
-                            setScannedData({ name: workerName, message: 'Bawal mag-Time Out: Walang naitalang Morning Time In.' });
+                            setScannedData({ name: workerName, message: 'Cannot Time Out: No Morning Time In recorded.' });
                             setRfidState('ERROR');
                             return;
                         }
@@ -412,12 +412,12 @@ export default function Attendance() {
                         // Dismissal Period (3:30 PM onwards)
                         const hasActiveTimeIn = (aIn && aIn !== '—') || (mIn && mIn !== '—' && (!mOut || mOut === '—'));
                         if (!hasActiveTimeIn) {
-                            setScannedData({ name: workerName, message: 'Bawal mag-Time Out: Walang naitalang Time In ngayong araw.' });
+                            setScannedData({ name: workerName, message: 'Cannot Time Out: No Time In recorded for today.' });
                             setRfidState('ERROR');
                             return;
                         }
                         if (aOut && aOut !== '—') {
-                            setScannedData({ name: workerName, message: 'Naka-Time Out na ang worker ngayong hapon.' });
+                            setScannedData({ name: workerName, message: 'Worker has already timed out this afternoon.' });
                             setRfidState('ERROR');
                             return;
                         }
@@ -466,12 +466,12 @@ export default function Attendance() {
             } else {
                 // First tap of the day -> Check if attempting to Time Out without Timing In
                 if (minutes !== null && minutes >= 11 * 60 + 30 && minutes < 12 * 60 + 30) {
-                    setScannedData({ name: workerName, message: 'Bawal mag-Time Out: Walang naitalang Morning Time In.' });
+                    setScannedData({ name: workerName, message: 'Cannot Time Out: No Morning Time In recorded.' });
                     setRfidState('ERROR');
                     return;
                 }
                 if (minutes !== null && minutes >= 15 * 60 + 30) {
-                    setScannedData({ name: workerName, message: 'Bawal mag-Time Out: Walang naitalang Time In ngayong araw.' });
+                    setScannedData({ name: workerName, message: 'Cannot Time Out: No Time In recorded for today.' });
                     setRfidState('ERROR');
                     return;
                 }

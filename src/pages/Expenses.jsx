@@ -275,7 +275,7 @@ export default function Expenses() {
         if (name === 'project') {
             const matched = mockProjects.find(p => p.name === value);
             if (matched && !isOngoingStatus(matched?.status)) {
-                alert(`Bawal mag-add ng expenses sa proyektong hindi Ongoing ("${matched.name}").`);
+                alert(`Cannot add expenses: The project "${matched.name}" is not Ongoing.`);
                 return;
             }
         }
@@ -413,7 +413,7 @@ export default function Expenses() {
         e.preventDefault();
         const selectedProj = mockProjects.find(p => p.name === formData.project || p.id === String(currentProjectId));
         if (selectedProj && !isOngoingStatus(selectedProj?.status)) {
-            setAmountError(`Bawal mag-add ng expenses sa proyektong hindi Ongoing ("${selectedProj?.name || 'Project'}"). Dapat ay ONGOING ang status nito.`);
+            setAmountError(`Cannot add expenses: The project "${selectedProj?.name || 'Project'}" is not Ongoing. The project status must be ONGOING.`);
             return;
         }
         const amt = computedTotal;
@@ -433,7 +433,7 @@ export default function Expenses() {
             return;
         }
         if (!photoData) {
-            setAmountError('Kailangang mag-upload ng katibayan o litrato ng resibo bago mai-save ang gastusin (Receipt upload is REQUIRED).');
+            setAmountError('A receipt photo or proof must be uploaded before saving the expense (Receipt upload is REQUIRED).');
             return;
         }
         setAmountError('');
@@ -452,7 +452,7 @@ export default function Expenses() {
     const handleConfirmAdd = () => {
         const proj = mockProjects.find(p => p.id === String(currentProjectId) || p.name === formData.project);
         if (proj && !isOngoingStatus(proj?.status)) {
-            alert(`Bawal mag-add ng expenses sa proyektong hindi Ongoing ("${proj?.name || 'Project'}"). Dapat ay ONGOING ang status nito.`);
+            alert(`Cannot add expenses: The project "${proj?.name || 'Project'}" is not Ongoing. The project status must be ONGOING.`);
             return;
         }
         const resolvedItems = formData.items.map(it => ({
@@ -489,7 +489,7 @@ export default function Expenses() {
         e.preventDefault();
         const selectedProj = mockProjects.find(p => p.name === formData.project || p.id === String(currentProjectId));
         if (selectedProj && !isOngoingStatus(selectedProj?.status)) {
-            setAmountError(`Bawal mag-add ng expenses sa proyektong hindi Ongoing ("${selectedProj?.name || 'Project'}"). Dapat ay ONGOING ang status nito.`);
+            setAmountError(`Cannot add expenses: The project "${selectedProj?.name || 'Project'}" is not Ongoing. The project status must be ONGOING.`);
             return;
         }
         const amt = parseFloat(formData.amount || 0);
@@ -503,7 +503,7 @@ export default function Expenses() {
             return;
         }
         if (!photoData) {
-            setAmountError('Kailangang may kalakip na litrato o scan ng resibo bago mai-save ang gastusin (Receipt upload is REQUIRED).');
+            setAmountError('A receipt photo or scan must be attached before saving the expense (Receipt upload is REQUIRED).');
             return;
         }
         setAmountError('');
@@ -852,7 +852,7 @@ export default function Expenses() {
                                     setModalState('ADD');
                                 }}
                                 disabled={isCurrentProjectUpcoming}
-                                title={!isCurrentProjectOngoing ? `Bawal mag-add ng expenses: Ang proyektong ito ay ${currentProjectData?.status || 'hindi Ongoing'}.` : "Add Expense"}
+                                title={!isCurrentProjectOngoing ? `Cannot add expenses: This project is ${currentProjectData?.status || 'not Ongoing'}.` : "Add Expense"}
                                 className={isCurrentProjectUpcoming
                                     ? "bg-gray-100 text-gray-400 border border-gray-200 px-3 py-1.5 rounded-lg font-bold text-[10px] shadow-sm cursor-not-allowed opacity-75 flex items-center justify-center gap-1 flex-1 md:flex-none"
                                     : "bg-[#E8C547] text-gray-900 px-3 py-1.5 rounded-lg font-bold text-[10px] shadow-sm hover:bg-[#d4b33d] transition-colors flex items-center justify-center gap-1 flex-1 md:flex-none"
@@ -860,21 +860,7 @@ export default function Expenses() {
                             >
                                 <span>+</span> Add Expense
                             </button>
-                            <button
-                                onClick={() => {
-                                    if (isCurrentProjectUpcoming) return;
-                                    setModalState('SCAN_START');
-                                    setPhotoData(null);
-                                }}
-                                disabled={isCurrentProjectUpcoming}
-                                title={!isCurrentProjectOngoing ? `Bawal mag-scan ng resibo: Ang proyektong ito ay ${currentProjectData?.status || 'hindi Ongoing'}.` : "Scan Receipt"}
-                                className={isCurrentProjectUpcoming
-                                    ? "bg-gray-100 text-gray-400 border border-gray-200 px-3 py-1.5 rounded-lg font-bold text-[10px] shadow-sm cursor-not-allowed opacity-75 flex-1 md:flex-none"
-                                    : "bg-white border border-[#A63228] text-[#A63228] px-3 py-1.5 rounded-lg font-bold text-[10px] shadow-sm hover:bg-red-50 transition-colors flex-1 md:flex-none"
-                                }
-                            >
-                                Scan Receipt
-                            </button>
+
                         </div>
                     </div>
 
@@ -884,9 +870,9 @@ export default function Expenses() {
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                             </svg>
                             <div className="flex-1">
-                                <span className="font-extrabold uppercase text-[9px] tracking-wider text-[#b45309] mr-1.5">{(currentProjectData?.status || 'HINDI ONGOING').toUpperCase()} PROJECT:</span>
+                                <span className="font-extrabold uppercase text-[9px] tracking-wider text-[#b45309] mr-1.5">{(currentProjectData?.status || 'NOT ONGOING').toUpperCase()} PROJECT:</span>
                                 <span className="text-[10px] font-medium text-amber-900">
-                                    Ang proyektong ito ay may status na <strong>{(currentProjectData?.status || 'Hindi Ongoing').toUpperCase()}</strong>. Bawal magdagdag o mag-scan ng gastusin (expenses) hangga't hindi ito naka-set sa <strong>ONGOING</strong>.
+                                    This project has a status of <strong>{(currentProjectData?.status || 'Not Ongoing').toUpperCase()}</strong>. Adding expenses is not allowed until the project is set to <strong>ONGOING</strong>.
                                 </span>
                             </div>
                         </div>
@@ -1666,12 +1652,12 @@ export default function Expenses() {
                                     <div className="flex justify-between items-center mb-1">
                                         <label className="block text-[8.5px] font-bold text-gray-700 uppercase flex items-center gap-1">
                                             <span>Receipt / Proof Image</span>
-                                            <span className="text-red-700 font-extrabold text-[7.5px] bg-red-100 border border-red-300 px-1.5 py-0.2 rounded uppercase">* Required (Kailangan)</span>
+                                            <span className="text-red-700 font-extrabold text-[7.5px] bg-red-100 border border-red-300 px-1.5 py-0.2 rounded uppercase">* Required</span>
                                         </label>
                                         {photoData ? (
                                             <span className="text-[8.5px] font-bold text-[#2e7d32]">✓ Receipt Attached</span>
                                         ) : (
-                                            <span className="text-[8.5px] font-bold text-amber-700">⚠ Mag-attach ng Resibo</span>
+                                            <span className="text-[8.5px] font-bold text-amber-700">⚠ Attach Receipt</span>
                                         )}
                                     </div>
                                     {photoData ? (
@@ -1721,7 +1707,7 @@ export default function Expenses() {
                                     <button
                                         type="submit"
                                         disabled={computedTotal <= 0 || computedTotal > MAX_AMOUNT || !photoData}
-                                        title={!photoData ? "Kailangang mag-upload ng resibo bago mag-save (Receipt is REQUIRED)" : "Save All Items"}
+                                        title={!photoData ? "A receipt must be uploaded before saving (Receipt is REQUIRED)" : "Save All Items"}
                                         className="flex-1 sm:flex-initial px-4 py-2 bg-[#E8C547] text-gray-900 rounded-xl text-xs font-extrabold hover:bg-[#d4b33d] transition-colors shadow-sm uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                         Save All {formData.items.length} Item(s)
