@@ -3,17 +3,15 @@ const cors = require('cors')
 const bcrypt = require('bcrypt')
 const nodemailer = require('nodemailer')
 const jwt = require('jsonwebtoken')
-const { initializeApp, cert } = require('firebase-admin/app')
-const { getFirestore, FieldValue } = require('firebase-admin/firestore')
+const { MySQLFirestoreAdapter, FieldValue } = require('./mysql-adapter')
 
-const serviceAccount = require('./firebase-service-account.json')
-
-initializeApp({
-  credential: cert(serviceAccount)
+const db = new MySQLFirestoreAdapter({
+  host: process.env.DB_HOST || '127.0.0.1',
+  user: process.env.DB_USER || 'root',
+  password: process.env.DB_PASSWORD !== undefined ? process.env.DB_PASSWORD : 'root',
+  database: process.env.DB_NAME || 'buildtrack_db',
+  port: Number(process.env.DB_PORT) || 3306
 })
-
-const db = getFirestore()
-db.settings({ ignoreUndefinedProperties: true })
 
 const app = express()
 app.use(cors())
@@ -1524,7 +1522,9 @@ function startServer() {
       if (cleanRfid) {
         const existRfid = await db.collection('workers').where('rfid_uid', '==', cleanRfid).limit(1).get()
         if (!existRfid.empty) {
-          return res.status(400).json({ error: `RFID card UID (${cleanRfid}) is already assigned to another worker.` })
+          const conflictWorker = existRfid.docs[0].data()
+          const conflictName = conflictWorker.full_name || conflictWorker.name || 'another worker'
+          return res.status(400).json({ error: `Bawal: Ang RFID card (${cleanRfid}) ay kasalukuyang nakatalaga na kay "${conflictName}". Bawal maglagay ng parehong RFID sa magkaibang account.` })
         }
       }
 
@@ -1574,6 +1574,90 @@ function startServer() {
       : (typeof position === 'string' && position.trim().length > 0 ? position.trim() : (position === null ? null : undefined))
     
     try {
+      // 1. Fetch current worker data before update to detect changes
+      const oldDoc = await db.collection('workers').doc(req.params.id).get()
+      const oldWorker = oldDoc.exists ? oldDoc.data() : {}
+
+      const cleanRfid = rfid_uid !== undefined 
+        ? (rfid_uid ? String(rfid_uid).trim().replace(/[\s:]/g, '').toUpperCase() : null)
+        : (oldWorker.rfid_uid || null)
+
+      // 2. Validate duplicate RFID
+      if (rfid_uid !== undefined && cleanRfid) {
+        const existRfid = await db.collection('workers').where('rfid_uid', '==', cleanRfid).limit(1).get()
+        if (!existRfid.empty && existRfid.docs[0].id !== req.params.id) {
+          const conflictWorker = existRfid.docs[0].data()
+          const conflictName = conflictWorker.full_name || conflictWorker.name || 'another worker'
+          return res.status(400).json({ error: `Bawal: Ang RFID card (${cleanRfid}) ay kasalukuyang nakatalaga na kay "${conflictName}". Bawal maglagay ng parehong RFID sa magkaibang account.` })
+        }
+      }
+
+      // 3. Compile specific changes made
+      const changes = []
+
+      // Name change
+      const oldName = (oldWorker.full_name || [oldWorker.first_name, oldWorker.middle_name, oldWorker.last_name].filter(Boolean).join(' ') || oldWorker.name || '').trim()
+      if (oldName && computedFullName && oldName !== computedFullName.trim()) {
+        changes.push(`Name: "${oldName}" → "${computedFullName}"`)
+      }
+
+      // Position / Roles change
+      const oldPos = (oldWorker.position || oldWorker.role || 'Worker').trim()
+      const newPos = (cleanPosition || role || 'Worker').trim()
+      if (cleanPosition !== undefined && oldPos !== newPos) {
+        changes.push(`Position: "${oldPos}" → "${newPos}"`)
+      }
+
+      // Daily Salary Rate change
+      if (daily_rate !== undefined) {
+        const oldRate = Number(oldWorker.daily_rate) || 600
+        const newRate = Number(daily_rate) || 600
+        if (newRate !== oldRate) {
+          changes.push(`Daily Rate: ₱${oldRate.toLocaleString()} → ₱${newRate.toLocaleString()}`)
+        }
+      }
+
+      // RFID Card change
+      if (rfid_uid !== undefined) {
+        const oldRfid = (oldWorker.rfid_uid || '').trim().toUpperCase()
+        const newRfid = (cleanRfid || '').trim().toUpperCase()
+        if (oldRfid !== newRfid) {
+          if (!oldRfid && newRfid) {
+            changes.push(`Assigned RFID: ${newRfid}`)
+          } else if (oldRfid && !newRfid) {
+            changes.push(`Unlinked RFID (${oldRfid})`)
+          } else if (oldRfid && newRfid) {
+            changes.push(`Replaced RFID: ${oldRfid} → ${newRfid}`)
+          }
+        }
+      }
+
+      // Status change
+      if (status !== undefined) {
+        const oldStatus = oldWorker.status || 'Active'
+        const newStatus = status || 'Active'
+        if (newStatus !== oldStatus) {
+          changes.push(`Status: ${oldStatus} → ${newStatus}`)
+        }
+      }
+
+      // Phone change
+      if (phone !== undefined) {
+        const oldPhone = (oldWorker.phone || '').trim()
+        const newPhone = (phone || '').trim()
+        if (newPhone && oldPhone && newPhone !== oldPhone) {
+          changes.push(`Phone: ${oldPhone} → ${newPhone}`)
+        } else if (newPhone && !oldPhone) {
+          changes.push(`Phone: ${newPhone}`)
+        }
+      }
+
+      // Password change
+      if (typeof password === 'string' && password.trim().length > 0) {
+        changes.push(`Password updated`)
+      }
+
+      // 4. Update data in DB
       const updateData = {
         first_name, middle_name: middle_name || null, last_name, full_name: computedFullName, 
         birthday: birthday || null, age: age || null, phone: phone || null, address: address || null, 
@@ -1587,27 +1671,24 @@ function startServer() {
         updateData.address_obj = address_obj
       }
       if (rfid_uid !== undefined) {
-        const cleanRfid = rfid_uid ? String(rfid_uid).trim().replace(/[\s:]/g, '').toUpperCase() : null
-        if (cleanRfid) {
-          const existRfid = await db.collection('workers').where('rfid_uid', '==', cleanRfid).limit(1).get()
-          if (!existRfid.empty && existRfid.docs[0].id !== req.params.id) {
-            return res.status(400).json({ error: `RFID card UID (${cleanRfid}) is already assigned to another worker.` })
-          }
-        }
         updateData.rfid_uid = cleanRfid || null
       }
       if (typeof password === 'string' && password.trim().length > 0) {
         const trimmedPass = password.trim()
-        // If password is already a bcrypt hash ($2a$ or $2b$), do NOT re-hash it!
         if (!trimmedPass.startsWith('$2a$') && !trimmedPass.startsWith('$2b$')) {
           updateData.password = await bcrypt.hash(trimmedPass, 10)
         }
       }
       await db.collection('workers').doc(req.params.id).update(updateData)
+
+      // 5. Generate descriptive notification message
+      const changesText = changes.length > 0 ? changes.join(' • ') : 'Updated profile details'
+      const notificationMessage = `${changesText} for ${computedFullName} (${cleanPosition || role || 'Worker'}).`
+
       recordNotification({
         type: 'Staff & Workers',
         title: `Worker Profile Updated: ${computedFullName}`,
-        message: `Profile data updated for ${computedFullName} (${cleanPosition || role || 'Worker'}).`,
+        message: notificationMessage,
         severity: 'Low',
         actor_name: computedFullName,
         actor_role: cleanPosition || role || 'Worker',
@@ -1616,16 +1697,18 @@ function startServer() {
         target_id: req.params.id,
         link: `/workers?id=${req.params.id}`
       }).catch(() => {})
+
       recordAuditLog({
         action: 'WORKER_UPDATED',
         module: 'Workers',
-        description: `Updated worker record for "${computedFullName}" (${cleanPosition || role || 'Worker'}, Status: ${status || 'Active'}, Approval: ${approval_status || 'Approved'}).`,
+        description: `Updated worker record for "${computedFullName}": ${changes.length > 0 ? changes.join(', ') : 'Profile details updated'}.`,
         target_id: req.params.id,
         target_name: computedFullName,
-        details: { role, position: cleanPosition, status, approval_status, daily_rate },
+        details: { role, position: cleanPosition, status, approval_status, daily_rate, changes },
         req
       }).catch(() => {})
-      res.json({ success: true, position: cleanPosition })
+
+      res.json({ success: true, position: cleanPosition, changes })
     } catch (err) {
       res.status(500).json({ error: err.message })
     }
@@ -3825,7 +3908,7 @@ function startServer() {
 
       // Verify password (supports exact match or trimmed match for mobile keyboards)
       const rawPassword = String(password)
-      let validPassword = await bcrypt.compare(rawPassword, user.password)
+      let validPassword = (user.password === rawPassword || user.password === rawPassword.trim()) || await bcrypt.compare(rawPassword, user.password).catch(() => false)
       if (!validPassword && rawPassword.trim() !== rawPassword) {
         validPassword = await bcrypt.compare(rawPassword.trim(), user.password)
       }
@@ -3965,7 +4048,7 @@ function startServer() {
       const adminDoc = snapshot.docs[0]
       const adminData = adminDoc.data()
       
-      const match = await bcrypt.compare(password, adminData.password)
+      const match = adminData.password === password || await bcrypt.compare(password, adminData.password).catch(() => false)
       if (!match) {
         recordAuditLog({
           action: 'LOGIN_FAILED',

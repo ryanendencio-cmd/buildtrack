@@ -54,6 +54,8 @@ export default function Workers() {
     const [modalOpenedAt, setModalOpenedAt] = useState(0);
     const [tapAlert, setTapAlert] = useState(null);
     const [viewWorker, setViewWorker] = useState(null);
+    const [originalRfidUid, setOriginalRfidUid] = useState('');
+    const [isReplacingRfid, setIsReplacingRfid] = useState(false);
 
     // Auto-detect RFID card taps from hardware scanner while Add/Edit modal is open
     useEffect(() => {
@@ -252,6 +254,13 @@ export default function Workers() {
             : (formData.position || 'Worker');
 
         const cleanRfid = (formData.rfid_uid || '').replace(/[\s:]/g, '').toUpperCase();
+        if (cleanRfid) {
+            const duplicate = workers.find(w => String(w.id) !== String(formData.id) && w.rfid_uid && String(w.rfid_uid).trim().replace(/[\s:]/g, '').toUpperCase() === cleanRfid);
+            if (duplicate) {
+                alert(`Bawal mag-save: Ang RFID card (${cleanRfid}) ay kasalukuyang nakatalaga na kay ${duplicate.full_name || duplicate.name || 'ibang worker'} (${duplicate.role || 'Worker'}). Bawal ang parehong RFID sa magkaibang account.`);
+                return;
+            }
+        }
         const payload = {
             first_name: formattedFirstName,
             middle_name: formattedMiddleName,
@@ -317,12 +326,16 @@ export default function Workers() {
         });
         setModalOpenedAt(Date.now());
         setTapAlert(null);
+        setOriginalRfidUid('');
+        setIsReplacingRfid(false);
         setModalState('ADD');
     };
 
     const openEditModal = async (worker) => {
         setModalOpenedAt(Date.now());
         setTapAlert(null);
+        setOriginalRfidUid(worker.rfid_uid || '');
+        setIsReplacingRfid(false);
         const parsed = parseFullName(worker.full_name || '');
         const initialPositions = parsePositions(worker.position);
         const initialData = {
@@ -865,30 +878,143 @@ export default function Workers() {
                                             </select>
                                         </div>
                                         <div>
-                                            <label className="block text-[8px] font-bold text-gray-700 mb-0.5 uppercase flex items-center justify-between">
-                                                <span>RFID Card UID</span>
+                                            <div className="flex items-center justify-between mb-0.5">
+                                                <label className="block text-[8px] font-bold text-gray-700 uppercase">
+                                                    RFID Card UID
+                                                </label>
                                                 <span className="text-[7.5px] text-amber-700 font-semibold flex items-center gap-1">
                                                     <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
                                                     <span>Tap card on ESP32 to auto-fill</span>
                                                 </span>
-                                            </label>
-                                            <div className="relative">
-                                                <input
-                                                    type="text"
-                                                    name="rfid_uid"
-                                                    value={formData.rfid_uid || ''}
-                                                    onChange={(e) => setFormData(prev => ({ ...prev, rfid_uid: e.target.value.toUpperCase() }))}
-                                                    placeholder="Tap card or enter UID"
-                                                    className={`w-full bg-[#f4f1ee] border rounded-md px-2 py-1.5 text-[9px] font-mono font-bold text-gray-800 tracking-wider outline-none transition-all ${
-                                                        tapAlert ? 'border-emerald-500 bg-emerald-50/50 ring-1 ring-emerald-400' : 'border-transparent focus:border-[#A63228]'
-                                                    }`}
-                                                />
-                                                {formData.rfid_uid && (
-                                                    <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[7.5px] font-bold text-emerald-700 bg-emerald-50 px-1 py-0.5 rounded border border-emerald-200">
-                                                        LINKED
-                                                    </span>
-                                                )}
                                             </div>
+
+                                            {/* Alert when replacing a lost card */}
+                                            {isReplacingRfid && (
+                                                <div className="mb-1.5 p-2 bg-amber-50 border border-amber-200 rounded-md flex flex-col gap-1">
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="text-[8px] font-extrabold text-amber-900 uppercase flex items-center gap-1">
+                                                            <span>⚠️</span> Replacing Lost / Damaged Card
+                                                        </span>
+                                                        {originalRfidUid && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setFormData(prev => ({ ...prev, rfid_uid: originalRfidUid }));
+                                                                    setIsReplacingRfid(false);
+                                                                    setTapAlert(null);
+                                                                }}
+                                                                className="text-[7.5px] font-bold text-gray-600 hover:text-gray-900 underline cursor-pointer"
+                                                            >
+                                                                Cancel Replacement
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                    <p className="text-[7.5px] text-amber-800">
+                                                        Previous Card: <code className="font-mono bg-white px-1 py-0.5 rounded border border-amber-300 text-red-700 line-through font-bold">{originalRfidUid}</code>
+                                                    </p>
+                                                    <p className="text-[7px] text-amber-700 italic">
+                                                        Tap the new RFID card on the ESP32 hardware reader, or type the new UID below. The lost card will be disconnected once saved.
+                                                    </p>
+                                                </div>
+                                            )}
+
+                                            {(() => {
+                                                const cleanCurrent = (formData.rfid_uid || '').trim().replace(/[\s:]/g, '').toUpperCase();
+                                                const duplicateWorker = cleanCurrent ? workers.find(w => String(w.id) !== String(formData.id) && w.rfid_uid && String(w.rfid_uid).trim().replace(/[\s:]/g, '').toUpperCase() === cleanCurrent) : null;
+                                                return (
+                                                    <>
+                                                        <div className="relative">
+                                                            <input
+                                                                type="text"
+                                                                name="rfid_uid"
+                                                                value={formData.rfid_uid || ''}
+                                                                onChange={(e) => setFormData(prev => ({ ...prev, rfid_uid: e.target.value.toUpperCase() }))}
+                                                                placeholder={isReplacingRfid ? "Tap NEW card on ESP32 or enter new UID" : "Tap card on ESP32 or enter UID"}
+                                                                className={`w-full bg-[#f4f1ee] border rounded-md pl-2 pr-24 py-1.5 text-[9px] font-mono font-bold text-gray-800 tracking-wider outline-none transition-all ${
+                                                                    duplicateWorker 
+                                                                        ? 'border-red-500 bg-red-50/70 ring-2 ring-red-400 text-red-900' 
+                                                                        : tapAlert 
+                                                                            ? 'border-emerald-500 bg-emerald-50/50 ring-1 ring-emerald-400' 
+                                                                            : 'border-transparent focus:border-[#A63228]'
+                                                                }`}
+                                                            />
+                                                            {formData.rfid_uid && (
+                                                                <span className={`absolute right-1.5 top-1/2 -translate-y-1/2 text-[7.5px] font-bold px-1.5 py-0.5 rounded border ${
+                                                                    duplicateWorker 
+                                                                        ? 'text-red-700 bg-red-100 border-red-300 animate-pulse' 
+                                                                        : 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                                                                }`}>
+                                                                    {duplicateWorker ? 'DUPLICATE (IN USE)' : (isReplacingRfid && formData.rfid_uid !== originalRfidUid ? 'NEW CARD' : 'LINKED')}
+                                                                </span>
+                                                            )}
+                                                        </div>
+
+                                                        {/* Duplicate RFID Warning Alert */}
+                                                        {duplicateWorker && (
+                                                            <div className="mt-1.5 p-2 bg-red-50 border-l-4 border-red-500 rounded-r-md flex items-start gap-1.5 shadow-xs">
+                                                                <span className="text-xs">🚫</span>
+                                                                <div className="flex-1">
+                                                                    <div className="text-[8px] font-extrabold text-red-900 uppercase">
+                                                                        Bawal ang Duplicate RFID Card!
+                                                                    </div>
+                                                                    <p className="text-[7.5px] text-red-800 mt-0.5 leading-snug">
+                                                                        Ang card na <code className="font-mono bg-white px-1 py-0.2 rounded border border-red-200 font-bold">{cleanCurrent}</code> ay kasalukuyang nakatalaga na kay <strong className="text-red-950 underline">{duplicateWorker.full_name || `${duplicateWorker.first_name} ${duplicateWorker.last_name}`}</strong> ({duplicateWorker.role || 'Worker'}).
+                                                                    </p>
+                                                                    <p className="text-[7px] text-red-700 mt-0.5 font-medium italic">
+                                                                        Bawal maglagay ng parehong RFID card sa magkaibang account. Mangyaring gumamit ng ibang card.
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </>
+                                                );
+                                            })()}
+
+                                            {/* Action buttons: Change / Replace & Unlink Card */}
+                                            <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                                                {formData.rfid_uid && !isReplacingRfid ? (
+                                                    <>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setIsReplacingRfid(true);
+                                                                setFormData(prev => ({ ...prev, rfid_uid: '' }));
+                                                                setModalOpenedAt(Date.now());
+                                                                setTapAlert('Ready: Tap new replacement card on your ESP32 scanner.');
+                                                            }}
+                                                            className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded text-[7.5px] font-bold transition-all cursor-pointer shadow-xs"
+                                                            title="Change or replace this RFID card if lost or damaged"
+                                                        >
+                                                            <span>🔄</span> Change / Replace RFID (Lost Card)
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                if (window.confirm(`Sigurado ka bang nais mong tanggalin ang RFID card (${formData.rfid_uid}) para kay ${formData.firstName || 'worker'}? Hindi na gagana ang lumang card.`)) {
+                                                                    setFormData(prev => ({ ...prev, rfid_uid: '' }));
+                                                                    setTapAlert('RFID card unlinked. Click Save to apply.');
+                                                                }
+                                                            }}
+                                                            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded text-[7.5px] font-bold transition-all cursor-pointer"
+                                                            title="Unlink and disconnect physical RFID card"
+                                                        >
+                                                            <span>✕</span> Unlink Card
+                                                        </button>
+                                                    </>
+                                                ) : !formData.rfid_uid && originalRfidUid && !isReplacingRfid ? (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setFormData(prev => ({ ...prev, rfid_uid: originalRfidUid }));
+                                                            setTapAlert(null);
+                                                        }}
+                                                        className="text-[7.5px] text-gray-500 hover:text-gray-800 underline font-medium cursor-pointer"
+                                                    >
+                                                        Restore previous card ({originalRfidUid})
+                                                    </button>
+                                                ) : null}
+                                            </div>
+
                                             {tapAlert ? (
                                                 <p className="text-[7.5px] font-bold text-emerald-700 mt-1 flex items-center gap-1">
                                                     <span>✅</span> {tapAlert}
@@ -1041,6 +1167,24 @@ export default function Workers() {
                                             <span className="text-[7px] text-emerald-700 font-bold bg-emerald-50 px-1 py-0.5 rounded border border-emerald-200">
                                                 LINKED
                                             </span>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    const target = viewWorker;
+                                                    setViewWorker(null);
+                                                    openEditModal(target);
+                                                    setTimeout(() => {
+                                                        setIsReplacingRfid(true);
+                                                        setFormData(prev => ({ ...prev, rfid_uid: '' }));
+                                                        setModalOpenedAt(Date.now());
+                                                        setTapAlert('Ready: Tap new replacement card on your ESP32 scanner.');
+                                                    }, 150);
+                                                }}
+                                                className="ml-1 text-[7px] font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 px-1.5 py-0.5 rounded border border-amber-300 transition-all cursor-pointer inline-flex items-center gap-0.5"
+                                                title="Replace lost or damaged RFID card"
+                                            >
+                                                <span>🔄</span> Replace Card
+                                            </button>
                                         </div>
                                     ) : (
                                         <span className="text-[8px] text-gray-400 italic font-medium block mt-1">

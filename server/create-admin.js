@@ -1,18 +1,18 @@
 /**
- * One-time script to create an admin account in Firestore.
+ * One-time script to create an admin account in MySQL (buildtrack_db).
  * Usage: node create-admin.js
- * Delete this file after use.
  */
 
 const bcrypt = require('bcrypt')
-const { initializeApp, cert } = require('firebase-admin/app')
-const { getFirestore } = require('firebase-admin/firestore')
+const { MySQLFirestoreAdapter, FieldValue } = require('./mysql-adapter')
 
-const serviceAccount = require('./firebase-service-account.json')
-
-initializeApp({ credential: cert(serviceAccount) })
-const db = getFirestore()
-db.settings({ ignoreUndefinedProperties: true })
+const db = new MySQLFirestoreAdapter({
+  host: process.env.DB_HOST || '127.0.0.1',
+  user: process.env.DB_USER || 'root',
+  password: process.env.DB_PASSWORD !== undefined ? process.env.DB_PASSWORD : 'root',
+  database: process.env.DB_NAME || 'buildtrack_db',
+  port: Number(process.env.DB_PORT) || 3306
+})
 
 // ── EDIT THESE BEFORE RUNNING ──
 const ADMIN = {
@@ -35,6 +35,7 @@ async function main() {
   const existing = await db.collection('admins').where('username', '==', ADMIN.username).limit(1).get()
   if (!existing.empty) {
     console.log(`Admin "${ADMIN.username}" already exists. Aborting.`)
+    await db.close()
     process.exit(0)
   }
 
@@ -49,8 +50,12 @@ async function main() {
   console.log(`  Document ID : ${docRef.id}`)
   console.log(`  Username    : ${ADMIN.username}`)
   console.log(`  Password    : ${ADMIN.password}`)
-  console.log(`\nDelete this file (create-admin.js) after use.`)
+  await db.close()
   process.exit(0)
 }
 
-main().catch(err => { console.error(err); process.exit(1) })
+main().catch(async err => { 
+  console.error(err)
+  await db.close().catch(() => {})
+  process.exit(1) 
+})
