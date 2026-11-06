@@ -36,12 +36,59 @@ export default function Assets() {
 
     const [borrowHistory, setBorrowHistory] = useState([]);
 
-    const refreshAssets = () => {
+    const matchesCurrentProject = (record) => {
+        const rawProjectId = record?.project_id ?? record?.projectId ?? null;
+        const rawProjectName = record?.project_name ?? record?.projectName ?? record?.project ?? '';
+
+        const projectMatch = rawProjectId !== null && rawProjectId !== undefined && rawProjectId !== '' && String(rawProjectId).trim() !== 'null' && String(rawProjectId).trim() !== 'undefined'
+            ? String(rawProjectId) === String(currentProjectId)
+            : false;
+
+        const projectNameMatch = currentProject?.name && rawProjectName
+            ? String(rawProjectName).trim().toLowerCase() === String(currentProject.name).trim().toLowerCase()
+            : false;
+
+        const unscopedRecord = rawProjectId === null || rawProjectId === undefined || String(rawProjectId).trim() === '' || String(rawProjectId).trim() === 'null' || String(rawProjectId).trim() === 'undefined';
+
+        return projectMatch || projectNameMatch || unscopedRecord;
+    };
+
+    const refreshAssets = async () => {
         if (!currentProjectId) return;
-        api.get(`/assets/${currentProjectId}`)
-            .then(data => setEquipment(Array.isArray(data) ? data.map(e => ({ ...e, condition: e.condition || e.type || 'Good' })) : []))
-            .catch(console.error);
-        api.get(`/borrow-history/${currentProjectId}`).then(data => setBorrowHistory(Array.isArray(data) ? data : [])).catch(console.error);
+
+        try {
+            const [projectAssets, projectHistory] = await Promise.all([
+                api.get(`/assets/${currentProjectId}`).catch(() => []),
+                api.get(`/borrow-history/${currentProjectId}`).catch(() => [])
+            ]);
+
+            const normalizeAsset = (item) => ({ ...item, condition: item.condition || item.type || 'Good' });
+            let nextEquipment = Array.isArray(projectAssets) ? projectAssets.map(normalizeAsset) : [];
+            let nextHistory = Array.isArray(projectHistory) ? projectHistory : [];
+
+            if (!nextEquipment.length) {
+                const allAssets = await api.get('/assets').catch(() => []);
+                nextEquipment = Array.isArray(allAssets)
+                    ? allAssets
+                        .filter(item => matchesCurrentProject(item))
+                        .map(normalizeAsset)
+                    : [];
+            }
+
+            if (!nextHistory.length) {
+                const allHistory = await api.get('/borrow-history/ALL').catch(() => []);
+                nextHistory = Array.isArray(allHistory)
+                    ? allHistory.filter(record => matchesCurrentProject(record))
+                    : [];
+            }
+
+            setEquipment(nextEquipment);
+            setBorrowHistory(nextHistory);
+        } catch (error) {
+            console.error('Failed to refresh asset data:', error);
+            setEquipment([]);
+            setBorrowHistory([]);
+        }
     };
 
     // Live auto-refresh: syncs inventory, unreturned tools, and history automatically whenever changes occur
@@ -155,6 +202,7 @@ export default function Assets() {
                 const item = equipment.find(eq => eq.id === id);
                 return api.put(`/assets/${id}`, {
                     ...item,
+                    project_id: item?.project_id || currentProjectId,
                     status: 'In Use',
                     assigned_to: borrowerName,
                     user: borrowerName,
@@ -194,6 +242,7 @@ export default function Assets() {
                 const original = equipment.find(eq => eq.id === id);
                 return api.put(`/assets/${id}`, {
                     ...original,
+                    project_id: original?.project_id || currentProjectId,
                     name: formData.name,
                     condition: formData.condition,
                     status: formData.status,
@@ -221,6 +270,7 @@ export default function Assets() {
                 const item = equipment.find(eq => eq.id === id);
                 return api.put(`/assets/${id}`, {
                     ...item,
+                    project_id: item?.project_id || currentProjectId,
                     status: newStatus,
                     assigned_to: null,
                     user: '—',
@@ -254,7 +304,12 @@ export default function Assets() {
 
     const submitRepair = (e) => {
         e.preventDefault();
-        api.put(`/assets/${selectedEquipment.id}`, { ...selectedEquipment, status: 'Available', type: 'Good' })
+        api.put(`/assets/${selectedEquipment.id}`, {
+            ...selectedEquipment,
+            project_id: selectedEquipment.project_id || currentProjectId,
+            status: 'Available',
+            type: 'Good'
+        })
             .then(() => {
                 setEquipment(prev => prev.map(eq => eq.id === selectedEquipment.id ? { ...eq, status: 'Available', condition: 'Good' } : eq));
                 setSuccessMsg(`${selectedEquipment.name} marked as repaired and available.`);
@@ -880,6 +935,22 @@ export default function Assets() {
                         </tbody>
                     </table>
                 )}
+            </div>
+
+            {/* ── BORROWED TOOLS HISTORY OVERVIEW ── */}
+            <div className="mb-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div className="bg-white border border-gray-100 rounded-xl p-3 shadow-sm">
+                    <p className="text-[8px] font-bold uppercase tracking-wider text-gray-500">Currently Borrowed</p>
+                    <p className="mt-1 text-xl font-extrabold text-[#A63228]">{inUseCount}</p>
+                </div>
+                <div className="bg-white border border-gray-100 rounded-xl p-3 shadow-sm">
+                    <p className="text-[8px] font-bold uppercase tracking-wider text-gray-500">Borrow Logs</p>
+                    <p className="mt-1 text-xl font-extrabold text-gray-900">{filteredBorrowHistory.filter(item => ['Check-Out', 'Borrowed', 'Borrow'].includes(item.action)).length}</p>
+                </div>
+                <div className="bg-white border border-gray-100 rounded-xl p-3 shadow-sm">
+                    <p className="text-[8px] font-bold uppercase tracking-wider text-gray-500">Return Logs</p>
+                    <p className="mt-1 text-xl font-extrabold text-green-700">{filteredBorrowHistory.filter(item => ['Check-In', 'Returned', 'Return'].includes(item.action)).length}</p>
+                </div>
             </div>
 
             {/* ── TOOLS BORROWING & RETURN HISTORY LIST ── */}

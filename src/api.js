@@ -1,4 +1,10 @@
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
+export function getApiBaseUrl() {
+  const configured = typeof import.meta !== 'undefined' ? import.meta.env?.VITE_API_URL : ''
+  if (configured) return String(configured).replace(/\/$/, '')
+  return 'http://localhost:5000/api'
+}
+
+const BASE_URL = getApiBaseUrl()
 
 function getHeaders(customHeaders = {}) {
   const headers = { 'Content-Type': 'application/json', ...customHeaders }
