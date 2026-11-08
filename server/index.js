@@ -4,6 +4,16 @@ const bcrypt = require('bcrypt')
 const nodemailer = require('nodemailer')
 const jwt = require('jsonwebtoken')
 const { MySQLFirestoreAdapter, FieldValue } = require('./mysql-adapter')
+const {
+  normalizeAttendanceSettings,
+  parseTimeToMinutes,
+  validateAttendanceSettings,
+  classifyTimeIn,
+  resolveRfidAttendanceAction,
+  evaluateTwoSessions,
+  calculateOvertimePay,
+  calculateDailyEarnings
+} = require('./attendance-rules')
 
 const db = new MySQLFirestoreAdapter({
   host: process.env.DB_HOST || '127.0.0.1',
@@ -12,6 +22,118 @@ const db = new MySQLFirestoreAdapter({
   database: process.env.DB_NAME || 'buildtrack_db',
   port: Number(process.env.DB_PORT) || 3306
 })
+
+function workerRegistrationYear(createdAt) {
+  if (createdAt == null || createdAt === '') return null
+  let date
+  if (createdAt && typeof createdAt.toDate === 'function') {
+    date = createdAt.toDate()
+  } else if (createdAt && typeof createdAt === 'object' && typeof createdAt._seconds === 'number') {
+    date = new Date(createdAt._seconds * 1000)
+  } else {
+    date = new Date(createdAt)
+  }
+  if (Number.isNaN(date.getTime())) return null
+  const year = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Manila',
+    year: 'numeric'
+  }).format(date)
+  return Number(year)
+}
+
+function isAttendancePresent(status) {
+  const normalized = String(status || '').trim().toLowerCase()
+  return normalized === 'present' ||
+    normalized === 'full day' ||
+    normalized === 'late' ||
+    normalized === 'double late' ||
+    normalized.includes('halfday') ||
+    normalized.includes('half day')
+}
+
+async function assignWorkerCode(workerRef, year, minimumSequence = 0) {
+  const firestore = db.firestore
+  const counterRef = firestore.collection('worker_counters').doc(String(year))
+  return firestore.runTransaction(async transaction => {
+    const workerSnapshot = await transaction.get(workerRef)
+    if (!workerSnapshot.exists) return null
+    const existingCode = workerSnapshot.data().worker_code
+    if (typeof existingCode === 'string' && existingCode.length > 0) return existingCode
+
+    const counterSnapshot = await transaction.get(counterRef)
+    const storedSequence = Number(counterSnapshot.exists ? counterSnapshot.data().sequence : 0) || 0
+    const nextSequence = Math.max(storedSequence, minimumSequence) + 1
+    const workerCode = `Worker_${year}_${String(nextSequence).padStart(4, '0')}`
+    transaction.set(counterRef, {
+      year,
+      sequence: nextSequence,
+      updated_at: new Date()
+    }, { merge: true })
+    transaction.update(workerRef, { worker_code: workerCode })
+    return workerCode
+  })
+}
+
+let workerCodeBackfillPromise
+async function ensureWorkerCodes() {
+  if (!workerCodeBackfillPromise) {
+    workerCodeBackfillPromise = (async () => {
+      const snapshot = await db.firestore.collection('workers').get()
+      const maximumByYear = new Map()
+      const missingByYear = new Map()
+
+      for (const worker of snapshot.docs) {
+        const data = worker.data()
+        const existingCode = typeof data.worker_code === 'string'
+          ? data.worker_code.match(/^Worker_(\d{4})_(\d+)$/)
+          : null
+        if (existingCode) {
+          const year = Number(existingCode[1])
+          maximumByYear.set(year, Math.max(maximumByYear.get(year) || 0, Number(existingCode[2])))
+          continue
+        }
+
+        const year = workerRegistrationYear(data.created_at)
+        if (year == null) continue
+        if (!missingByYear.has(year)) missingByYear.set(year, [])
+        missingByYear.get(year).push({ worker, createdAt: data.created_at })
+      }
+
+      for (const [year, workers] of missingByYear) {
+        workers.sort((a, b) => {
+          const first = new Date(a.createdAt?.toDate ? a.createdAt.toDate() : a.createdAt).getTime()
+          const second = new Date(b.createdAt?.toDate ? b.createdAt.toDate() : b.createdAt).getTime()
+          return first - second || a.worker.id.localeCompare(b.worker.id)
+        })
+        const minimumSequence = maximumByYear.get(year) || 0
+        for (const { worker } of workers) {
+          await assignWorkerCode(worker.ref, year, minimumSequence)
+        }
+      }
+    })()
+  }
+
+  try {
+    await workerCodeBackfillPromise
+  } catch (error) {
+    workerCodeBackfillPromise = null
+    throw error
+  }
+}
+
+async function createWorkerCode(year) {
+  const counterRef = db.firestore.collection('worker_counters').doc(String(year))
+  return db.firestore.runTransaction(async transaction => {
+    const counterSnapshot = await transaction.get(counterRef)
+    const sequence = (Number(counterSnapshot.exists ? counterSnapshot.data().sequence : 0) || 0) + 1
+    transaction.set(counterRef, {
+      year,
+      sequence,
+      updated_at: new Date()
+    }, { merge: true })
+    return `Worker_${year}_${String(sequence).padStart(4, '0')}`
+  })
+}
 
 const app = express()
 app.use(cors())
@@ -31,15 +153,18 @@ async function resolveProjectId(pid) {
   if (!pid || pid === 'ALL' || pid === 'undefined' || pid === 'null') return null
   const clean = String(pid).trim()
   if (!clean || clean === 'ALL' || clean === 'undefined' || clean === 'null') return null
+
+  const directDoc = await db.collection('projects').doc(clean).get()
+  if (directDoc.exists) return clean
+
   if (clean === '1') {
-    const directDoc = await db.collection('projects').doc('1').get()
-    if (directDoc.exists) return '1'
     const activeSnap = await db.collection('projects').where('status', '!=', 'COMPLETED').limit(1).get()
     if (!activeSnap.empty) return activeSnap.docs[0].id
     const snap = await db.collection('projects').limit(1).get()
     if (!snap.empty) return snap.docs[0].id
   }
-  return clean
+
+  return null
 }
 
 function startServer() {
@@ -1450,7 +1575,7 @@ function startServer() {
       const checkNW = await isDateNonWorkingDay(today)
       const isNonWorking = checkNW.isNonWorking
 
-      const presentToday = attendance.filter(a => a.status === 'Present').length
+      const presentToday = attendance.filter(a => isAttendancePresent(a.status)).length
       // On non-working days, workers must NOT be counted as absent!
       const absent = isNonWorking ? 0 : attendance.filter(a => a.status === 'Absent').length
       
@@ -1484,6 +1609,7 @@ function startServer() {
   // ── WORKERS ──
   app.get('/api/workers', async (req, res) => {
     try {
+      await ensureWorkerCodes()
       const snapshot = await db.collection('workers').orderBy('created_at', 'desc').get()
       const results = snapshot.docs.map(doc => {
         const data = doc.data()
@@ -1498,6 +1624,7 @@ function startServer() {
 
   app.get('/api/workers/:id', async (req, res) => {
     try {
+      await ensureWorkerCodes()
       const doc = await db.collection('workers').doc(req.params.id).get()
       if (!doc.exists) return res.status(404).json({ error: 'Worker not found' })
       const data = doc.data()
@@ -1519,6 +1646,7 @@ function startServer() {
     const cleanRfid = rfid_uid ? String(rfid_uid).trim().replace(/[\s:]/g, '').toUpperCase() : null
     
     try {
+      await ensureWorkerCodes()
       if (cleanRfid) {
         const existRfid = await db.collection('workers').where('rfid_uid', '==', cleanRfid).limit(1).get()
         if (!existRfid.empty) {
@@ -1536,6 +1664,7 @@ function startServer() {
         rfid_uid: cleanRfid || null,
         password: hashedPassword, approval_status: approval_status || 'Approved', 
         status: status || 'Active', project_id: project_id || null,
+        worker_code: await createWorkerCode(workerRegistrationYear(new Date())),
         created_at: FieldValue.serverTimestamp()
       }
       const docRef = await db.collection('workers').add(newWorker)
@@ -1567,16 +1696,33 @@ function startServer() {
   })
 
   app.put('/api/workers/:id', async (req, res) => {
-    const { first_name, middle_name, last_name, full_name, birthday, age, phone, address, role, position, daily_rate, password, approval_status, status, project_id, address_obj, rfid_uid } = req.body
-    const computedFullName = full_name || [first_name, middle_name, last_name].filter(Boolean).join(' ')
+    const has = (key) => Object.prototype.hasOwnProperty.call(req.body, key)
+    const value = (...keys) => {
+      const key = keys.find(has)
+      return key === undefined ? undefined : req.body[key]
+    }
+    const first_name = value('first_name', 'firstName')
+    const middle_name = value('middle_name', 'middleName')
+    const last_name = value('last_name', 'lastName')
+    const full_name = value('full_name', 'fullName')
+    const { birthday, age, phone, address, role, position, daily_rate, password, approval_status, status, project_id, address_obj, rfid_uid } = req.body
     const cleanPosition = Array.isArray(position)
       ? position.filter(Boolean).join(', ')
       : (typeof position === 'string' && position.trim().length > 0 ? position.trim() : (position === null ? null : undefined))
     
     try {
+      if (has('username') || has('user_name')) {
+        return res.status(400).json({ error: 'Worker usernames cannot be changed from profile editing.' })
+      }
+
       // 1. Fetch current worker data before update to detect changes
       const oldDoc = await db.collection('workers').doc(req.params.id).get()
-      const oldWorker = oldDoc.exists ? oldDoc.data() : {}
+      if (!oldDoc.exists) return res.status(404).json({ error: 'Worker not found' })
+      const oldWorker = oldDoc.data()
+      const nameChanged = ['first_name', 'firstName', 'middle_name', 'middleName', 'last_name', 'lastName', 'full_name', 'fullName'].some(has)
+      const computedFullName = full_name || (nameChanged
+        ? [first_name ?? oldWorker.first_name, middle_name ?? oldWorker.middle_name, last_name ?? oldWorker.last_name].filter(Boolean).join(' ')
+        : oldWorker.full_name || oldWorker.name || '')
 
       const cleanRfid = rfid_uid !== undefined 
         ? (rfid_uid ? String(rfid_uid).trim().replace(/[\s:]/g, '').toUpperCase() : null)
@@ -1658,18 +1804,22 @@ function startServer() {
       }
 
       // 4. Update data in DB
-      const updateData = {
-        first_name, middle_name: middle_name || null, last_name, full_name: computedFullName, 
-        birthday: birthday || null, age: age || null, phone: phone || null, address: address || null, 
-        role, daily_rate: daily_rate || 600, 
-        approval_status: approval_status || 'Approved', status: status || 'Active', project_id: project_id || null
-      }
-      if (cleanPosition !== undefined) {
-        updateData.position = cleanPosition
-      }
-      if (address_obj !== undefined) {
-        updateData.address_obj = address_obj
-      }
+      const updateData = {}
+      if (has('first_name') || has('firstName')) updateData.first_name = first_name ?? null
+      if (has('middle_name') || has('middleName')) updateData.middle_name = middle_name || null
+      if (has('last_name') || has('lastName')) updateData.last_name = last_name ?? null
+      if (nameChanged) updateData.full_name = computedFullName
+      if (has('birthday')) updateData.birthday = birthday || null
+      if (has('age')) updateData.age = age ?? null
+      if (has('phone')) updateData.phone = phone || null
+      if (has('address')) updateData.address = address || null
+      if (has('role')) updateData.role = role || 'Worker'
+      if (has('daily_rate')) updateData.daily_rate = daily_rate || 600
+      if (has('approval_status')) updateData.approval_status = approval_status || 'Approved'
+      if (has('status')) updateData.status = status || 'Active'
+      if (has('project_id')) updateData.project_id = project_id || null
+      if (has('position')) updateData.position = cleanPosition
+      if (has('address_obj')) updateData.address_obj = address_obj ?? null
       if (rfid_uid !== undefined) {
         updateData.rfid_uid = cleanRfid || null
       }
@@ -1679,11 +1829,15 @@ function startServer() {
           updateData.password = await bcrypt.hash(trimmedPass, 10)
         }
       }
+      if (Object.keys(updateData).length === 0) {
+        return res.status(400).json({ error: 'No worker fields were provided to update.' })
+      }
       await db.collection('workers').doc(req.params.id).update(updateData)
 
       // 5. Generate descriptive notification message
       const changesText = changes.length > 0 ? changes.join(' • ') : 'Updated profile details'
-      const notificationMessage = `${changesText} for ${computedFullName} (${cleanPosition || role || 'Worker'}).`
+      const effectiveRole = cleanPosition || role || oldWorker.position || oldWorker.role || 'Worker'
+      const notificationMessage = `${changesText} for ${computedFullName} (${effectiveRole}).`
 
       recordNotification({
         type: 'Staff & Workers',
@@ -1691,7 +1845,7 @@ function startServer() {
         message: notificationMessage,
         severity: 'Low',
         actor_name: computedFullName,
-        actor_role: cleanPosition || role || 'Worker',
+        actor_role: effectiveRole,
         action: 'worker_updated',
         worker_id: req.params.id,
         target_id: req.params.id,
@@ -1708,7 +1862,7 @@ function startServer() {
         req
       }).catch(() => {})
 
-      res.json({ success: true, position: cleanPosition, changes })
+      res.json({ success: true, position: cleanPosition ?? oldWorker.position, changes })
     } catch (err) {
       res.status(500).json({ error: err.message })
     }
@@ -1733,154 +1887,123 @@ function startServer() {
     }
   })
 
-  // ── 2-SESSION ATTENDANCE LOGIC & POLICY RULES ──
-  // Morning: Time in <= 8:10 AM (Present), 8:11 - 10:00 AM (Late, -100), Timeout 12:00 PM
-  // Afternoon: Time in <= 1:10 PM (Present), 1:11 - 3:00 PM (Late, -100), Timeout 5:00 PM
-  // Both On-Time: Present (100% full wage)
-  // One Late + One On-time: Late (Base - 100)
-  // Both Late: Double Late (Base - 200)
-  // Halfday: Only Morning (50% wage, or 50% - 100 if late) or Only Afternoon (50% wage, or 50% - 100 if late)
-  // Absent: No valid logs in both morning & afternoon (0 wage)
-
-  function parseTimeToMinutes(timeStr) {
-    if (!timeStr || timeStr === '—' || timeStr === '--:--') return null
-    const match = String(timeStr).trim().match(/^(\d{1,2}):(\d{2})(?:\s*([AP]M))?$/i)
-    if (!match) return null
-
-    let hours = parseInt(match[1], 10)
-    const minutes = parseInt(match[2], 10)
-    const meridian = match[3]?.toUpperCase()
-
-    if (meridian === 'PM' && hours < 12) hours += 12
-    if (meridian === 'AM' && hours === 12) hours = 0
-
-    return hours * 60 + minutes
-  }
-
-  function evaluateTwoSessions(morningIn, afternoonIn, baseRate) {
-    const rate = Number(baseRate) || 0
-    const mMinutes = parseTimeToMinutes(morningIn)
-    const aMinutes = parseTimeToMinutes(afternoonIn)
-
-    // Evaluate Morning Session
-    let mStatus = 'Absent' // 'Present' | 'Late' | 'Absent'
-    if (mMinutes !== null) {
-      if (mMinutes <= 8 * 60 + 10) {
-        mStatus = 'Present'
-      } else if (mMinutes <= 10 * 60) {
-        mStatus = 'Late'
-      } else {
-        mStatus = 'Absent'
-      }
-    }
-
-    // Evaluate Afternoon Session
-    let aStatus = 'Absent' // 'Present' | 'Late' | 'Absent'
-    if (aMinutes !== null) {
-      if (aMinutes <= 13 * 60 + 10) {
-        aStatus = 'Present'
-      } else if (aMinutes <= 15 * 60) {
-        aStatus = 'Late'
-      } else {
-        aStatus = 'Absent'
-      }
-    }
-
-    // Combine Sessions
-    const hasMorning = (mStatus !== 'Absent')
-    const hasAfternoon = (aStatus !== 'Absent')
-
-    if (hasMorning && hasAfternoon) {
-      if (mStatus === 'Present' && aStatus === 'Present') {
-        return {
-          status: 'Present',
-          morningStatus: 'Present',
-          afternoonStatus: 'Present',
-          earnedAmount: rate
-        }
-      } else if (mStatus === 'Late' && aStatus === 'Late') {
-        return {
-          status: 'Double Late',
-          morningStatus: 'Late',
-          afternoonStatus: 'Late',
-          earnedAmount: Math.max(0, rate - 200)
-        }
-      } else {
-        return {
-          status: 'Late',
-          morningStatus: mStatus,
-          afternoonStatus: aStatus,
-          earnedAmount: Math.max(0, rate - 100)
-        }
-      }
-    } else if (hasMorning) {
-      const halfRate = Math.round((rate / 2) * 100) / 100
-      const earned = mStatus === 'Late' ? Math.max(0, halfRate - 100) : halfRate
-      return {
-        status: mStatus === 'Late' ? 'Halfday (Late)' : 'Halfday',
-        morningStatus: mStatus,
-        afternoonStatus: 'Absent',
-        earnedAmount: earned
-      }
-    } else if (hasAfternoon) {
-      const halfRate = Math.round((rate / 2) * 100) / 100
-      const earned = aStatus === 'Late' ? Math.max(0, halfRate - 100) : halfRate
-      return {
-        status: aStatus === 'Late' ? 'Halfday (Late)' : 'Halfday',
-        morningStatus: 'Absent',
-        afternoonStatus: aStatus,
-        earnedAmount: earned
-      }
-    }
-
-    return {
-      status: 'Absent',
-      morningStatus: 'Absent',
-      afternoonStatus: 'Absent',
-      earnedAmount: 0
-    }
-  }
+  // ── CONFIGURABLE TWO-SESSION ATTENDANCE RULES ──
+  // Time windows, per-tier fixed deductions, and overtime rates are loaded from settings/attendance.
+  // Payroll applies the configured session evaluator once per worker per date.
 
   // ── ATTENDANCE SETTINGS & NON-WORKING DAYS ──
+  const isTodayInManila = date => {
+    const now = new Date()
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Manila',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).formatToParts(now)
+    const value = type => parts.find(part => part.type === type)?.value
+    return date === `${value('year')}-${value('month')}-${value('day')}`
+  }
+
+  const hasRecordedTime = value =>
+    Boolean(value && value !== '—' && value !== '--:--')
+
+  const requireWebAdmin = (req, res) => {
+    const role = String(req.get('x-actor-role') || '').toLowerCase()
+    if (req.get('x-client-platform') !== 'web' || !role.includes('admin')) {
+      res.status(403).json({ error: 'Attendance settings can only be changed by an Admin on the web app.' })
+      return false
+    }
+    return true
+  }
+
+  const validateAttendanceTimeWindow = (date, morningIn, morningOut, afternoonIn, afternoonOut, settings) => {
+    if (hasRecordedTime(morningOut) && !hasRecordedTime(morningIn)) {
+      return 'Morning Time Out requires a recorded Morning Time In.'
+    }
+    if (hasRecordedTime(afternoonOut) && !hasRecordedTime(afternoonIn)) {
+      return 'Afternoon Time Out requires a recorded Afternoon Time In.'
+    }
+    if (!isTodayInManila(date)) return null
+    const rules = normalizeAttendanceSettings(settings)
+    if (hasRecordedTime(morningIn) && classifyTimeIn(morningIn, 'morning', rules).status === 'Absent') {
+      return `Morning Time In is only open from ${rules.morning_time_in_start} to ${rules.morning_time_in_close}.`
+    }
+    if (hasRecordedTime(afternoonIn) && classifyTimeIn(afternoonIn, 'afternoon', rules).status === 'Absent') {
+      return `Afternoon Time In is only open from ${rules.afternoon_time_in_start} to ${rules.afternoon_time_in_close}.`
+    }
+    const validateTimeOut = (value, startKey, closeKey, label) => {
+      if (!hasRecordedTime(value)) return null
+      const minutes = parseTimeToMinutes(value)
+      const start = parseTimeToMinutes(rules[startKey])
+      const close = parseTimeToMinutes(rules[closeKey])
+      return minutes !== null && minutes >= start && minutes <= close
+        ? null
+        : `${label} is only open from ${rules[startKey]} to ${rules[closeKey]}.`
+    }
+    return validateTimeOut(morningOut, 'morning_time_out_start', 'morning_time_out_close', 'Morning Time Out') ||
+      validateTimeOut(afternoonOut, 'afternoon_time_out_start', 'afternoon_time_out_close', 'Afternoon Time Out')
+  }
+
   app.get('/api/attendance-settings', async (req, res) => {
     try {
       const doc = await db.collection('settings').doc('attendance').get()
-      if (doc.exists) {
-        res.json({
-          auto_schedule: true,
-          open_time: '07:00',
-          close_time: '17:30',
-          auto_sundays_off: true,
-          manual_override: null,
-          ...doc.data()
-        })
-      } else {
-        res.json({
-          auto_schedule: true,
-          open_time: '07:00',
-          close_time: '17:30',
-          auto_sundays_off: true,
-          manual_override: null
-        })
-      }
+      const current = doc.exists ? doc.data() : {}
+      res.json({
+        ...normalizeAttendanceSettings(current),
+        auto_schedule: true,
+        open_time: '07:00',
+        close_time: '17:30',
+        default_time_in: '08:00',
+        default_time_out: '17:00',
+        daily_work_hours: 8,
+        grace_period_minutes: 10,
+        auto_sundays_off: true,
+        manual_override: null,
+        ...current
+      })
     } catch (err) {
       res.status(500).json({ error: err.message })
     }
   })
 
   app.post('/api/attendance-settings', async (req, res) => {
-    const { auto_schedule, open_time, close_time, auto_sundays_off, manual_override, updated_by } = req.body
+    if (!requireWebAdmin(req, res)) return
     try {
+      const settingsRef = db.collection('settings').doc('attendance')
+      const settingsSnapshot = await settingsRef.get()
+      const previousSettings = settingsSnapshot.exists ? settingsSnapshot.data() : {}
+      const requestedSettings = { ...previousSettings, ...req.body }
+      const validation = validateAttendanceSettings(requestedSettings)
+      if (typeof validation === 'string') {
+        return res.status(400).json({ error: validation })
+      }
+
+      const {
+        auto_schedule, open_time, close_time, auto_sundays_off, manual_override,
+        updated_by, default_time_in, default_time_out, daily_work_hours,
+        grace_period_minutes
+      } = requestedSettings
+      const workHours = Number(daily_work_hours ?? 8)
+      const graceMinutes = Number(grace_period_minutes ?? 10)
+      if (!Number.isFinite(workHours) || workHours <= 0 || workHours > 24 ||
+          !Number.isInteger(graceMinutes) || graceMinutes < 0 || graceMinutes > 180) {
+        return res.status(400).json({ error: 'Working hours or grace period is invalid.' })
+      }
       const updateData = {
+        ...validation.settings,
         auto_schedule: auto_schedule !== undefined ? Boolean(auto_schedule) : true,
         open_time: open_time || '07:00',
         close_time: close_time || '17:30',
+        default_time_in: default_time_in || open_time || '08:00',
+        default_time_out: default_time_out || close_time || '17:00',
+        daily_work_hours: workHours,
+        grace_period_minutes: graceMinutes,
         auto_sundays_off: auto_sundays_off !== undefined ? Boolean(auto_sundays_off) : true,
         manual_override: manual_override !== undefined ? manual_override : null,
         updated_by: updated_by || 'Admin / Attendance Monitoring Officer',
         updated_at: FieldValue.serverTimestamp()
       }
-      await db.collection('settings').doc('attendance').set(updateData, { merge: true })
+      await settingsRef.set(updateData, { merge: true })
       recordAuditLog({
         action: 'ATTENDANCE_SETTINGS_UPDATED',
         module: 'Settings',
@@ -1890,6 +2013,87 @@ function startServer() {
         req
       }).catch(() => {})
       res.json({ success: true, ...updateData })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  app.get('/api/attendance-overtime-days/:date', async (req, res) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(req.params.date)) {
+      return res.status(400).json({ error: 'Date must use YYYY-MM-DD format.' })
+    }
+    try {
+      const doc = await db.collection('attendance_overtime_days').doc(req.params.date).get()
+      res.json({
+        date: req.params.date,
+        required: doc.exists ? doc.data().required === true : false
+      })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  app.put('/api/attendance-overtime-days/:date', async (req, res) => {
+    if (!requireWebAdmin(req, res)) return
+    const date = req.params.date
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || typeof req.body.required !== 'boolean') {
+      return res.status(400).json({ error: 'A valid date and required boolean are required.' })
+    }
+    try {
+      const data = {
+        date,
+        required: req.body.required,
+        updated_by: req.body.updated_by || 'Attendance Administrator',
+        updated_at: FieldValue.serverTimestamp()
+      }
+      await db.collection('attendance_overtime_days').doc(date).set(data, { merge: true })
+      res.json({ success: true, ...data })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  app.put('/api/attendance/:id/overtime', async (req, res) => {
+    if (!requireWebAdmin(req, res)) return
+    const minutes = Number(req.body.overtime_minutes)
+    if (!Number.isInteger(minutes) || minutes < 0 || minutes > 1440 ||
+        typeof req.body.approved !== 'boolean') {
+      return res.status(400).json({ error: 'Overtime minutes or approval value is invalid.' })
+    }
+    try {
+      const attendanceRef = db.collection('attendance').doc(req.params.id)
+      const attendanceDoc = await attendanceRef.get()
+      if (!attendanceDoc.exists) return res.status(404).json({ error: 'Attendance record not found.' })
+
+      const attendance = attendanceDoc.data()
+      const overtimeDay = await db.collection('attendance_overtime_days').doc(attendance.date).get()
+      if (req.body.approved && (!overtimeDay.exists || overtimeDay.data().required !== true)) {
+        return res.status(400).json({ error: 'Overtime must be required for this workday before it can be approved.' })
+      }
+      const settingsDoc = await db.collection('settings').doc('attendance').get()
+      const settings = normalizeAttendanceSettings(settingsDoc.exists ? settingsDoc.data() : {})
+      const attendanceEvaluation = evaluateTwoSessions(
+        attendance.morning_in || attendance.time_in,
+        attendance.afternoon_in,
+        Number(attendance.rate) || 0,
+        settings
+      )
+      if (req.body.approved && attendanceEvaluation.status === 'Absent') {
+        return res.status(400).json({ error: 'Overtime cannot be approved without valid attendance for this workday.' })
+      }
+      const approved = req.body.approved && minutes > 0
+      const overtimePay = approved ? calculateOvertimePay(minutes, settings) : 0
+      const update = {
+        overtime_minutes: minutes,
+        overtime_approved: approved,
+        overtime_pay: overtimePay,
+        overtime_approved_by: approved
+          ? (req.body.updated_by || 'Attendance Administrator')
+          : null,
+        overtime_updated_at: FieldValue.serverTimestamp()
+      }
+      await attendanceRef.update(update)
+      res.json({ success: true, ...update })
     } catch (err) {
       res.status(500).json({ error: err.message })
     }
@@ -1950,6 +2154,372 @@ function startServer() {
     }
   })
 
+  // ── WORKER ATTENDANCE SCHEDULES ──
+  app.get('/api/attendance-schedules', async (_req, res) => {
+    try {
+      const snapshot = await db.collection('attendance_schedules').get()
+      const schedules = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+      schedules.sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')))
+      res.json(schedules)
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  const applyAttendanceSchedule = async schedule => {
+    const records = await db.collection('attendance').where('date', '==', schedule.date).get()
+    const matchingRecords = records.docs.filter(doc => (
+      !schedule.worker_id || String(doc.data().worker_id || '') === String(schedule.worker_id)
+    ))
+    const rules = await getAttendanceEvaluationRules(schedule)
+    await Promise.all(matchingRecords.map(doc => {
+      const current = doc.data()
+      const evaluation = evaluateTwoSessions(
+        current.morning_in && current.morning_in !== '—' ? current.morning_in : current.time_in,
+        current.afternoon_in,
+        current.rate,
+        rules
+      )
+      return doc.ref.update({
+        ...attendanceScheduleFields(schedule),
+        morning_status: evaluation.morningStatus,
+        afternoon_status: evaluation.afternoonStatus,
+        status: evaluation.status,
+        earned_amount: evaluation.earnedAmount
+      })
+    }))
+  }
+
+  const findAttendanceSchedule = async (date, workerId) => {
+    const snapshot = await db.collection('attendance_schedules')
+      .where('date', '==', date)
+      .get()
+    const schedules = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+    return schedules.find(schedule => schedule.worker_id &&
+      String(schedule.worker_id) === String(workerId)) ||
+      schedules.find(schedule => !schedule.worker_id) ||
+      null
+  }
+
+  const getAttendanceEvaluationRules = async schedule => {
+    const settingsDoc = await db.collection('settings').doc('attendance').get()
+    const settings = settingsDoc.exists ? settingsDoc.data() : {}
+    return {
+      ...normalizeAttendanceSettings(settings),
+      morningStartTime: schedule?.start_time || schedule?.scheduled_time_in ||
+        settings.default_time_in || '08:00',
+      gracePeriodMinutes: Number(settings.grace_period_minutes ?? 10)
+    }
+  }
+
+  const attendanceScheduleFields = schedule => schedule ? ({
+    scheduled_time_in: schedule.start_time,
+    scheduled_time_out: schedule.end_time,
+    scheduled_work_hours: schedule.working_hours,
+    attendance_schedule_id: schedule.id
+  }) : {}
+
+  app.post('/api/attendance-schedules', async (req, res) => {
+    if (!requireWebAdmin(req, res)) return
+    const { date, worker_id, worker_name, start_time, end_time, working_hours, notes } = req.body
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || '')) ||
+        !/^\d{2}:\d{2}$/.test(String(start_time || '')) ||
+        !/^\d{2}:\d{2}$/.test(String(end_time || ''))) {
+      return res.status(400).json({ error: 'Date and times are required in YYYY-MM-DD and HH:mm format.' })
+    }
+    const startMinutes = parseTimeToMinutes(start_time)
+    const endMinutes = parseTimeToMinutes(end_time)
+    const hours = Number(working_hours || 8)
+    if (startMinutes === null || endMinutes === null || endMinutes <= startMinutes ||
+        !Number.isFinite(hours) || hours <= 0 || hours > 24) {
+      return res.status(400).json({ error: 'Schedule end time or working hours are invalid.' })
+    }
+    try {
+      const schedule = {
+        date,
+        worker_id: worker_id || null,
+        worker_name: worker_name || 'All Workers',
+        start_time,
+        end_time,
+        working_hours: hours,
+        notes: notes || '',
+        updated_at: FieldValue.serverTimestamp(),
+        updated_by: req.get('x-actor-name') || 'Attendance Administrator'
+      }
+      let id
+      if (req.body.id) {
+        id = String(req.body.id)
+        await db.collection('attendance_schedules').doc(id).set(schedule, { merge: true })
+      } else {
+        const doc = await db.collection('attendance_schedules').add({
+          ...schedule,
+          created_at: FieldValue.serverTimestamp()
+        })
+        id = doc.id
+        schedule.id = id
+      }
+      await applyAttendanceSchedule({ ...schedule, id })
+      res.json({ id, ...schedule })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  app.delete('/api/attendance-schedules/:id', async (req, res) => {
+    if (!requireWebAdmin(req, res)) return
+    try {
+      await db.collection('attendance_schedules').doc(req.params.id).delete()
+      res.json({ success: true })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  // ── EARLY-OUT REQUESTS ──
+  app.get('/api/early-out-requests', async (req, res) => {
+    try {
+      const snapshot = await db.collection('early_out_requests').get()
+      let requests = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+      if (req.query.worker_id) {
+        requests = requests.filter(r => String(r.worker_id || '') === String(req.query.worker_id))
+      }
+      requests.sort((a, b) => {
+        const aTime = a.created_at?._seconds || 0
+        const bTime = b.created_at?._seconds || 0
+        return bTime - aTime
+      })
+      res.json(requests)
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  app.post('/api/early-out-requests', async (req, res) => {
+    const { worker_id, worker_name, date, requested_out_time, reason, details } = req.body
+    if (!worker_id || !worker_name || !/^\d{4}-\d{2}-\d{2}$/.test(String(date || '')) ||
+        !/^\d{2}:\d{2}$/.test(String(requested_out_time || '')) || !reason) {
+      return res.status(400).json({ error: 'Worker, date, requested time, and reason are required.' })
+    }
+    try {
+      const requests = await db.collection('early_out_requests')
+        .where('worker_id', '==', String(worker_id))
+        .get()
+      const hasPending = requests.docs.some(doc =>
+        doc.data().date === date && doc.data().status === 'Pending'
+      )
+      if (hasPending) {
+        return res.status(409).json({ error: 'You already have a pending early-out request for this date.' })
+      }
+      const data = {
+        worker_id: String(worker_id),
+        worker_name,
+        date,
+        requested_out_time,
+        reason,
+        details: details || '',
+        status: 'Pending',
+        created_at: FieldValue.serverTimestamp(),
+        reviewed_by: null,
+        reviewed_at: null
+      }
+      const doc = await db.collection('early_out_requests').add(data)
+      res.status(201).json({ id: doc.id, ...data })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  app.put('/api/early-out-requests/:id/review', async (req, res) => {
+    const { status, reviewed_by, rejection_reason } = req.body
+    if (!['Approved', 'Rejected'].includes(status)) {
+      return res.status(400).json({ error: 'Review status must be Approved or Rejected.' })
+    }
+    try {
+      const requestRef = db.collection('early_out_requests').doc(req.params.id)
+      const requestDoc = await requestRef.get()
+      if (!requestDoc.exists) return res.status(404).json({ error: 'Early-out request not found.' })
+      const request = requestDoc.data()
+      if (request.status !== 'Pending') {
+        return res.status(409).json({ error: 'This request has already been reviewed.' })
+      }
+
+      let attendanceRecord = null
+      if (status === 'Approved') {
+        const records = await db.collection('attendance').where('date', '==', request.date).get()
+        attendanceRecord = records.docs.find(doc =>
+          String(doc.data().worker_id || '') === String(request.worker_id)
+        ) || records.docs.find(doc =>
+          String(doc.data().worker_name || doc.data().name || '').trim().toLowerCase() ===
+          String(request.worker_name || '').trim().toLowerCase()
+        )
+        if (!attendanceRecord) {
+          return res.status(404).json({ error: 'No attendance record exists for this worker and date; request remains pending.' })
+        }
+        const current = attendanceRecord.data()
+        if (current.afternoon_out && current.afternoon_out !== '—') {
+          return res.status(409).json({ error: 'The worker already has a recorded time out for this date.' })
+        }
+        const requestedTime = request.requested_out_time
+        const rate = Number(current.rate || 0)
+        const rules = await getAttendanceEvaluationRules(current)
+        const evaluation = evaluateTwoSessions(
+          current.morning_in && current.morning_in !== '—' ? current.morning_in : current.time_in,
+          current.afternoon_in,
+          rate,
+          rules
+        )
+        await attendanceRecord.ref.update({
+          afternoon_out: requestedTime,
+          time_out: requestedTime,
+          early_out_approved: true,
+          early_out_request_id: req.params.id,
+          morning_status: evaluation.morningStatus,
+          afternoon_status: evaluation.afternoonStatus,
+          status: evaluation.status,
+          earned_amount: evaluation.earnedAmount
+        })
+      }
+
+      await requestRef.update({
+        status,
+        reviewed_by: reviewed_by || req.get('x-actor-name') || 'Attendance Administrator',
+        reviewed_at: FieldValue.serverTimestamp(),
+        rejection_reason: status === 'Rejected' ? (rejection_reason || '') : null,
+        applied_to_attendance: status === 'Approved'
+      })
+      res.json({ success: true, status, attendance_updated: status === 'Approved' })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  // ── ATTENDANCE CORRECTION REQUESTS ──
+  app.get('/api/attendance-correction-requests', async (req, res) => {
+    try {
+      const snapshot = await db.collection('attendance_correction_requests').get()
+      let requests = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+      if (req.query.worker_id) {
+        requests = requests.filter(request =>
+          String(request.worker_id || '') === String(req.query.worker_id)
+        )
+      }
+      requests.sort((a, b) => (b.created_at?._seconds || 0) - (a.created_at?._seconds || 0))
+      res.json(requests)
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  app.post('/api/attendance-correction-requests', async (req, res) => {
+    const { worker_id, worker_name, date, field, requested_time, original_time, reason } = req.body
+    if (!worker_id || !worker_name || !/^\d{4}-\d{2}-\d{2}$/.test(String(date || '')) ||
+        !['time_in', 'time_out'].includes(field) ||
+        !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(String(requested_time || '')) ||
+        !String(reason || '').trim()) {
+      return res.status(400).json({ error: 'Worker, date, correction type, time, and reason are required.' })
+    }
+    try {
+      const existing = await db.collection('attendance_correction_requests')
+        .where('worker_id', '==', String(worker_id))
+        .get()
+      const hasPending = existing.docs.some(doc =>
+        doc.data().date === date && doc.data().field === field && doc.data().status === 'Pending'
+      )
+      if (hasPending) {
+        return res.status(409).json({ error: 'A correction request for this attendance entry is already pending.' })
+      }
+      const data = {
+        worker_id: String(worker_id),
+        worker_name: String(worker_name).trim(),
+        date,
+        field,
+        requested_time,
+        original_time: original_time || '',
+        reason: String(reason).trim(),
+        status: 'Pending',
+        created_at: FieldValue.serverTimestamp(),
+        reviewed_by: null,
+        reviewed_at: null,
+        rejection_reason: null
+      }
+      const doc = await db.collection('attendance_correction_requests').add(data)
+      await recordNotification({
+        type: 'Attendance',
+        title: `Attendance correction requested: ${data.worker_name}`,
+        message: `${data.worker_name} requested a ${field === 'time_in' ? 'Time In' : 'Time Out'} correction for ${date}.`,
+        severity: 'Medium',
+        actor_name: data.worker_name,
+        actor_role: 'Worker',
+        action: 'attendance_correction_requested',
+        worker_id: data.worker_id,
+        target_id: doc.id
+      })
+      res.status(201).json({ id: doc.id, ...data })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  app.put('/api/attendance-correction-requests/:id/review', async (req, res) => {
+    const { status, reviewed_by, rejection_reason } = req.body
+    if (!['Approved', 'Rejected'].includes(status)) {
+      return res.status(400).json({ error: 'Review status must be Approved or Rejected.' })
+    }
+    try {
+      const requestRef = db.collection('attendance_correction_requests').doc(req.params.id)
+      const requestDoc = await requestRef.get()
+      if (!requestDoc.exists) return res.status(404).json({ error: 'Attendance correction request not found.' })
+      const request = requestDoc.data()
+      if (request.status !== 'Pending') {
+        return res.status(409).json({ error: 'This correction request has already been reviewed.' })
+      }
+
+      if (status === 'Approved') {
+        const records = await db.collection('attendance').where('date', '==', request.date).get()
+        const attendanceRecord = records.docs.find(doc =>
+          String(doc.data().worker_id || '') === String(request.worker_id)
+        ) || records.docs.find(doc =>
+          String(doc.data().worker_name || doc.data().name || '').trim().toLowerCase() ===
+          String(request.worker_name || '').trim().toLowerCase()
+        )
+        if (!attendanceRecord) {
+          return res.status(404).json({ error: 'No attendance record exists for this worker and date; request remains pending.' })
+        }
+
+        const current = attendanceRecord.data()
+        const isTimeIn = request.field === 'time_in'
+        const updates = isTimeIn
+          ? { time_in: request.requested_time, morning_in: request.requested_time }
+          : { time_out: request.requested_time, afternoon_out: request.requested_time }
+        const rules = await getAttendanceEvaluationRules(current)
+        const evaluation = evaluateTwoSessions(
+          isTimeIn ? request.requested_time : (current.morning_in || current.time_in),
+          current.afternoon_in,
+          Number(current.rate || 0),
+          rules
+        )
+        await attendanceRecord.ref.update({
+          ...updates,
+          morning_status: evaluation.morningStatus,
+          afternoon_status: evaluation.afternoonStatus,
+          status: evaluation.status,
+          earned_amount: evaluation.earnedAmount
+        })
+      }
+
+      await requestRef.update({
+        status,
+        reviewed_by: reviewed_by || req.get('x-actor-name') || 'Attendance Administrator',
+        reviewed_at: FieldValue.serverTimestamp(),
+        rejection_reason: status === 'Rejected' ? (rejection_reason || '') : null,
+        applied_to_attendance: status === 'Approved'
+      })
+      res.json({ success: true, status, attendance_updated: status === 'Approved' })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
   // ── ATTENDANCE ──
   app.get('/api/attendance/:project_id', async (req, res) => {
     const { project_id } = req.params
@@ -1961,8 +2531,19 @@ function startServer() {
       }
       
       const snapshot = await query.get()
+      const attendanceSettingsDoc = await db.collection('settings').doc('attendance').get()
+      const attendanceRules = normalizeAttendanceSettings(
+        attendanceSettingsDoc.exists ? attendanceSettingsDoc.data() : {}
+      )
       const results = snapshot.docs.map(doc => {
         const r = doc.data()
+        const morningIn = r.morning_in || r.time_in || '—'
+        const afternoonIn = r.afternoon_in || '—'
+        const evaluation = evaluateTwoSessions(morningIn, afternoonIn, Number(r.rate) || 0, attendanceRules)
+        const overtimeApproved = r.overtime_approved === true
+        const isRestDay = String(r.status || '').includes('Rest Day') ||
+          String(r.status || '').includes('Non-Working')
+        const status = isRestDay ? r.status : r.status === 'Absent' ? 'Absent' : evaluation.status
         return {
           id: doc.id,
           project_id: r.project_id,
@@ -1971,18 +2552,22 @@ function startServer() {
           name: r.worker_name,
           date: r.date,
           role: r.role,
-          morningIn: r.morning_in || r.time_in || '—',
+          morningIn,
           morningOut: r.morning_out || '—',
-          afternoonIn: r.afternoon_in || '—',
+          afternoonIn,
           afternoonOut: r.afternoon_out || r.time_out || '—',
-          morningStatus: r.morning_status,
-          afternoonStatus: r.afternoon_status,
+          morningStatus: evaluation.morningStatus,
+          afternoonStatus: evaluation.afternoonStatus,
           timeIn: r.morning_in || r.afternoon_in || r.time_in || '—',
           timeOut: r.afternoon_out || r.morning_out || r.time_out || '—',
           rate: Number(r.rate) || 0,
-          earned_amount: Number(r.earned_amount) || 0,
+          earned_amount: status === 'Absent' || isRestDay ? 0 : evaluation.earnedAmount,
+          late_deduction: evaluation.lateDeductions,
+          overtime_minutes: Number(r.overtime_minutes) || 0,
+          overtime_approved: overtimeApproved,
+          overtime_pay: Number(r.overtime_pay) || 0,
           advance: Number(r.advance) || 0,
-          status: r.status,
+          status,
           created_at: r.created_at
         }
       })
@@ -2017,11 +2602,24 @@ function startServer() {
         aIn = timeIn
       }
     }
-
-    const evaluated = evaluateTwoSessions(mIn, aIn, baseRate)
-    let status = req.body.status && req.body.status !== 'Present' ? req.body.status : evaluated.status
+    if (!mOut && !aOut && timeOut) {
+      const minutes = parseTimeToMinutes(timeOut)
+      const morningInMinutes = parseTimeToMinutes(mIn)
+      const afternoonInMinutes = parseTimeToMinutes(aIn)
+      if (minutes !== null && morningInMinutes !== null && minutes < 12 * 60 + 30) {
+        mOut = timeOut
+      } else if (minutes !== null && afternoonInMinutes !== null && minutes >= 12 * 60 + 30) {
+        aOut = timeOut
+      }
+    }
 
     try {
+      const schedule = await findAttendanceSchedule(finalDate, worker_id)
+      const rules = await getAttendanceEvaluationRules(schedule)
+      const timeWindowError = validateAttendanceTimeWindow(finalDate, mIn, mOut, aIn, aOut, rules)
+      if (timeWindowError) return res.status(400).json({ error: timeWindowError })
+      const evaluated = evaluateTwoSessions(mIn, aIn, baseRate, rules)
+      let status = req.body.status === 'Absent' ? 'Absent' : evaluated.status
       const checkNW = await isDateNonWorkingDay(finalDate)
       if (checkNW.isNonWorking) {
         if (!status || status === 'Absent') {
@@ -2035,7 +2633,9 @@ function startServer() {
         project_id: pid || project_id || null, worker_id: worker_id || null, worker_name: finalName, date: finalDate, role: role || 'Laborer',
         morning_in: mIn || '—', morning_out: mOut || '—', afternoon_in: aIn || '—', afternoon_out: aOut || '—',
         morning_status: evaluated.morningStatus, afternoon_status: evaluated.afternoonStatus,
+        late_deduction: evaluated.lateDeductions,
         time_in: mIn || aIn || '—', time_out: aOut || mOut || '—', rate: baseRate, earned_amount: earnedAmount, advance: advance || 0, status,
+        ...attendanceScheduleFields(schedule),
         created_at: FieldValue.serverTimestamp()
       }
       const docRef = await db.collection('attendance').add(newAttendance)
@@ -2067,7 +2667,8 @@ function startServer() {
         id: docRef.id,
         project_id, worker_id, worker_name: finalName, name: finalName, date: finalDate, role: role || 'Laborer',
         morningIn: mIn || '—', morningOut: mOut || '—', afternoonIn: aIn || '—', afternoonOut: aOut || '—',
-        timeIn: mIn || aIn || '—', timeOut: aOut || mOut || '—', rate: baseRate, earned_amount: earnedAmount, advance: advance || 0, status
+        timeIn: mIn || aIn || '—', timeOut: aOut || mOut || '—', rate: baseRate, earned_amount: earnedAmount, advance: advance || 0, status,
+        late_deduction: evaluated.lateDeductions
       })
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -2082,44 +2683,68 @@ function startServer() {
   })
 
   app.post('/api/attendance/scan', async (req, res) => {
-    const { rfid_uid, terminal_id } = req.body
+    const { rfid_uid, worker_code, worker_id, terminal_id, scan_source } = req.body
     const cleanUid = rfid_uid ? String(rfid_uid).trim().replace(/[\s:]/g, '').toUpperCase() : null
-    const terminalId = terminal_id || 'ESP32-GATE-TERMINAL'
+    const workerIdentifier = String(worker_code || worker_id || '').trim()
+    const scanSource = ['NFC', 'QR'].includes(String(scan_source || '').toUpperCase())
+      ? String(scan_source).toUpperCase()
+      : (cleanUid ? 'RFID' : 'QR')
+    const terminalId = terminal_id || (scanSource === 'RFID' ? 'ESP32-GATE-TERMINAL' : `MOBILE-${scanSource}`)
 
-    if (!cleanUid) {
-      return res.status(400).json({ success: false, error: 'RFID UID is required.' })
+    if (!cleanUid && !workerIdentifier) {
+      return res.status(400).json({ success: false, error: 'An RFID UID or worker ID is required.' })
     }
 
     // Cache the latest scan so admin UI can auto-detect and populate newly tapped cards
-    latestRfidScan = {
-      uid: cleanUid,
-      timestamp: Date.now(),
-      terminal_id: terminalId
+    if (cleanUid) {
+      latestRfidScan = {
+        uid: cleanUid,
+        timestamp: Date.now(),
+        terminal_id: terminalId
+      }
     }
 
     try {
-      // 1. Look up worker by rfid_uid
-      const workerSnap = await db.collection('workers').where('rfid_uid', '==', cleanUid).limit(1).get()
-      if (workerSnap.empty) {
+      // 1. Look up by RFID UID, or by the worker ID encoded in a QR code.
+      let workerDoc = null
+      if (cleanUid) {
+        const workerSnap = await db.collection('workers').where('rfid_uid', '==', cleanUid).limit(1).get()
+        workerDoc = workerSnap.empty ? null : workerSnap.docs[0]
+      } else {
+        if (workerIdentifier.length > 128) {
+          return res.status(400).json({ success: false, error: 'Worker ID is invalid.' })
+        }
+        if (!workerIdentifier.includes('/')) {
+          const workerByDocumentId = await db.collection('workers').doc(workerIdentifier).get()
+          if (workerByDocumentId.exists) workerDoc = workerByDocumentId
+        }
+        if (!workerDoc) {
+          const workerSnap = await db.collection('workers').where('worker_code', '==', workerIdentifier).limit(1).get()
+          workerDoc = workerSnap.empty ? null : workerSnap.docs[0]
+        }
+      }
+      if (!workerDoc) {
         recordAuditLog({
-          action: 'RFID_SCAN_UNREGISTERED',
+          action: 'ATTENDANCE_SCAN_UNREGISTERED',
           module: 'Attendance',
-          description: `Unregistered RFID card tapped [UID: ${cleanUid}] at terminal "${terminalId}".`,
-          actor_name: 'Unknown / RFID Card',
+          description: `Unregistered ${scanSource} attendance scan [Identifier: ${cleanUid || workerIdentifier}] at terminal "${terminalId}".`,
+          actor_name: 'Unknown / Attendance Scan',
           actor_role: 'Anonymous',
           status: 'FAILED',
-          details: { rfid_uid: cleanUid, terminal_id: terminalId },
+          details: { rfid_uid: cleanUid, worker_identifier: workerIdentifier || null, scan_source: scanSource, terminal_id: terminalId },
           req
         }).catch(() => {})
 
         return res.status(404).json({
           success: false,
-          error: `Unregistered RFID card (${cleanUid}). Please assign this card to a worker first.`,
-          rfid_uid: cleanUid
+          error: cleanUid
+            ? `Unregistered RFID card (${cleanUid}). Please assign this card to a worker first.`
+            : `Worker ID "${workerIdentifier}" was not found.`,
+          rfid_uid: cleanUid,
+          worker_identifier: workerIdentifier || null
         })
       }
 
-      const workerDoc = workerSnap.docs[0]
       const worker = workerDoc.data()
       const workerId = workerDoc.id
       const workerName = worker.full_name || [worker.first_name, worker.last_name].filter(Boolean).join(' ') || 'Worker'
@@ -2146,8 +2771,20 @@ function startServer() {
 
       // 2. Check Date & Terminal Schedule Settings
       const now = new Date()
-      const timeString = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
-      const todayISO = now.toISOString().slice(0, 10)
+      const timeString = now.toLocaleTimeString('en-US', {
+        timeZone: 'Asia/Manila',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      })
+      const dateParts = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Manila',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      }).formatToParts(now)
+      const getDatePart = type => dateParts.find(part => part.type === type)?.value
+      const todayISO = `${getDatePart('year')}-${getDatePart('month')}-${getDatePart('day')}`
       const minutes = parseTimeToMinutes(timeString)
 
       const nwCheck = await isDateNonWorkingDay(todayISO)
@@ -2171,19 +2808,26 @@ function startServer() {
           })
         }
         if (sData.auto_schedule && sData.manual_override !== 'OPEN') {
-          const openM = parseTimeToMinutes(sData.open_time || '07:00') || (7 * 60)
-          const closeM = parseTimeToMinutes(sData.close_time || '17:30') || (17 * 60 + 30)
+          const scanRules = normalizeAttendanceSettings(sData)
+          const openM = Math.min(
+            parseTimeToMinutes(scanRules.morning_time_in_start),
+            parseTimeToMinutes(scanRules.afternoon_time_in_start)
+          )
+          const closeM = Math.max(
+            parseTimeToMinutes(scanRules.morning_time_out_close),
+            parseTimeToMinutes(scanRules.afternoon_time_out_close)
+          )
           if (minutes < openM) {
             return res.status(400).json({
               success: false,
-              error: `Attendance is closed before shift. Opens at ${sData.open_time}.`,
+              error: `Attendance is closed before shift. Opens at ${scanRules.morning_time_in_start}.`,
               worker_name: workerName
             })
           }
           if (minutes > closeM) {
             return res.status(400).json({
               success: false,
-              error: `Shift cutoff reached (${sData.close_time}). Terminal is closed.`,
+              error: `Shift cutoff reached (${scanRules.afternoon_time_out_close}). Terminal is closed.`,
               worker_name: workerName
             })
           }
@@ -2214,110 +2858,48 @@ function startServer() {
         // Existing record for today -> Update shift
         const existingDoc = attSnap.docs[0]
         const existing = existingDoc.data()
-        let mIn = existing.morning_in
-        let mOut = existing.morning_out
-        let aIn = existing.afternoon_in
-        let aOut = existing.afternoon_out
+        const rules = await getAttendanceEvaluationRules(existing)
+        const resolvedAction = resolveRfidAttendanceAction(minutes, existing, rules)
+        if (resolvedAction.error) {
+          return res.status(400).json({
+            success: false,
+            error: `${resolvedAction.error} Worker: ${workerName}.`,
+            worker_name: workerName,
+            action: resolvedAction.action
+          })
+        }
+        action = resolvedAction.action
+        let mIn = existing.morning_in || '—'
+        let mOut = existing.morning_out || '—'
+        let aIn = existing.afternoon_in || '—'
+        let aOut = existing.afternoon_out || '—'
+        if (action === 'MORNING TIME IN') mIn = timeString
+        else if (action === 'MORNING TIME OUT (12 PM)') mOut = timeString
+        else if (action === 'AFTERNOON TIME IN (1 PM)') aIn = timeString
+        else if (action === 'AFTERNOON TIME OUT (5 PM)') aOut = timeString
 
-        if (minutes !== null && minutes < 12 * 60 + 30) {
-          // Morning session (before 12:30 PM)
-          if (mIn === '—' || !mIn) {
-            // Check if tapping during Lunch Out window (11:30 AM - 12:30 PM) without having Timed In
-            if (minutes >= 11 * 60 + 30) {
-              return res.status(400).json({
-                success: false,
-                error: `Bawal mag-Time Out: Walang naitalang Morning Time In para kay ${workerName}.`,
-                worker_name: workerName,
-                action: 'NO_TIME_IN'
-              })
-            }
-            mIn = timeString
-            action = 'MORNING TIME IN'
-          } else if (mOut === '—' || !mOut) {
-            // Anti-double-tap: Prevent accidental immediate checkout within 3 minutes of Time In
-            const mInMin = parseTimeToMinutes(mIn)
-            if (mInMin !== null && Math.abs(minutes - mInMin) < 3) {
-              return res.status(400).json({
-                success: false,
-                error: `Kaka-Time In lang ni ${workerName}. Maghintay sandali bago mag-Time Out.`,
-                worker_name: workerName,
-                action: 'TOO_SOON'
-              })
-            }
-            mOut = timeString
-            action = 'MORNING TIME OUT (12 PM)'
-          } else {
+        if (action.includes('TIME OUT')) {
+          const matchingTimeIn = action.startsWith('MORNING') ? mIn : aIn
+          const timeInMinutes = parseTimeToMinutes(matchingTimeIn)
+          if (timeInMinutes !== null && Math.abs(minutes - timeInMinutes) < 3) {
             return res.status(400).json({
               success: false,
-              error: `Morning shift already completed for ${workerName}.`,
+              error: `Kaka-Time In lang ni ${workerName}. Maghintay sandali bago mag-Time Out.`,
               worker_name: workerName,
-              action: 'ALREADY_COMPLETED'
+              action: 'TOO_SOON'
             })
           }
-        } else {
-          // Afternoon session (12:30 PM onwards)
-          if (minutes >= 15 * 60 + 30) {
-            // Dismissal / Uwian Period (3:30 PM onwards)
-            const hasActiveTimeIn = (aIn && aIn !== '—') || (mIn && mIn !== '—' && (!mOut || mOut === '—'))
-            if (!hasActiveTimeIn) {
-              return res.status(400).json({
-                success: false,
-                error: `Bawal mag-Time Out: Walang naitalang Time In para kay ${workerName} ngayong araw.`,
-                worker_name: workerName,
-                action: 'NO_TIME_IN'
-              })
-            }
-            if (aOut && aOut !== '—') {
-              return res.status(400).json({
-                success: false,
-                error: `Naka-Time Out na si ${workerName} ngayong araw (Time Out: ${aOut}).`,
-                worker_name: workerName,
-                action: 'ALREADY_COMPLETED'
-              })
-            }
-
-            // Anti-double-tap check if they just timed in in the afternoon
-            const aInMin = parseTimeToMinutes(aIn)
-            if (aInMin !== null && Math.abs(minutes - aInMin) < 3) {
-              return res.status(400).json({
-                success: false,
-                error: `Kaka-Time In lang ni ${workerName}. Maghintay sandali bago mag-Time Out.`,
-                worker_name: workerName,
-                action: 'TOO_SOON'
-              })
-            }
-
-            aOut = timeString
-            action = 'AFTERNOON TIME OUT (5 PM)'
-          } else {
-            // Afternoon entry window (12:30 PM to 3:30 PM)
-            if (aIn === '—' || !aIn) {
-              aIn = timeString
-              action = 'AFTERNOON TIME IN (1 PM)'
-            } else if (aOut === '—' || !aOut) {
-              const aInMin = parseTimeToMinutes(aIn)
-              if (aInMin !== null && Math.abs(minutes - aInMin) < 3) {
-                return res.status(400).json({
-                  success: false,
-                  error: `Kaka-Time In lang ni ${workerName}. Maghintay sandali bago mag-Time Out.`,
-                  worker_name: workerName,
-                  action: 'TOO_SOON'
-                })
-              }
-              aOut = timeString
-              action = 'AFTERNOON TIME OUT (5 PM)'
-            } else {
-              return res.status(400).json({
-                success: false,
-                error: `Afternoon shift already completed for ${workerName}.`,
-                worker_name: workerName,
-                action: 'ALREADY_COMPLETED'
-              })
-            }
-          }
         }
-
-        const evalRes = evaluateTwoSessions(mIn, aIn, workerRate)
+        const timeWindowError = validateAttendanceTimeWindow(todayISO, mIn, mOut, aIn, aOut, rules)
+        if (timeWindowError) {
+          return res.status(400).json({
+            success: false,
+            error: timeWindowError,
+            worker_name: workerName,
+            action: 'ATTENDANCE_WINDOW_CLOSED'
+          })
+        }
+        const evalRes = evaluateTwoSessions(mIn, aIn, workerRate, rules)
         finalStatus = evalRes.status
         earnedAmount = evalRes.earnedAmount
 
@@ -2338,24 +2920,24 @@ function startServer() {
 
         recordNotification({
           type: 'Staff & Workers',
-          title: `RFID Tap: ${workerName}`,
-          message: `Recorded ${action} for ${workerName} (${workerRole}) via terminal "${terminalId}". Status: ${finalStatus}.`,
+          title: `${scanSource} Attendance: ${workerName}`,
+          message: `Recorded ${action} for ${workerName} (${workerRole}) via ${scanSource} at "${terminalId}". Status: ${finalStatus}.`,
           severity: (finalStatus === 'Late' || finalStatus === 'Double Late') ? 'Medium' : 'Low',
           actor_name: workerName,
           actor_role: workerRole,
-          action: 'rfid_tap'
+          action: 'attendance_scan'
         }).catch(() => {})
 
         recordAuditLog({
-          action: 'RFID_ATTENDANCE_LOGGED',
+          action: cleanUid ? 'RFID_ATTENDANCE_LOGGED' : 'QR_ATTENDANCE_LOGGED',
           module: 'Attendance',
-          description: `Worker "${workerName}" (${workerRole}) logged ${action} at terminal "${terminalId}" (Time: ${timeString}, Status: ${finalStatus}).`,
+          description: `Worker "${workerName}" (${workerRole}) logged ${action} via ${scanSource} at terminal "${terminalId}" (Time: ${timeString}, Status: ${finalStatus}).`,
           actor_name: workerName,
           actor_role: workerRole,
           actor_id: workerId,
           target_id: existingDoc.id,
           target_name: workerName,
-          details: { action, time: timeString, status: finalStatus, rfid_uid: cleanUid, terminal_id: terminalId },
+          details: { action, time: timeString, status: finalStatus, rfid_uid: cleanUid, worker_identifier: workerIdentifier || null, scan_source: scanSource, terminal_id: terminalId },
           req
         }).catch(() => {})
 
@@ -2368,55 +2950,36 @@ function startServer() {
           status: finalStatus,
           earned_amount: earnedAmount,
           rfid_uid: cleanUid,
+          scan_source: scanSource,
           terminal_id: terminalId
         })
       } else {
-        // First tap of the day -> Create attendance record
-        // First tap of the day -> Check if worker is attempting to Time Out without ever Timing In!
-        // 1. If tapping during Lunch Out window (11:30 AM - 12:30 PM) without having Timed In
-        if (minutes !== null && minutes >= 11 * 60 + 30 && minutes < 12 * 60 + 30) {
+        const schedule = await findAttendanceSchedule(todayISO, workerId)
+        const rules = await getAttendanceEvaluationRules(schedule)
+        const resolvedAction = resolveRfidAttendanceAction(minutes, null, rules)
+        if (resolvedAction.error || (resolvedAction.action || '').includes('TIME OUT')) {
           return res.status(400).json({
             success: false,
-            error: `Bawal mag-Time Out: Walang naitalang Morning Time In para kay ${workerName}.`,
+            error: resolvedAction.error || 'Cannot record Time Out without an existing Time In.',
             worker_name: workerName,
-            action: 'NO_TIME_IN'
+            action: resolvedAction.action || 'NO_TIME_IN'
           })
         }
-
-        // 2. If tapping during Afternoon Dismissal / Uwian window (3:30 PM onwards) without having Timed In
-        if (minutes !== null && minutes >= 15 * 60 + 30) {
-          recordAuditLog({
-            action: 'RFID_TIMEOUT_REJECTED_NO_TIMEIN',
-            module: 'Attendance',
-            description: `Tinanggihan ang Time Out para kay "${workerName}" sa terminal "${terminalId}": Walang naitalang Time In ngayong araw.`,
-            actor_name: workerName,
-            actor_role: workerRole,
-            actor_id: workerId,
-            status: 'FAILED',
-            details: { rfid_uid: cleanUid, terminal_id: terminalId, time: timeString },
-            req
-          }).catch(() => {})
-
-          return res.status(400).json({
-            success: false,
-            error: `Bawal mag-Time Out: Walang naitalang Time In para kay ${workerName} ngayong araw.`,
-            worker_name: workerName,
-            action: 'NO_TIME_IN'
-          })
-        }
-
+        action = resolvedAction.action
         let mIn = '—'
         let aIn = '—'
-
-        if (minutes !== null && minutes < 12 * 60 + 30) {
-          mIn = timeString
-          action = 'MORNING TIME IN'
-        } else {
-          aIn = timeString
-          action = 'AFTERNOON TIME IN (1 PM)'
+        if (action === 'MORNING TIME IN') mIn = timeString
+        if (action === 'AFTERNOON TIME IN (1 PM)') aIn = timeString
+        const timeWindowError = validateAttendanceTimeWindow(todayISO, mIn, '—', aIn, '—', rules)
+        if (timeWindowError) {
+          return res.status(400).json({
+            success: false,
+            error: timeWindowError,
+            worker_name: workerName,
+            action: 'ATTENDANCE_WINDOW_CLOSED'
+          })
         }
-
-        const evalRes = evaluateTwoSessions(mIn, aIn, workerRate)
+        const evalRes = evaluateTwoSessions(mIn, aIn, workerRate, rules)
         finalStatus = evalRes.status
         earnedAmount = evalRes.earnedAmount
 
@@ -2433,11 +2996,13 @@ function startServer() {
           afternoon_out: '—',
           morning_status: evalRes.morningStatus,
           afternoon_status: evalRes.afternoonStatus,
+          late_deduction: evalRes.lateDeductions,
           rate: workerRate,
           earned_amount: earnedAmount,
           advance: 0,
           time_in: mIn !== '—' ? mIn : aIn,
           time_out: '—',
+          ...attendanceScheduleFields(schedule),
           created_at: FieldValue.serverTimestamp()
         }
 
@@ -2445,24 +3010,24 @@ function startServer() {
 
         recordNotification({
           type: 'Staff & Workers',
-          title: `RFID Tap: ${workerName}`,
-          message: `Recorded ${action} for ${workerName} (${workerRole}) via terminal "${terminalId}". Status: ${finalStatus}.`,
+          title: `${scanSource} Attendance: ${workerName}`,
+          message: `Recorded ${action} for ${workerName} (${workerRole}) via ${scanSource} at "${terminalId}". Status: ${finalStatus}.`,
           severity: (finalStatus === 'Late' || finalStatus === 'Double Late') ? 'Medium' : 'Low',
           actor_name: workerName,
           actor_role: workerRole,
-          action: 'rfid_tap'
+          action: 'attendance_scan'
         }).catch(() => {})
 
         recordAuditLog({
-          action: 'RFID_ATTENDANCE_LOGGED',
+          action: cleanUid ? 'RFID_ATTENDANCE_LOGGED' : 'QR_ATTENDANCE_LOGGED',
           module: 'Attendance',
-          description: `Worker "${workerName}" (${workerRole}) logged ${action} at terminal "${terminalId}" (Time: ${timeString}, Status: ${finalStatus}).`,
+          description: `Worker "${workerName}" (${workerRole}) logged ${action} via ${scanSource} at terminal "${terminalId}" (Time: ${timeString}, Status: ${finalStatus}).`,
           actor_name: workerName,
           actor_role: workerRole,
           actor_id: workerId,
           target_id: newDoc.id,
           target_name: workerName,
-          details: { action, time: timeString, status: finalStatus, rfid_uid: cleanUid, terminal_id: terminalId },
+          details: { action, time: timeString, status: finalStatus, rfid_uid: cleanUid, worker_identifier: workerIdentifier || null, scan_source: scanSource, terminal_id: terminalId },
           req
         }).catch(() => {})
 
@@ -2475,6 +3040,7 @@ function startServer() {
           status: finalStatus,
           earned_amount: earnedAmount,
           rfid_uid: cleanUid,
+          scan_source: scanSource,
           terminal_id: terminalId
         })
       }
@@ -2488,7 +3054,7 @@ function startServer() {
   app.put('/api/attendance/:id', async (req, res) => {
     const {
       morningIn, morningOut, afternoonIn, afternoonOut,
-      timeIn, timeOut, status, rate
+      status, rate
     } = req.body
 
     try {
@@ -2512,13 +3078,17 @@ function startServer() {
         return res.status(400).json({ error: 'Bawal mag-Time Out sa hapon kung walang naitalang Time In.' })
       }
 
-      const evaluated = evaluateTwoSessions(mIn, aIn, baseRate)
-      const finalStatus = status || evaluated.status
+      const rules = await getAttendanceEvaluationRules(existing)
+      const timeWindowError = validateAttendanceTimeWindow(existing.date, mIn, mOut, aIn, aOut, rules)
+      if (timeWindowError) return res.status(400).json({ error: timeWindowError })
+      const evaluated = evaluateTwoSessions(mIn, aIn, baseRate, rules)
+      const finalStatus = status === 'Absent' ? 'Absent' : evaluated.status
       const finalEarned = (finalStatus === 'Absent') ? 0 : evaluated.earnedAmount
 
       await docRef.update({
         morning_in: mIn || '—', morning_out: mOut || '—', afternoon_in: aIn || '—', afternoon_out: aOut || '—',
         morning_status: evaluated.morningStatus, afternoon_status: evaluated.afternoonStatus,
+        late_deduction: evaluated.lateDeductions,
         time_in: mIn || aIn || '—', time_out: aOut || mOut || '—',
         earned_amount: finalEarned, status: finalStatus
       })
@@ -3239,10 +3809,15 @@ function startServer() {
 
       // Check non-working days for all dates (batch-optimized to prevent multiple sequential roundtrips)
       let autoSundaysOff = true
+      let attendanceRules = normalizeAttendanceSettings()
       try {
         const settingsDoc = await db.collection('settings').doc('attendance').get()
-        if (settingsDoc.exists && settingsDoc.data().auto_sundays_off !== undefined) {
-          autoSundaysOff = Boolean(settingsDoc.data().auto_sundays_off)
+        if (settingsDoc.exists) {
+          const settings = settingsDoc.data()
+          attendanceRules = normalizeAttendanceSettings(settings)
+          if (settings.auto_sundays_off !== undefined) {
+            autoSundaysOff = Boolean(settings.auto_sundays_off)
+          }
         }
       } catch (_) {}
 
@@ -3309,6 +3884,17 @@ function startServer() {
         .map(doc => ({ id: doc.id, ...doc.data() }))
         .filter(ca => !ca.is_deducted)
 
+      const overtimeDaySnap = await db.collection('attendance_overtime_days')
+        .where('date', '>=', startDate)
+        .where('date', '<=', endDate)
+        .get()
+      const overtimeRequiredDates = new Set(
+        overtimeDaySnap.docs
+          .map(doc => doc.data())
+          .filter(day => day.required === true)
+          .map(day => day.date)
+      )
+
       // Fetch project name if project_id is specified
       let projectName = 'All Projects'
       if (pid) {
@@ -3319,6 +3905,7 @@ function startServer() {
       let totalGrossPay = 0
       let totalCashAdvances = 0
       let totalLateDeductions = 0
+      let totalOvertimePay = 0
       let totalNetPayout = 0
       let totalHours = 0
 
@@ -3357,8 +3944,9 @@ function startServer() {
         let absentDays = 0
         let restDays = 0
         let workerHours = 0
-        let workerGross = 0
+        let workerBaseEarnings = 0
         let workerLatePenalty = 0
+        let workerOvertimePay = 0
 
         const dailyLogs = []
 
@@ -3367,51 +3955,41 @@ function startServer() {
           const isNW = Boolean(nonWorkingMap[dateStr])
 
           if (log) {
-            const status = log.status || 'Present'
-            let earned = (log.earned_amount !== undefined && log.earned_amount !== null) ? Number(log.earned_amount) : 0
-            let hours = 0
-            let penalty = 0
+            const earnings = calculateDailyEarnings({
+              morningIn: log.morning_in || log.time_in,
+              afternoonIn: log.afternoon_in,
+              dailyRate: baseDailyRate,
+              attendance: {
+                ...log,
+                status: isNW ? 'Rest Day / Non-Working' : log.status
+              },
+              overtimeRequired: overtimeRequiredDates.has(dateStr),
+              settings: attendanceRules
+            })
+            const { status, hours, baseEarned, attendanceDeduction: penalty, overtimeMinutes, overtimePay } = earnings
+            const earned = earnings.totalEarnings
 
             if (status === 'Present') {
-              hours = 8.0
-              earned = baseDailyRate
               presentDays++
             } else if (status === 'Late') {
-              hours = 8.0
-              earned = Math.max(0, baseDailyRate - 100)
-              penalty = 100
               lateDays++
             } else if (status === 'Double Late') {
-              hours = 8.0
-              earned = Math.max(0, baseDailyRate - 200)
-              penalty = 200
               doubleLateDays++
             } else if (status === 'Halfday') {
-              hours = 4.0
-              earned = Math.round((baseDailyRate / 2) * 100) / 100
               halfdayDays++
             } else if (status === 'Halfday (Late)') {
-              hours = 4.0
-              earned = Math.max(0, (baseDailyRate / 2) - 100)
-              penalty = 100
               halfdayLateDays++
             } else if (status === 'Absent') {
-              hours = 0
-              earned = 0
               absentDays++
             } else if (status.includes('Rest Day') || status.includes('Non-Working')) {
               hours = 0
-              earned = 0
               restDays++
-            } else {
-              hours = 8.0
-              earned = baseDailyRate
-              presentDays++
             }
 
             workerHours += hours
-            workerGross += earned
+            workerBaseEarnings += baseEarned
             workerLatePenalty += penalty
+            workerOvertimePay += overtimePay
 
             dailyLogs.push({
               date: dateStr,
@@ -3423,8 +4001,14 @@ function startServer() {
               hours,
               rate: baseDailyRate,
               earned,
+              base_earned: baseEarned,
               deduction: penalty,
-              note: penalty > 0 ? `Late penalty (-₱${penalty})` : ''
+              overtime_minutes: overtimeMinutes,
+              overtime_pay: overtimePay,
+              note: [
+                penalty > 0 ? `Late penalty (-₱${penalty})` : '',
+                overtimePay > 0 ? `Approved overtime (+₱${overtimePay})` : ''
+              ].filter(Boolean).join(' • ')
             })
           } else {
             // No attendance recorded on this date
@@ -3477,11 +4061,13 @@ function startServer() {
         }
 
         const workedDays = presentDays + lateDays + doubleLateDays + halfdayDays + halfdayLateDays
-        const netPay = Math.max(0, workerGross - workerCATotal)
+        const grossPay = workerBaseEarnings + workerOvertimePay
+        const netPay = Math.max(0, grossPay - workerLatePenalty - workerCATotal)
 
-        totalGrossPay += workerGross
+        totalGrossPay += grossPay
         totalCashAdvances += workerCATotal
         totalLateDeductions += workerLatePenalty
+        totalOvertimePay += workerOvertimePay
         totalNetPayout += netPay
         totalHours += workerHours
 
@@ -3499,9 +4085,10 @@ function startServer() {
           rest_days: restDays,
           worked_days: workedDays,
           total_hours: workerHours,
-          regular_earnings: workerGross + workerLatePenalty,
+          regular_earnings: workerBaseEarnings,
+          overtime_pay: workerOvertimePay,
           late_deductions: workerLatePenalty,
-          gross_pay: workerGross,
+          gross_pay: grossPay,
           cash_advance_deductions: workerCATotal,
           cash_advances: workerCAs.map(ca => ({
             id: ca.id,
@@ -3509,7 +4096,7 @@ function startServer() {
             date: ca.date,
             reason: ca.reason || 'Cash Advance'
           })),
-          total_deductions: workerCATotal,
+          total_deductions: workerCATotal + workerLatePenalty,
           net_pay: netPay,
           daily_logs: dailyLogs
         })
@@ -3526,6 +4113,7 @@ function startServer() {
           totalGrossPay,
           totalCashAdvances,
           totalLateDeductions,
+          totalOvertimePay,
           totalNetPayout,
           totalWorkers: workersPayroll.length,
           totalHours
@@ -3762,6 +4350,134 @@ function startServer() {
     }
   })
 
+  app.get('/api/workers/:id/salary-summary', async (req, res) => {
+    try {
+      const workerDoc = await db.collection('workers').doc(req.params.id).get()
+      if (!workerDoc.exists) return res.status(404).json({ error: 'Worker not found.' })
+
+      const worker = workerDoc.data()
+      const workerName = (worker.full_name || `${worker.first_name || ''} ${worker.last_name || ''}`)
+        .trim() || worker.name || 'Worker'
+      const dailyRate = Number(worker.daily_rate) || (
+        worker.role?.includes('Foreman') ? 1000 :
+        (worker.role?.includes('Skilled') || worker.role?.includes('Operator')) ? 800 : 600
+      )
+      const attendanceSnapshot = await db.collection('attendance')
+        .where('worker_id', '==', req.params.id)
+        .get()
+      const records = attendanceSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+      const legacySnapshot = await db.collection('attendance')
+        .where('worker_name', '==', workerName)
+        .get()
+      records.push(...legacySnapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter(record => !records.some(existing => existing.id === record.id)))
+
+      const todayParts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Manila',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      }).formatToParts(new Date())
+      const today = `${todayParts.find(part => part.type === 'year')?.value}-${todayParts.find(part => part.type === 'month')?.value}-${todayParts.find(part => part.type === 'day')?.value}`
+      const latestByDate = new Map()
+      for (const record of records) {
+        if (!record.date || record.date > today) continue
+        const existing = latestByDate.get(record.date) || {}
+        const hasValue = value => Boolean(value && value !== '—' && value !== '--:--')
+        const legacyInMinutes = parseTimeToMinutes(record.time_in)
+        const legacyOutMinutes = parseTimeToMinutes(record.time_out)
+        const incoming = {
+          ...record,
+          morning_in: hasValue(record.morning_in)
+            ? record.morning_in
+            : legacyInMinutes !== null && legacyInMinutes < 12 * 60 + 30 ? record.time_in : '—',
+          morning_out: hasValue(record.morning_out)
+            ? record.morning_out
+            : legacyOutMinutes !== null && legacyOutMinutes < 12 * 60 + 30 ? record.time_out : '—',
+          afternoon_in: hasValue(record.afternoon_in)
+            ? record.afternoon_in
+            : legacyInMinutes !== null && legacyInMinutes >= 12 * 60 + 30 ? record.time_in : '—',
+          afternoon_out: hasValue(record.afternoon_out)
+            ? record.afternoon_out
+            : legacyOutMinutes !== null && legacyOutMinutes >= 12 * 60 + 30 ? record.time_out : '—'
+        }
+        for (const [field, alias] of [
+          ['morning_in', null],
+          ['morning_out', null],
+          ['afternoon_in', null],
+          ['afternoon_out', null]
+        ]) {
+          if (!hasValue(existing[field]) && hasValue(incoming[field] || (alias && incoming[alias]))) {
+            existing[field] = incoming[field] || incoming[alias]
+          }
+        }
+        latestByDate.set(record.date, {
+          ...existing,
+          ...incoming,
+          morning_in: existing.morning_in || incoming.morning_in,
+          morning_out: existing.morning_out || incoming.morning_out,
+          afternoon_in: existing.afternoon_in || incoming.afternoon_in,
+          afternoon_out: existing.afternoon_out || incoming.afternoon_out
+        })
+      }
+
+      const settingsDoc = await db.collection('settings').doc('attendance').get()
+      const rules = normalizeAttendanceSettings(settingsDoc.exists ? settingsDoc.data() : {})
+      const overtimeSnapshot = await db.collection('attendance_overtime_days').get()
+      const overtimeRequiredDates = new Set(
+        overtimeSnapshot.docs
+          .map(doc => doc.data())
+          .filter(day => day.required === true)
+          .map(day => day.date)
+      )
+
+      let totalBaseEarnings = 0
+      let totalAttendanceDeductions = 0
+      let totalOvertimePay = 0
+      const dailyLogs = [...latestByDate.values()].sort((a, b) => b.date.localeCompare(a.date))
+        .map(record => {
+          const earnings = calculateDailyEarnings({
+            morningIn: record.morning_in,
+            afternoonIn: record.afternoon_in,
+            dailyRate,
+            attendance: record,
+            overtimeRequired: overtimeRequiredDates.has(record.date),
+            settings: rules
+          })
+          totalBaseEarnings += earnings.dailySalary
+          totalAttendanceDeductions += earnings.attendanceDeduction
+          totalOvertimePay += earnings.overtimePay
+          return {
+            date: record.date,
+            status: earnings.status,
+            morning_in: record.morning_in,
+            morning_out: record.morning_out,
+            afternoon_in: record.afternoon_in,
+            afternoon_out: record.afternoon_out,
+            hours: earnings.hours,
+            daily_rate: dailyRate,
+            daily_salary: earnings.dailySalary,
+            attendance_deduction: earnings.attendanceDeduction,
+            overtime_minutes: earnings.overtimeMinutes,
+            overtime_pay: earnings.overtimePay,
+            total_earnings: earnings.totalEarnings
+          }
+        })
+
+      res.json({
+        daily_rate: dailyRate,
+        base_earnings: Math.round(totalBaseEarnings * 100) / 100,
+        attendance_deductions: Math.round(totalAttendanceDeductions * 100) / 100,
+        overtime_pay: Math.round(totalOvertimePay * 100) / 100,
+        total_earnings: Math.round((totalBaseEarnings + totalOvertimePay) * 100) / 100,
+        daily_logs: dailyLogs
+      })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
   // ── REGISTRATION ──
   app.post('/api/register', async (req, res) => {
     const { firstName, middleName, lastName, username, birthday, age, phone, address, address_obj, role, position, password } = req.body
@@ -3774,9 +4490,11 @@ function startServer() {
       }
       const hashedPassword = await bcrypt.hash(cleanPassword, 10)
 
+      await ensureWorkerCodes()
       const newWorker = {
         first_name: firstName, middle_name: middleName || null, last_name: lastName, full_name: fullName, username: username ? String(username).trim() : null,
         birthday, age, phone, address, address_obj: address_obj || null, role, position: position || null, password: hashedPassword,
+        daily_rate: 600, worker_code: await createWorkerCode(workerRegistrationYear(new Date())),
         approval_status: 'Pending', status: 'Active',
         created_at: FieldValue.serverTimestamp()
       }
@@ -3926,6 +4644,10 @@ function startServer() {
         return res.status(401).json({ error: 'Invalid password' })
       }
 
+      await ensureWorkerCodes()
+      const refreshedWorker = await db.collection('workers').doc(userDoc.id).get()
+      const workerCode = refreshedWorker.exists ? refreshedWorker.data().worker_code : user.worker_code
+
       // Record successful login in Audit Logs
       recordAuditLog({
         action: 'LOGIN_SUCCESS',
@@ -3951,6 +4673,7 @@ function startServer() {
           position: user.position,
           phone: user.phone,
           address: user.address,
+          worker_code: workerCode,
           approval_status: user.approval_status
         }
       })
@@ -3962,6 +4685,7 @@ function startServer() {
   // ── GET ALL PENDING REGISTRATIONS (for Admin) ──
   app.get('/api/pending-registrations', async (req, res) => {
     try {
+      await ensureWorkerCodes()
       const snapshot = await db.collection('workers')
         .where('approval_status', '==', 'Pending')
         .get()
@@ -3980,6 +4704,7 @@ function startServer() {
           position: data.position,
           birthday: data.birthday,
           age: data.age,
+          worker_code: data.worker_code,
           approval_status: data.approval_status,
           created_at: data.created_at
         }
@@ -4267,11 +4992,13 @@ function startServer() {
   app.post('/api/admin/profile/save', async (req, res) => {
     const {
       adminId, firstName, middleName, lastName, email, phone, homeAddress, addressObj,
-      role, empId, dept, assignedProjectSite, terminalId, pushNotificationsEnabled, biometricLoginEnabled, status
+      role, empId, dept, department, assignedProjectSite, terminalId, pushNotificationsEnabled, biometricLoginEnabled, status,
+      username, birthday, age, password
     } = req.body
 
     try {
       const fullName = [firstName, middleName, lastName].filter(Boolean).join(' ').trim()
+      const finalDepartment = department ?? dept
       const addressObjStr = typeof addressObj === 'object' ? JSON.stringify(addressObj) : (addressObj || null)
 
       let targetId = adminId
@@ -4295,9 +5022,30 @@ function startServer() {
 
       // Only update these if they are provided
       if (email !== undefined) updateData.email = email || null
+      if (username !== undefined) {
+        const cleanUsername = typeof username === 'string' ? username.trim() : ''
+        if (!/^[a-z0-9]{8,20}$/.test(cleanUsername)) {
+          return res.status(400).json({ error: 'Username must be 8 to 20 lowercase letters or numbers.' })
+        }
+        const usernameSnapshot = await db.collection('admins').where('username', '==', cleanUsername).limit(2).get()
+        if (usernameSnapshot.docs.some(doc => doc.id !== targetId)) {
+          return res.status(409).json({ error: 'Username is already in use.' })
+        }
+        updateData.username = cleanUsername
+      }
+      if (birthday !== undefined) updateData.birthday = birthday || null
+      if (age !== undefined) updateData.age = age === null ? null : Number(age)
+      if (typeof password === 'string' && password.trim()) {
+        const cleanPassword = password.trim()
+        if (cleanPassword.length < 8 || cleanPassword.length > 20 ||
+            !/[A-Z]/.test(cleanPassword) || !/[a-z]/.test(cleanPassword) || !/[0-9]/.test(cleanPassword)) {
+          return res.status(400).json({ error: 'Password must be 8 to 20 characters and include uppercase, lowercase, and a number.' })
+        }
+        updateData.password = await bcrypt.hash(cleanPassword, 10)
+      }
       if (role !== undefined) updateData.role = role || null
       if (empId !== undefined) updateData.emp_id = empId || null
-      if (dept !== undefined) updateData.dept = dept || null
+      if (finalDepartment !== undefined) updateData.dept = finalDepartment || null
       if (assignedProjectSite !== undefined) updateData.assigned_project_site = assignedProjectSite || null
       if (terminalId !== undefined) updateData.terminal_id = terminalId || null
       if (pushNotificationsEnabled !== undefined) updateData.push_notifications_enabled = pushNotificationsEnabled ? 1 : 0
@@ -4312,7 +5060,7 @@ function startServer() {
         actor_name: fullName,
         actor_role: role || 'Administrator',
         actor_id: targetId,
-        details: { email, phone, role, dept, empId },
+        details: { email, phone, role, dept: finalDepartment, empId },
         req
       }).catch(() => {})
 
@@ -4320,9 +5068,9 @@ function startServer() {
         success: true,
         message: 'Admin profile saved successfully',
         data: {
-          id: targetId, fullName, firstName, middleName, lastName, email, phone, homeAddress,
+          id: targetId, fullName, firstName, middleName, lastName, username: updateData.username ?? username, birthday, age, email, phone, homeAddress,
           addressObj: addressObj || {}, role: role || 'Administrator', empId: empId || 'SCON-ADMIN-001',
-          dept: dept || 'Management', assignedProjectSite, terminalId, pushNotificationsEnabled, biometricLoginEnabled, status
+          dept: finalDepartment || 'Management', assignedProjectSite, terminalId, pushNotificationsEnabled, biometricLoginEnabled, status
         }
       })
     } catch (e) {
@@ -4365,6 +5113,8 @@ function startServer() {
         firstName: adminData.first_name,
         middleName: adminData.middle_name,
         lastName: adminData.last_name,
+        birthday: adminData.birthday,
+        age: adminData.age,
         phone: adminData.phone,
         homeAddress: adminData.home_address,
         addressObj: parsedAddressObj,

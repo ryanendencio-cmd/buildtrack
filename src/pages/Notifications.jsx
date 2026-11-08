@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { useNotifications } from '../context/useNotifications'
+import { api } from '../api'
 
 // Helper to resolve the specific module & destination URL for any notification
 export const resolveNotificationDestination = (notif) => {
@@ -146,7 +147,13 @@ export default function Notifications() {
     const navigate = useNavigate();
     const [filter, setFilter] = useState('All');
     const [sortOrder, setSortOrder] = useState('Newest First');
-    const { notifications, markAsRead, markAllAsRead, unreadCount } = useNotifications();
+    const [showAnnouncementForm, setShowAnnouncementForm] = useState(false);
+    const [announcementTitle, setAnnouncementTitle] = useState('');
+    const [announcementMessage, setAnnouncementMessage] = useState('');
+    const [announcementSeverity, setAnnouncementSeverity] = useState('Medium');
+    const [isPostingAnnouncement, setIsPostingAnnouncement] = useState(false);
+    const [announcementError, setAnnouncementError] = useState('');
+    const { notifications, markAsRead, markAllAsRead, unreadCount, refreshNotifications } = useNotifications();
 
     const filteredNotifs = notifications.filter(n => {
         if (filter === 'Unread') return !n.read;
@@ -173,7 +180,38 @@ export default function Notifications() {
         backgroundSize: '0.8rem 0.8rem'
     };
 
-    const categories = ['All', 'Unread', 'Schedule', 'Cash Advance', 'Staff & Workers', 'Budget', 'Tools', 'Expenses'];
+    const categories = ['All', 'Unread', 'Announcement', 'Schedule', 'Cash Advance', 'Staff & Workers', 'Budget', 'Tools', 'Expenses'];
+
+    const handlePostAnnouncement = async (event) => {
+        event.preventDefault();
+        const title = announcementTitle.trim();
+        const message = announcementMessage.trim();
+        if (!title || !message) {
+            setAnnouncementError('Enter both a title and announcement message.');
+            return;
+        }
+
+        setIsPostingAnnouncement(true);
+        setAnnouncementError('');
+        try {
+            await api.post('/notifications', {
+                type: 'Announcement',
+                title,
+                message,
+                severity: announcementSeverity,
+                action: 'project_announcement'
+            });
+            await refreshNotifications();
+            setAnnouncementTitle('');
+            setAnnouncementMessage('');
+            setAnnouncementSeverity('Medium');
+            setShowAnnouncementForm(false);
+        } catch (error) {
+            setAnnouncementError(error.message || 'Unable to post announcement.');
+        } finally {
+            setIsPostingAnnouncement(false);
+        }
+    };
 
     // Handle clicking Acknowledge or View: Marks as read if unread AND navigates directly to target
     const handleAcknowledgeAndNavigate = (notif) => {
@@ -207,15 +245,84 @@ export default function Notifications() {
                         Clicking any notification will mark it as read and direct you straight to its specific record or module.
                     </p>
                 </div>
-                <button
-                    type="button"
-                    onClick={markAllAsRead}
-                    disabled={unreadCount === 0}
-                    className={`px-4 py-2 rounded-lg font-bold text-[10px] shadow-xs transition-colors flex items-center justify-center gap-1.5 w-full md:w-auto cursor-pointer ${unreadCount > 0 ? 'bg-[#E8C547] text-gray-900 hover:bg-[#d4b33d]' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
-                >
-                    Mark All as Read
-                </button>
+                <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setShowAnnouncementForm((visible) => !visible);
+                            setAnnouncementError('');
+                        }}
+                        className="px-4 py-2 rounded-lg font-bold text-[10px] shadow-xs transition-colors flex items-center justify-center gap-1.5 bg-[#A63228] text-white hover:bg-[#8e2920] w-full md:w-auto cursor-pointer"
+                    >
+                        Post Worker Announcement
+                    </button>
+                    <button
+                        type="button"
+                        onClick={markAllAsRead}
+                        disabled={unreadCount === 0}
+                        className={`px-4 py-2 rounded-lg font-bold text-[10px] shadow-xs transition-colors flex items-center justify-center gap-1.5 w-full md:w-auto cursor-pointer ${unreadCount > 0 ? 'bg-[#E8C547] text-gray-900 hover:bg-[#d4b33d]' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
+                    >
+                        Mark All as Read
+                    </button>
+                </div>
             </div>
+
+            {showAnnouncementForm && (
+                <form onSubmit={handlePostAnnouncement} className="bg-white rounded-xl border border-gray-100 shadow-xs p-3 mb-3">
+                    <div className="flex items-start justify-between gap-2 mb-3">
+                        <div>
+                            <h2 className="text-xs font-extrabold text-gray-900">New Worker Announcement</h2>
+                            <p className="text-[9px] text-gray-500 mt-0.5">This message will appear on worker dashboards.</p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setShowAnnouncementForm(false)}
+                            className="text-[10px] font-bold text-gray-500 hover:text-gray-900 cursor-pointer"
+                        >
+                            Close
+                        </button>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-2">
+                        <input
+                            value={announcementTitle}
+                            onChange={(event) => setAnnouncementTitle(event.target.value)}
+                            maxLength={100}
+                            placeholder="Announcement title"
+                            className="w-full text-[10px] px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-[#A63228]"
+                            disabled={isPostingAnnouncement}
+                        />
+                        <select
+                            value={announcementSeverity}
+                            onChange={(event) => setAnnouncementSeverity(event.target.value)}
+                            className="text-[10px] px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-[#A63228]"
+                            disabled={isPostingAnnouncement}
+                        >
+                            <option value="Low">General</option>
+                            <option value="Medium">Important</option>
+                            <option value="High">Urgent</option>
+                        </select>
+                    </div>
+                    <textarea
+                        value={announcementMessage}
+                        onChange={(event) => setAnnouncementMessage(event.target.value)}
+                        maxLength={1000}
+                        rows={3}
+                        placeholder="Write the project update, safety reminder, or schedule notice..."
+                        className="w-full text-[10px] px-3 py-2 border border-gray-200 rounded-lg mt-2 focus:outline-none focus:border-[#A63228] resize-y"
+                        disabled={isPostingAnnouncement}
+                    />
+                    {announcementError && <p role="alert" className="text-[10px] text-red-700 mt-2">{announcementError}</p>}
+                    <div className="flex justify-end mt-2">
+                        <button
+                            type="submit"
+                            disabled={isPostingAnnouncement}
+                            className="px-4 py-2 rounded-lg bg-[#A63228] text-white text-[10px] font-bold hover:bg-[#8e2920] disabled:opacity-50 cursor-pointer"
+                        >
+                            {isPostingAnnouncement ? 'Posting…' : 'Publish Announcement'}
+                        </button>
+                    </div>
+                </form>
+            )}
 
             {/* CATEGORY FILTER TABS */}
             <div className="bg-white rounded-t-xl shadow-xs border border-gray-100 border-b-0 p-3 flex flex-col sm:flex-row justify-between gap-2">

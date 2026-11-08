@@ -4,6 +4,7 @@ import AdminLayout from '../components/AdminLayout'
 import PhilippineAddressSelector from '../components/PhilippineAddressSelector'
 import { parseLocationToAddress } from '../services/psgc'
 import { api } from '../api'
+import { QRCodeSVG } from 'qrcode.react'
 
 const POSITION_OPTIONS = [
     'Worker',
@@ -16,6 +17,23 @@ const parsePositions = (pos) => {
     if (Array.isArray(pos)) return pos.length > 0 ? pos : ['Worker'];
     const parts = String(pos).split(',').map(s => s.trim()).filter(Boolean);
     return parts.length > 0 ? parts : ['Worker'];
+};
+
+const downloadWorkerQrCode = (worker) => {
+    const svg = document.getElementById('worker-profile-qr');
+    if (!svg) return;
+
+    const workerId = String(worker.worker_code || worker.id || 'worker');
+    const svgText = new XMLSerializer().serializeToString(svg);
+    const blob = new Blob([svgText], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${workerId.replace(/[^a-zA-Z0-9_-]/g, '_')}-qr.svg`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 };
 
 export default function Workers() {
@@ -566,6 +584,9 @@ export default function Workers() {
                                                     </span>
                                                 )}
                                             </div>
+                                            <p className="text-[7px] text-gray-400 font-mono mt-0.5">
+                                                Worker ID: {worker.worker_code || worker.id}
+                                            </p>
                                             <p className="text-[8px] text-gray-500 font-medium mt-0.5">
                                                 {worker.role}{worker.position ? ` · ${worker.position}` : ''}{worker.phone ? ` · ${worker.phone}` : ''}
                                             </p>
@@ -1194,6 +1215,39 @@ export default function Workers() {
                                 </div>
                             </div>
 
+                            <div className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-3">
+                                <div className="shrink-0 rounded-md border border-gray-100 bg-white p-1.5">
+                                    <QRCodeSVG
+                                        id="worker-profile-qr"
+                                        value={String(viewWorker.worker_code || viewWorker.id || '')}
+                                        size={88}
+                                        level="M"
+                                        includeMargin
+                                        aria-label={`QR code for worker ID ${viewWorker.worker_code || viewWorker.id || ''}`}
+                                    />
+                                </div>
+                                <div className="min-w-0">
+                                    <h4 className="text-[8px] font-extrabold uppercase tracking-wider text-gray-500">Worker ID QR Code</h4>
+                                    <p className="mt-1 break-all font-mono text-[10px] font-bold text-gray-900">
+                                        {viewWorker.worker_code || viewWorker.id}
+                                    </p>
+                                    <p className="mt-1 text-[8px] leading-relaxed text-gray-500">
+                                        Scan to read this worker's ID.
+                                    </p>
+                                    <button
+                                        type="button"
+                                        onClick={() => downloadWorkerQrCode(viewWorker)}
+                                        className="mt-2 inline-flex items-center gap-1 rounded bg-[#A63228] px-2 py-1 text-[8px] font-bold text-white transition-colors hover:bg-[#84251e]"
+                                    >
+                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                            <path d="m7 10 5 5 5-5M12 15V3" />
+                                        </svg>
+                                        Download QR
+                                    </button>
+                                </div>
+                            </div>
+
                             {/* Job Positions / Specializations */}
                             <div>
                                 <h4 className="text-[7.5px] font-extrabold text-gray-400 uppercase tracking-widest mb-1 pb-0.5 border-b border-gray-100">
@@ -1254,7 +1308,7 @@ export default function Workers() {
 
                             {/* Metadata Footer */}
                             <div className="flex justify-between items-center text-[7.5px] text-gray-400 pt-1.5 border-t border-gray-100">
-                                <span>Worker Reference ID: #{viewWorker.id}</span>
+                                <span>Worker ID: {viewWorker.worker_code || viewWorker.id}</span>
                                 <span>
                                     {viewWorker.created_at ? `Registered: ${new Date(viewWorker.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : ''}
                                 </span>

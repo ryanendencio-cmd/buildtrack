@@ -5,28 +5,36 @@ import { api } from '../api';
 
 export default function WorkersSalary() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const initialTab = searchParams.get('tab') === 'history' ? 'history' : 'worksheet';
-  const [activeTab, setActiveTab] = useState(initialTab);
+  const activeTab = searchParams.get('tab') === 'history' ? 'history' : 'worksheet';
+
+  const updateTab = (tab) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (tab === 'history') {
+        next.set('tab', 'history');
+      } else {
+        next.delete('tab');
+      }
+      return next;
+    }, { replace: true });
+  };
+
   const [loading, setLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
-
-  // Sync tab with URL search params (e.g. from notification clicks)
-  useEffect(() => {
-    const tabParam = searchParams.get('tab');
-    if (tabParam === 'history') {
-      setActiveTab('history');
-    } else if (tabParam === 'worksheet') {
-      setActiveTab('worksheet');
-    }
-  }, [searchParams]);
 
   // Projects
   const [projects, setProjects] = useState([]);
   const [selectedProject, setSelectedProject] = useState('ALL');
 
+  const formatLocalDateInput = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   // Cutoff Dates
   const today = new Date();
-  const todayStr = today.toISOString().slice(0, 10);
   const curYear = today.getFullYear();
   const curMonth = today.getMonth();
   const curDate = today.getDate();
@@ -71,7 +79,12 @@ export default function WorkersSalary() {
 
   // Past Payrolls
   const [pastPayrolls, setPastPayrolls] = useState([]);
-  const [selectedPastPayroll, setSelectedPastPayroll] = useState(null);
+
+  const fetchPastPayrolls = () => {
+    api.get('/payroll').then(data => {
+      if (Array.isArray(data)) setPastPayrolls(data);
+    }).catch(console.error);
+  };
 
   // Load Projects and initial Payroll
   useEffect(() => {
@@ -81,12 +94,6 @@ export default function WorkersSalary() {
 
     fetchPastPayrolls();
   }, []);
-
-  const fetchPastPayrolls = () => {
-    api.get('/payroll').then(data => {
-      if (Array.isArray(data)) setPastPayrolls(data);
-    }).catch(console.error);
-  };
 
   // Preset Handler
   const handlePresetChange = (preset) => {
@@ -109,8 +116,8 @@ export default function WorkersSalary() {
       const mon = new Date(d.setDate(diffToMon));
       const sun = new Date(mon);
       sun.setDate(sun.getDate() + 6);
-      setStartDate(mon.toISOString().slice(0, 10));
-      setEndDate(sun.toISOString().slice(0, 10));
+      setStartDate(formatLocalDateInput(mon));
+      setEndDate(formatLocalDateInput(sun));
     } else if (preset === 'LastWeek') {
       const d = new Date(now);
       const day = d.getDay();
@@ -118,8 +125,8 @@ export default function WorkersSalary() {
       const mon = new Date(d.setDate(diffToMon));
       const sun = new Date(mon);
       sun.setDate(sun.getDate() + 6);
-      setStartDate(mon.toISOString().slice(0, 10));
-      setEndDate(sun.toISOString().slice(0, 10));
+      setStartDate(formatLocalDateInput(mon));
+      setEndDate(formatLocalDateInput(sun));
     } else if (preset === 'CurrentSemiMonthly') {
       setStartDate(defaultStart);
       setEndDate(defaultEnd);
@@ -147,7 +154,11 @@ export default function WorkersSalary() {
   };
 
   useEffect(() => {
-    generatePayroll(startDate, endDate, selectedProject);
+    const runPayroll = async () => {
+      await generatePayroll(startDate, endDate, selectedProject);
+    };
+
+    void runPayroll();
   }, [startDate, endDate, selectedProject]);
 
   // Filter workers in table
@@ -229,6 +240,7 @@ export default function WorkersSalary() {
       'Absent Days',
       'Total Hours',
       'Gross Pay (PHP)',
+      'Overtime Pay (PHP)',
       'Late Penalties (PHP)',
       'Cash Advance Deductions (PHP)',
       'Net Pay (PHP)'
@@ -245,6 +257,7 @@ export default function WorkersSalary() {
       w.absent_days,
       w.total_hours,
       w.gross_pay,
+      w.overtime_pay,
       w.late_deductions,
       w.cash_advance_deductions,
       w.net_pay
@@ -281,7 +294,7 @@ export default function WorkersSalary() {
         <div className="flex items-center gap-2 print:hidden">
           <div className="bg-gray-100 p-0.5 rounded-lg flex text-[10px] font-bold">
             <button
-              onClick={() => { setActiveTab('worksheet'); setSearchParams({}); }}
+              onClick={() => updateTab('worksheet')}
               className={`px-3 py-1.5 rounded-md transition-all ${
                 activeTab === 'worksheet'
                   ? 'bg-white text-gray-900 shadow-sm'
@@ -291,7 +304,7 @@ export default function WorkersSalary() {
               ⚡ Live Payroll Worksheet
             </button>
             <button
-              onClick={() => { setActiveTab('history'); setSearchParams({ tab: 'history' }); }}
+              onClick={() => updateTab('history')}
               className={`px-3 py-1.5 rounded-md transition-all ${
                 activeTab === 'history'
                   ? 'bg-white text-gray-900 shadow-sm'
@@ -427,7 +440,7 @@ export default function WorkersSalary() {
                 </div>
               </div>
               <button
-                onClick={() => { setActiveTab('history'); setSearchParams({ tab: 'history' }); }}
+                onClick={() => setSearchParams({ tab: 'history' })}
                 className="px-3 py-1.5 bg-blue-700 hover:bg-blue-800 text-white rounded-lg text-[10px] font-bold shadow-xs transition-all whitespace-nowrap self-start sm:self-auto cursor-pointer"
               >
                 📋 View Payroll History →
@@ -452,7 +465,7 @@ export default function WorkersSalary() {
           )}
 
           {/* ── KPI METRIC CARDS ── */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-2.5 mb-3 print:hidden">
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-2.5 mb-3 print:hidden">
             {/* Total Gross Pay */}
             <div className="bg-white rounded-xl border border-gray-100 p-2.5 shadow-xs">
               <span className="text-[8px] font-bold text-gray-400 uppercase tracking-wider block mb-0.5">GROSS EARNED WAGES</span>
@@ -469,6 +482,14 @@ export default function WorkersSalary() {
                 -₱{Number(payrollData.summary.totalLateDeductions || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
               <span className="text-[8px] text-gray-500 font-medium">Late & Double Late deductions</span>
+            </div>
+
+            <div className="bg-white rounded-xl border border-gray-100 p-2.5 shadow-xs">
+              <span className="text-[8px] font-bold text-emerald-700 uppercase tracking-wider block mb-0.5">OVERTIME PAY</span>
+              <div className="text-base font-extrabold text-emerald-700 tracking-tight">
+                +₱{Number(payrollData.summary.totalOvertimePay || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+              <span className="text-[8px] text-gray-500 font-medium">Approved complete intervals only</span>
             </div>
 
             {/* Total Cash Advances */}
@@ -634,6 +655,7 @@ export default function WorkersSalary() {
                     <th className="py-2.5 px-2 text-center">ATTENDANCE SUMMARY</th>
                     <th className="py-2.5 px-2 text-center">TOTAL HOURS</th>
                     <th className="py-2.5 px-2 text-right">GROSS EARNED</th>
+                    <th className="py-2.5 px-2 text-right">OVERTIME</th>
                     <th className="py-2.5 px-2 text-right">DEDUCTIONS (LATE / CA)</th>
                     <th className="py-2.5 px-3 text-right">NET TAKE-HOME</th>
                     <th className="py-2.5 px-3 text-center min-w-[110px] hidden print:table-cell">SIGNATURE</th>
@@ -643,7 +665,7 @@ export default function WorkersSalary() {
                 <tbody className="divide-y divide-gray-50 text-[10px]">
                   {loading ? (
                     <tr>
-                      <td colSpan="9" className="py-10 text-center text-gray-400">
+                      <td colSpan="11" className="py-10 text-center text-gray-400">
                         <div className="flex flex-col items-center justify-center gap-2">
                           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-spin text-[#A63228]">
                             <line x1="12" y1="2" x2="12" y2="6"></line>
@@ -723,6 +745,12 @@ export default function WorkersSalary() {
                         {/* Gross Earned */}
                         <td className="py-2.5 px-2 text-right font-extrabold text-gray-900">
                           ₱{Number(w.gross_pay).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+
+                        <td className="py-2.5 px-2 text-right font-bold text-emerald-700">
+                          {Number(w.overtime_pay || 0) > 0
+                            ? `+₱${Number(w.overtime_pay).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                            : '—'}
                         </td>
 
                         {/* Deductions (Late + Cash Advance) */}
@@ -860,7 +888,7 @@ export default function WorkersSalary() {
                             setStartDate(p.cutoff_start);
                             setEndDate(p.cutoff_end);
                             setSelectedProject(p.project_id || 'ALL');
-                            setActiveTab('worksheet');
+                            updateTab('worksheet');
                           }}
                           className="px-2.5 py-1 bg-gray-900 text-white hover:bg-black rounded text-[8.5px] font-bold transition-all"
                         >
@@ -946,6 +974,7 @@ export default function WorkersSalary() {
                         <th className="py-1.5 px-2 text-center">AFTERNOON SHIFT</th>
                         <th className="py-1.5 px-2 text-center">STATUS</th>
                         <th className="py-1.5 px-2 text-center">HOURS</th>
+                        <th className="py-1.5 px-2 text-right">OT PAY</th>
                         <th className="py-1.5 px-2 text-right">EARNED WAGE</th>
                       </tr>
                     </thead>
@@ -971,10 +1000,18 @@ export default function WorkersSalary() {
                             </span>
                           </td>
                           <td className="py-1.5 px-2 text-center font-bold text-gray-700">{log.hours}h</td>
+                          <td className="py-1.5 px-2 text-right font-bold text-emerald-700">
+                            {Number(log.overtime_pay || 0) > 0
+                              ? `₱${Number(log.overtime_pay).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                              : '—'}
+                          </td>
                           <td className="py-1.5 px-2 text-right font-extrabold text-gray-900">
                             ₱{Number(log.earned).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             {log.deduction > 0 && (
                               <span className="block text-[7.5px] text-amber-600 font-bold">(-₱{log.deduction} late)</span>
+                            )}
+                            {log.overtime_pay > 0 && (
+                              <span className="block text-[7.5px] text-emerald-700 font-bold">(+₱{log.overtime_pay} overtime)</span>
                             )}
                           </td>
                         </tr>
@@ -1009,7 +1046,17 @@ export default function WorkersSalary() {
               <div className="p-3 bg-gray-50 border border-gray-200 rounded-xl space-y-1.5">
                 <div className="flex justify-between text-gray-600">
                   <span>Regular Earned Wages:</span>
-                  <span className="font-bold">₱{Number(selectedWorkerModal.gross_pay + selectedWorkerModal.late_deductions).toLocaleString()}</span>
+                  <span className="font-bold">₱{Number(selectedWorkerModal.regular_earnings).toLocaleString()}</span>
+                </div>
+                {selectedWorkerModal.overtime_pay > 0 && (
+                  <div className="flex justify-between text-emerald-700">
+                    <span>Approved Overtime Pay:</span>
+                    <span className="font-bold">+₱{Number(selectedWorkerModal.overtime_pay).toLocaleString()}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-gray-600">
+                  <span>Gross Earnings before deductions:</span>
+                  <span className="font-bold">₱{Number(selectedWorkerModal.gross_pay).toLocaleString()}</span>
                 </div>
                 {selectedWorkerModal.late_deductions > 0 && (
                   <div className="flex justify-between text-amber-700">
@@ -1048,4 +1095,3 @@ export default function WorkersSalary() {
     </AdminLayout>
   );
 }
-

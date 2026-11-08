@@ -3,6 +3,21 @@ import { useParams, useNavigate } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { api } from '../api'
 
+const attendanceTimeFields = [
+    { key: 'morning_time_in_start', label: 'Morning Time In Opens' },
+    { key: 'morning_time_in_on_time_end', label: 'Morning On-Time Ends' },
+    { key: 'morning_time_in_late_1_end', label: 'Morning ₱100 Tier Ends' },
+    { key: 'morning_time_in_close', label: 'Morning Time In Closes' },
+    { key: 'morning_time_out_start', label: 'Morning Time Out Opens' },
+    { key: 'morning_time_out_close', label: 'Morning Time Out Closes' },
+    { key: 'afternoon_time_in_start', label: 'Afternoon Time In Opens' },
+    { key: 'afternoon_time_in_on_time_end', label: 'Afternoon On-Time Ends' },
+    { key: 'afternoon_time_in_late_1_end', label: 'Afternoon ₱100 Tier Ends' },
+    { key: 'afternoon_time_in_close', label: 'Afternoon Time In Closes' },
+    { key: 'afternoon_time_out_start', label: 'Afternoon Time Out Opens' },
+    { key: 'afternoon_time_out_close', label: 'Afternoon Time Out Closes' }
+];
+
 export default function Attendance() {
     const { id } = useParams();
     const navigate = useNavigate();
@@ -44,10 +59,28 @@ export default function Attendance() {
         open_time: '07:00',
         close_time: '17:30',
         auto_sundays_off: true,
-        manual_override: null
+        manual_override: null,
+        morning_time_in_start: '07:00',
+        morning_time_in_on_time_end: '08:00',
+        morning_time_in_late_1_end: '08:10',
+        morning_time_in_close: '08:20',
+        morning_time_out_start: '12:00',
+        morning_time_out_close: '12:30',
+        afternoon_time_in_start: '12:30',
+        afternoon_time_in_on_time_end: '13:00',
+        afternoon_time_in_late_1_end: '13:10',
+        afternoon_time_in_close: '13:20',
+        afternoon_time_out_start: '17:00',
+        afternoon_time_out_close: '17:30',
+        late_tier_1_deduction: 100,
+        late_tier_2_deduction: 200,
+        overtime_rate_per_interval: 50,
+        overtime_interval_minutes: 15
     });
     const [nonWorkingDays, setNonWorkingDays] = useState([]);
     const [currentTime, setCurrentTime] = useState(new Date());
+    const [overtimeDayRequired, setOvertimeDayRequired] = useState(false);
+    const [overtimeMinutesInputs, setOvertimeMinutesInputs] = useState({});
 
     // Non-Working Day form state
     const [nonWorkingForm, setNonWorkingForm] = useState({
@@ -63,20 +96,38 @@ export default function Attendance() {
         open_time: '07:00',
         close_time: '17:30',
         auto_sundays_off: true,
-        manual_override: ''
+        manual_override: '',
+        morning_time_in_start: '07:00',
+        morning_time_in_on_time_end: '08:00',
+        morning_time_in_late_1_end: '08:10',
+        morning_time_in_close: '08:20',
+        morning_time_out_start: '12:00',
+        morning_time_out_close: '12:30',
+        afternoon_time_in_start: '12:30',
+        afternoon_time_in_on_time_end: '13:00',
+        afternoon_time_in_late_1_end: '13:10',
+        afternoon_time_in_close: '13:20',
+        afternoon_time_out_start: '17:00',
+        afternoon_time_out_close: '17:30',
+        late_tier_1_deduction: 100,
+        late_tier_2_deduction: 200,
+        overtime_rate_per_interval: 50,
+        overtime_interval_minutes: 15
     });
 
     const fetchSettingsAndNonWorking = () => {
         api.get('/attendance-settings').then(data => {
             if (data && !data.error) {
                 setAttendanceSettings(data);
-                setSettingsForm({
+                setSettingsForm(prev => ({
+                    ...prev,
+                    ...data,
                     auto_schedule: data.auto_schedule !== false,
                     open_time: data.open_time || '07:00',
                     close_time: data.close_time || '17:30',
                     auto_sundays_off: data.auto_sundays_off !== false,
                     manual_override: data.manual_override || ''
-                });
+                }));
             }
         }).catch(console.error);
 
@@ -88,6 +139,12 @@ export default function Attendance() {
     useEffect(() => {
         fetchSettingsAndNonWorking();
     }, []);
+
+    useEffect(() => {
+        api.get(`/attendance-overtime-days/${selectedDate}`)
+            .then(data => setOvertimeDayRequired(data.required === true))
+            .catch(error => console.error('Unable to load overtime requirement:', error));
+    }, [selectedDate]);
 
     // Timer to update clock every 10 seconds for real-time open/close evaluation
     useEffect(() => {
@@ -241,6 +298,40 @@ export default function Attendance() {
         }
     };
 
+    const handleOvertimeRequirementChange = async (required) => {
+        try {
+            await api.put(`/attendance-overtime-days/${selectedDate}`, {
+                required,
+                updated_by: currentOfficerName
+            });
+            setOvertimeDayRequired(required);
+        } catch (err) {
+            console.error(err);
+            alert('Failed to update the overtime requirement.');
+        }
+    };
+
+    const handleOvertimeApproval = async (worker) => {
+        const minutes = Number(overtimeMinutesInputs[worker.id] ?? worker.overtime_minutes ?? 0);
+        if (!Number.isInteger(minutes) || minutes < 0 || minutes > 1440) {
+            alert('Overtime must be between 0 and 1,440 whole minutes.');
+            return;
+        }
+        try {
+            const result = await api.put(`/attendance/${worker.id}/overtime`, {
+                overtime_minutes: minutes,
+                approved: worker.overtime_approved !== true,
+                updated_by: currentOfficerName
+            });
+            setAllWorkers(previous => previous.map(record =>
+                String(record.id) === String(worker.id) ? { ...record, ...result } : record
+            ));
+        } catch (err) {
+            console.error(err);
+            alert(err.message || 'Failed to update worker overtime.');
+        }
+    };
+
     const displayedWorkers = allWorkers.filter(w => w.date === selectedDate);
     const isPastDate = selectedDate < todayISO;
 
@@ -274,49 +365,87 @@ export default function Attendance() {
         return hours * 60 + minutes;
     };
 
-    const evaluateTwoSessions = (morningIn, afternoonIn, baseRate) => {
+    const resolveAttendanceAction = (minutes, record = {}) => {
+        const hasTime = value => Boolean(value && value !== '—' && value !== '--:--');
+        const within = (startKey, closeKey) => {
+            const start = parseTimeToMinutes(attendanceSettings[startKey]);
+            const close = parseTimeToMinutes(attendanceSettings[closeKey]);
+            return minutes !== null && start !== null && close !== null && minutes >= start && minutes <= close;
+        };
+        const mIn = record.morningIn || record.morning_in || '—';
+        const mOut = record.morningOut || record.morning_out || '—';
+        const aIn = record.afternoonIn || record.afternoon_in || '—';
+        const aOut = record.afternoonOut || record.afternoon_out || '—';
+        const morningOutWindow = within('morning_time_out_start', 'morning_time_out_close');
+
+        if (morningOutWindow) {
+            const afternoonStartsNow = minutes === parseTimeToMinutes(attendanceSettings.morning_time_out_close) &&
+                within('afternoon_time_in_start', 'afternoon_time_in_close');
+            if (!hasTime(mIn) && !afternoonStartsNow) return { error: 'Cannot record morning Time Out without a morning Time In.' };
+            if (hasTime(mIn) && !hasTime(mOut)) return { action: 'MORNING TIME OUT (12 PM)' };
+        }
+        if (within('morning_time_in_start', 'morning_time_in_close')) {
+            return hasTime(mIn)
+                ? { error: 'Morning Time In has already been recorded.' }
+                : { action: 'MORNING TIME IN' };
+        }
+        if (within('afternoon_time_out_start', 'afternoon_time_out_close')) {
+            if (!hasTime(aIn)) return { error: 'Cannot record afternoon Time Out without an afternoon Time In.' };
+            return hasTime(aOut)
+                ? { error: 'Afternoon shift is already completed.' }
+                : { action: 'AFTERNOON TIME OUT (5 PM)' };
+        }
+        if (within('afternoon_time_in_start', 'afternoon_time_in_close')) {
+            return hasTime(aIn)
+                ? { error: 'Afternoon Time In has already been recorded.' }
+                : { action: 'AFTERNOON TIME IN (1 PM)' };
+        }
+        return { error: 'Attendance is closed at this time.' };
+    };
+
+    const evaluateTwoSessions = (morningIn, afternoonIn, baseRate, rules = attendanceSettings) => {
         const rate = Number(baseRate) || 0;
         const mMinutes = parseTimeToMinutes(morningIn);
         const aMinutes = parseTimeToMinutes(afternoonIn);
 
-        // Morning Session Check
-        let mStatus = 'Absent';
-        if (mMinutes !== null) {
-            if (mMinutes <= 8 * 60 + 10) mStatus = 'Present';
-            else if (mMinutes <= 10 * 60) mStatus = 'Late';
-            else mStatus = 'Absent';
-        }
-
-        // Afternoon Session Check
-        let aStatus = 'Absent';
-        if (aMinutes !== null) {
-            if (aMinutes <= 13 * 60 + 10) aStatus = 'Present';
-            else if (aMinutes <= 15 * 60) aStatus = 'Late';
-            else aStatus = 'Absent';
-        }
+        const evaluateSession = (minutes, prefix) => {
+            if (minutes === null) return { status: 'Absent', deduction: 0 };
+            const start = parseTimeToMinutes(rules[`${prefix}_time_in_start`]);
+            const onTimeEnd = parseTimeToMinutes(rules[`${prefix}_time_in_on_time_end`]);
+            const tierOneEnd = parseTimeToMinutes(rules[`${prefix}_time_in_late_1_end`]);
+            const close = parseTimeToMinutes(rules[`${prefix}_time_in_close`]);
+            if (start === null || onTimeEnd === null || tierOneEnd === null || close === null ||
+                minutes < start || minutes > close) return { status: 'Absent', deduction: 0 };
+            if (minutes <= onTimeEnd) return { status: 'Present', deduction: 0 };
+            const tierKey = minutes <= tierOneEnd ? 'late_tier_1_deduction' : 'late_tier_2_deduction';
+            return { status: 'Late', deduction: Number(rules[tierKey] ?? (tierKey === 'late_tier_1_deduction' ? 100 : 200)) };
+        };
+        const morning = evaluateSession(mMinutes, 'morning');
+        const afternoon = evaluateSession(aMinutes, 'afternoon');
+        const mStatus = morning.status;
+        const aStatus = afternoon.status;
 
         const hasMorning = mStatus !== 'Absent';
         const hasAfternoon = aStatus !== 'Absent';
+        const deductions = (hasMorning ? morning.deduction : 0) +
+            (hasAfternoon ? afternoon.deduction : 0);
 
         if (hasMorning && hasAfternoon) {
-            if (mStatus === 'Present' && aStatus === 'Present') {
-                return { status: 'Present', morningStatus: 'Present', afternoonStatus: 'Present', earnedAmount: rate };
-            } else if (mStatus === 'Late' && aStatus === 'Late') {
-                return { status: 'Double Late', morningStatus: 'Late', afternoonStatus: 'Late', earnedAmount: Math.max(0, rate - 200) };
-            } else {
-                return { status: 'Late', morningStatus: mStatus, afternoonStatus: aStatus, earnedAmount: Math.max(0, rate - 100) };
-            }
+            const status = mStatus === 'Late' && aStatus === 'Late'
+                ? 'Double Late'
+                : deductions > 0 ? 'Late' : 'Present';
+            return { status, morningStatus: mStatus, afternoonStatus: aStatus, lateDeductions: deductions, earnedAmount: Math.max(0, rate - deductions) };
         } else if (hasMorning) {
             const halfRate = Math.round((rate / 2) * 100) / 100;
-            const earned = mStatus === 'Late' ? Math.max(0, halfRate - 100) : halfRate;
-            return { status: mStatus === 'Late' ? 'Halfday (Late)' : 'Halfday', morningStatus: mStatus, afternoonStatus: 'Absent', earnedAmount: earned };
+            const earned = Math.max(0, halfRate - deductions);
+            return { status: mStatus === 'Late' ? 'Halfday (Late)' : 'Halfday', morningStatus: mStatus, afternoonStatus: 'Absent', lateDeductions: deductions, earnedAmount: earned };
         } else if (hasAfternoon) {
             const halfRate = Math.round((rate / 2) * 100) / 100;
-            const earned = aStatus === 'Late' ? Math.max(0, halfRate - 100) : halfRate;
-            return { status: aStatus === 'Late' ? 'Halfday (Late)' : 'Halfday', morningStatus: 'Absent', afternoonStatus: aStatus, earnedAmount: earned };
+            const earned = Math.max(0, halfRate - deductions);
+            return { status: aStatus === 'Late' ? 'Halfday (Late)' : 'Halfday', morningStatus: 'Absent', afternoonStatus: aStatus, lateDeductions: deductions, earnedAmount: earned };
         }
 
-        return { status: 'Absent', morningStatus: 'Absent', afternoonStatus: 'Absent', earnedAmount: 0 };
+        return { status: 'Absent', morningStatus: 'Absent', afternoonStatus: 'Absent', lateDeductions: 0, earnedAmount: 0 };
     };
 
     const handleAddWorker = (e) => {
@@ -372,7 +501,7 @@ export default function Attendance() {
     const simulateTapCard = (workerName, role, rate, simulatedTimeStr) => {
         setRfidState('READING');
 
-        setTimeout(() => {
+        setTimeout(async () => {
             const now = new Date();
             const timeString = simulatedTimeStr || now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
             const minutes = parseTimeToMinutes(timeString);
@@ -385,60 +514,28 @@ export default function Attendance() {
                 let mOut = existingWorker.morningOut || existingWorker.morning_out;
                 let aIn = existingWorker.afternoonIn || existingWorker.afternoon_in;
                 let aOut = existingWorker.afternoonOut || existingWorker.afternoon_out;
-                let action = '';
-
-                // Determine session from time
-                if (minutes !== null && minutes < 12 * 60 + 30) {
-                    // Morning session
-                    if (mIn === '—' || !mIn) {
-                        if (minutes >= 11 * 60 + 30) {
-                            setScannedData({ name: workerName, message: 'Cannot Time Out: No Morning Time In recorded.' });
-                            setRfidState('ERROR');
-                            return;
-                        }
-                        mIn = timeString;
-                        action = 'MORNING TIME IN';
-                    } else if (mOut === '—' || !mOut) {
-                        mOut = timeString;
-                        action = 'MORNING TIME OUT (12 PM)';
-                    } else {
-                        setScannedData({ name: workerName, message: 'Morning shift already completed.' });
+                const resolved = resolveAttendanceAction(minutes, existingWorker);
+                if (resolved.error) {
+                    setScannedData({ name: workerName, message: resolved.error });
+                    setRfidState('ERROR');
+                    return;
+                }
+                const action = resolved.action;
+                if (action === 'MORNING TIME IN') mIn = timeString;
+                else if (action === 'MORNING TIME OUT (12 PM)') mOut = timeString;
+                else if (action === 'AFTERNOON TIME IN (1 PM)') aIn = timeString;
+                else if (action === 'AFTERNOON TIME OUT (5 PM)') aOut = timeString;
+                if (action.includes('TIME OUT')) {
+                    const timeIn = action.startsWith('MORNING') ? mIn : aIn;
+                    const timeInMinutes = parseTimeToMinutes(timeIn);
+                    if (timeInMinutes !== null && Math.abs(minutes - timeInMinutes) < 3) {
+                        setScannedData({ name: workerName, message: 'Wait at least 3 minutes before recording Time Out.' });
                         setRfidState('ERROR');
                         return;
                     }
-                } else {
-                    // Afternoon session
-                    if (minutes >= 15 * 60 + 30) {
-                        // Dismissal Period (3:30 PM onwards)
-                        const hasActiveTimeIn = (aIn && aIn !== '—') || (mIn && mIn !== '—' && (!mOut || mOut === '—'));
-                        if (!hasActiveTimeIn) {
-                            setScannedData({ name: workerName, message: 'Cannot Time Out: No Time In recorded for today.' });
-                            setRfidState('ERROR');
-                            return;
-                        }
-                        if (aOut && aOut !== '—') {
-                            setScannedData({ name: workerName, message: 'Worker has already timed out this afternoon.' });
-                            setRfidState('ERROR');
-                            return;
-                        }
-                        aOut = timeString;
-                        action = 'AFTERNOON TIME OUT (5 PM)';
-                    } else {
-                        if (aIn === '—' || !aIn) {
-                            aIn = timeString;
-                            action = 'AFTERNOON TIME IN (1 PM)';
-                        } else if (aOut === '—' || !aOut) {
-                            aOut = timeString;
-                            action = 'AFTERNOON TIME OUT (5 PM)';
-                        } else {
-                            setScannedData({ name: workerName, message: 'Afternoon shift already completed for today.' });
-                            setRfidState('ERROR');
-                            return;
-                        }
-                    }
                 }
 
-                const evalRes = evaluateTwoSessions(mIn, aIn, rate);
+                const evalRes = evaluateTwoSessions(mIn, aIn, rate, attendanceSettings);
                 const updatePayload = {
                     morningIn: mIn,
                     morningOut: mOut,
@@ -448,7 +545,14 @@ export default function Attendance() {
                     rate
                 };
 
-                api.put(`/attendance/${existingWorker.id}`, updatePayload).catch(console.error);
+                try {
+                    await api.put(`/attendance/${existingWorker.id}`, updatePayload);
+                } catch (error) {
+                    console.error(error);
+                    setScannedData({ name: workerName, message: error.message || 'Attendance update failed.' });
+                    setRfidState('ERROR');
+                    return;
+                }
 
                 const updatedWorkers = [...allWorkers];
                 updatedWorkers[existingIndex] = {
@@ -464,31 +568,19 @@ export default function Attendance() {
                 setScannedData({ name: workerName, displayRole: existingWorker.role, time: timeString, action, status: evalRes.status });
                 setRfidState('SUCCESS_IN');
             } else {
-                // First tap of the day -> Check if attempting to Time Out without Timing In
-                if (minutes !== null && minutes >= 11 * 60 + 30 && minutes < 12 * 60 + 30) {
-                    setScannedData({ name: workerName, message: 'Cannot Time Out: No Morning Time In recorded.' });
+                const resolved = resolveAttendanceAction(minutes);
+                if (resolved.error || (resolved.action || '').includes('TIME OUT')) {
+                    setScannedData({ name: workerName, message: resolved.error || 'Cannot record Time Out without an existing Time In.' });
                     setRfidState('ERROR');
                     return;
                 }
-                if (minutes !== null && minutes >= 15 * 60 + 30) {
-                    setScannedData({ name: workerName, message: 'Cannot Time Out: No Time In recorded for today.' });
-                    setRfidState('ERROR');
-                    return;
-                }
-
                 let mIn = '—';
                 let aIn = '—';
-                let action = '';
+                const action = resolved.action;
+                if (action === 'MORNING TIME IN') mIn = timeString;
+                if (action === 'AFTERNOON TIME IN (1 PM)') aIn = timeString;
 
-                if (minutes !== null && minutes < 12 * 60 + 30) {
-                    mIn = timeString;
-                    action = 'MORNING TIME IN';
-                } else {
-                    aIn = timeString;
-                    action = 'AFTERNOON TIME IN (1 PM)';
-                }
-
-                const evaluated = evaluateTwoSessions(mIn, aIn, rate);
+                const evaluated = evaluateTwoSessions(mIn, aIn, rate, attendanceSettings);
                 const payload = {
                     project_id: currentProjectId,
                     worker_name: workerName,
@@ -503,9 +595,15 @@ export default function Attendance() {
                     earned_amount: evaluated.earnedAmount,
                     advance: 0
                 };
-                api.post('/attendance', payload).then(newWorker => {
+                try {
+                    const newWorker = await api.post('/attendance', payload);
                     setAllWorkers(prev => [newWorker, ...prev]);
-                }).catch(console.error);
+                } catch (error) {
+                    console.error(error);
+                    setScannedData({ name: workerName, message: error.message || 'Attendance could not be recorded.' });
+                    setRfidState('ERROR');
+                    return;
+                }
                 setScannedData({ name: workerName, displayRole: role, time: timeString, status: evaluated.status, action });
                 setRfidState('SUCCESS_IN');
             }
@@ -531,18 +629,26 @@ export default function Attendance() {
     const skilledPresent = skilledWorkers.length;
     const laborPresent = laborWorkers.length;
 
+    const getApprovedOvertimePay = (worker) => {
+        if (!overtimeDayRequired || worker.overtime_approved !== true) return 0;
+        if (worker.status === 'Absent' || String(worker.status || '').includes('Rest Day')) return 0;
+        const interval = Math.max(1, Number(settingsForm.overtime_interval_minutes) || 15);
+        const rate = Number(settingsForm.overtime_rate_per_interval) || 0;
+        return Math.floor((Number(worker.overtime_minutes) || 0) / interval) * rate;
+    };
+
     const getWorkerWage = (w) => {
         if (isNonWorkingDay) return 0;
         if (w.earned_amount !== undefined && w.earned_amount !== null && !isNaN(Number(w.earned_amount))) {
-            return Number(w.earned_amount);
+            return Number(w.earned_amount) + getApprovedOvertimePay(w);
         }
-        const rate = Number(w.rate || 0);
-        if (w.status === 'Present') return rate;
-        if (w.status === 'Late') return Math.max(0, rate - 100);
-        if (w.status === 'Double Late') return Math.max(0, rate - 200);
-        if (w.status === 'Halfday (Late)') return Math.max(0, (rate / 2) - 100);
-        if (String(w.status).includes('Halfday')) return Math.round((rate / 2) * 100) / 100;
-        return 0;
+        const evaluation = evaluateTwoSessions(
+            w.morningIn || w.morning_in,
+            w.afternoonIn || w.afternoon_in,
+            Number(w.rate || 0),
+            attendanceSettings
+        );
+        return evaluation.earnedAmount + getApprovedOvertimePay(w);
     };
 
     const skilledTotal = skilledWorkers.reduce((sum, w) => sum + getWorkerWage(w), 0);
@@ -795,6 +901,20 @@ export default function Attendance() {
                     />
                 </div>
 
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 mb-2.5">
+                    <div>
+                        <p className="text-[9px] font-extrabold text-orange-900 uppercase">Overtime requirement for {selectedDate}</p>
+                        <p className="text-[9px] text-orange-800">Workers only earn overtime when this is enabled and their minutes are approved below.</p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => handleOvertimeRequirementChange(!overtimeDayRequired)}
+                        className={`px-3 py-1.5 rounded-lg text-[9px] font-bold text-white ${overtimeDayRequired ? 'bg-[#2e7d32]' : 'bg-gray-500'}`}
+                    >
+                        {overtimeDayRequired ? 'Required — click to disable' : 'Not required — click to enable'}
+                    </button>
+                </div>
+
                 {isNonWorkingDay && (
                     <div className="bg-[#e8f0fe] border border-[#aecbfa] text-[#1a73e8] px-3 py-2 rounded-lg text-xs flex items-center gap-2 mb-2.5">
                         <svg className="w-4 h-4 text-[#1a73e8] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -809,22 +929,22 @@ export default function Attendance() {
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     <div className="bg-[#e6f4ea]/40 rounded-lg p-2 text-center border border-[#c3e6cb]">
                         <h2 className="text-lg font-extrabold text-[#2e7d32]">{presentCount}</h2>
-                        <p className="text-[8px] font-bold text-[#2e7d32] tracking-wider mt-0.5 uppercase">PRESENT (FULL)</p>
+                        <p className="text-[8px] font-bold text-[#2e7d32] tracking-wider mt-0.5 uppercase">FULL DAY</p>
                     </div>
                     <div className="bg-[#fff8e1] rounded-lg p-2 text-center border border-[#ffe082]">
                         <h2 className="text-lg font-extrabold text-[#f57f17]">{lateCount}</h2>
-                        <p className="text-[8px] font-bold text-[#f57f17] tracking-wider mt-0.5 uppercase">LATE (-₱100)</p>
+                        <p className="text-[8px] font-bold text-[#f57f17] tracking-wider mt-0.5 uppercase">LATE</p>
                     </div>
                     <div className="bg-[#fff3e0] rounded-lg p-2 text-center border border-[#ffcc80]">
                         <h2 className="text-lg font-extrabold text-[#e65100]">{halfdayCount}</h2>
-                        <p className="text-[8px] font-bold text-[#e65100] tracking-wider mt-0.5 uppercase">HALFDAY (50%)</p>
+                        <p className="text-[8px] font-bold text-[#e65100] tracking-wider mt-0.5 uppercase">HALFDAY</p>
                     </div>
                     <div className={isNonWorkingDay ? "bg-[#e8f0fe] rounded-lg p-2 text-center border border-[#aecbfa]" : "bg-[#fdecea] rounded-lg p-2 text-center border border-[#f5c6cb]"}>
                         <h2 className={`text-lg font-extrabold ${isNonWorkingDay ? 'text-[#1967d2]' : 'text-[#A63228]'}`}>
                             {isNonWorkingDay ? '0' : absentCount}
                         </h2>
                         <p className={`text-[8px] font-bold tracking-wider mt-0.5 uppercase ${isNonWorkingDay ? 'text-[#1967d2]' : 'text-[#A63228]'}`}>
-                            {isNonWorkingDay ? 'REST DAY (0 ABSENT)' : 'ABSENT (0%)'}
+                            {isNonWorkingDay ? 'REST DAY (0 ABSENT)' : 'ABSENT'}
                         </p>
                     </div>
                 </div>
@@ -833,9 +953,13 @@ export default function Attendance() {
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-3 overflow-x-auto">
                 <div className="flex justify-between items-center mb-3">
                     <h3 className="text-[9px] font-extrabold text-gray-900 tracking-wider uppercase">2-SESSION WORKER ATTENDANCE (MORNING & AFTERNOON)</h3>
-                    <span className="text-[8px] text-gray-500 font-bold bg-gray-50 px-2 py-0.5 rounded border border-gray-200">Morning: 8:00 AM - 12:00 PM | Afternoon: 1:00 PM - 5:00 PM</span>
+                    <span className="text-[8px] text-gray-500 font-bold bg-gray-50 px-2 py-0.5 rounded border border-gray-200">
+                        AM: {attendanceSettings.morning_time_in_start}–{attendanceSettings.morning_time_in_close} Time In / {attendanceSettings.morning_time_out_start}–{attendanceSettings.morning_time_out_close} Time Out
+                        {' • '}
+                        PM: {attendanceSettings.afternoon_time_in_start}–{attendanceSettings.afternoon_time_in_close} Time In / {attendanceSettings.afternoon_time_out_start}–{attendanceSettings.afternoon_time_out_close} Time Out
+                    </span>
                 </div>
-                <table className="w-full text-left border-collapse min-w-[750px]">
+                <table className="w-full text-left border-collapse min-w-[900px]">
                     <thead>
                         <tr>
                             <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[20%] uppercase tracking-wider">WORKER NAME</th>
@@ -844,6 +968,7 @@ export default function Attendance() {
                             <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[14%] uppercase tracking-wider text-center">MORNING (IN-OUT)</th>
                             <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[14%] uppercase tracking-wider text-center">AFTERNOON (IN-OUT)</th>
                             <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[11%] uppercase tracking-wider text-right pr-3">EARNED WAGE</th>
+                            <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[13%] uppercase tracking-wider text-center">OVERTIME</th>
                             <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[11%] uppercase tracking-wider text-right pr-4">ADVANCE</th>
                         </tr>
                     </thead>
@@ -854,6 +979,9 @@ export default function Attendance() {
                             const mOut = worker.morningOut || worker.morning_out || '—';
                             const aIn = worker.afternoonIn || worker.afternoon_in || '—';
                             const aOut = worker.afternoonOut || worker.afternoon_out || '—';
+                            const evaluatedPay = evaluateTwoSessions(mIn, aIn, worker.rate || 0);
+                            const lateDeduction = Number(worker.late_deduction ?? evaluatedPay.lateDeductions);
+                            const approvedOvertimePay = getApprovedOvertimePay(worker);
 
                             return (
                                 <tr key={worker.id} className="hover:bg-gray-50/50 transition-colors">
@@ -878,13 +1006,13 @@ export default function Attendance() {
                                             {isNonWorkingDay
                                                 ? 'REST DAY / OFF'
                                                 : worker.status === 'Late'
-                                                ? 'Late (-₱100)'
+                                                    ? `Late (-₱${lateDeduction})`
                                                 : worker.status === 'Double Late'
-                                                ? 'Double Late (-₱200)'
+                                                    ? `Double Late (-₱${lateDeduction})`
                                                 : worker.status === 'Halfday'
                                                 ? 'Halfday (50%)'
                                                 : worker.status === 'Halfday (Late)'
-                                                ? 'Halfday (Late -₱100)'
+                                                    ? `Halfday (Late -₱${lateDeduction})`
                                                 : worker.status}
                                         </span>
                                     </td>
@@ -904,10 +1032,36 @@ export default function Attendance() {
                                         ) : worker.status !== 'Absent' ? (
                                             <span className={worker.status === 'Present' ? 'text-[#2e7d32]' : 'text-[#f57f17]'}>
                                                 ₱{earned.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                {approvedOvertimePay > 0 && <small className="block text-emerald-700">includes ₱{approvedOvertimePay.toFixed(2)} OT</small>}
                                             </span>
                                         ) : (
                                             <span className="text-gray-400">₱0.00</span>
                                         )}
+                                    </td>
+                                    <td className="py-2 border-b border-gray-50 text-center">
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            max="1440"
+                                            step="1"
+                                            aria-label={`Overtime minutes for ${worker.worker_name || worker.name}`}
+                                            value={overtimeMinutesInputs[worker.id] ?? worker.overtime_minutes ?? 0}
+                                            onChange={event => setOvertimeMinutesInputs(previous => ({ ...previous, [worker.id]: event.target.value }))}
+                                            disabled={!overtimeDayRequired}
+                                            className="w-16 border border-gray-200 rounded px-1.5 py-1 text-[9px] disabled:bg-gray-100"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => handleOvertimeApproval(worker)}
+                                            disabled={!overtimeDayRequired || Number(overtimeMinutesInputs[worker.id] ?? worker.overtime_minutes ?? 0) <= 0}
+                                            className={`ml-1 px-2 py-1 rounded text-[8px] font-bold text-white disabled:bg-gray-300 ${worker.overtime_approved ? 'bg-gray-500' : 'bg-[#2e7d32]'}`}
+                                            title={worker.overtime_approved ? 'Revoke approval' : 'Approve recorded overtime'}
+                                        >
+                                            {worker.overtime_approved ? 'Approved' : 'Approve'}
+                                        </button>
+                                        <div className="text-[8px] text-gray-500 mt-1">
+                                            {approvedOvertimePay > 0 ? `₱${approvedOvertimePay.toFixed(2)}` : 'minutes'}
+                                        </div>
                                     </td>
                                     <td className="py-2.5 text-[10px] font-extrabold text-gray-900 border-b border-gray-50 text-right pr-4">
                                         {worker.advance > 0 ? `₱${worker.advance}` : '—'}
@@ -916,7 +1070,7 @@ export default function Attendance() {
                             );
                         }) : (
                             <tr>
-                                <td colSpan="7" className="py-8 text-center text-xs text-gray-400 italic">No workers found for {formatDisplayDate(selectedDate)}.</td>
+                                <td colSpan="8" className="py-8 text-center text-xs text-gray-400 italic">No workers found for {formatDisplayDate(selectedDate)}.</td>
                             </tr>
                         )}
                     </tbody>
@@ -1337,6 +1491,51 @@ export default function Attendance() {
                                             <span className="text-[8px] text-gray-400 mt-0.5 block">Default: 05:30 PM (after 5:00 PM)</span>
                                         </div>
                                     </div>
+                                </div>
+
+                                <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                                    <h4 className="text-[10px] font-bold text-gray-900 uppercase mb-2">Time In / Time Out Windows</h4>
+                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                        {attendanceTimeFields.map(field => (
+                                            <div key={field.key}>
+                                                <label className="block text-[8px] font-bold text-gray-600 mb-1 uppercase">{field.label}</label>
+                                                <input
+                                                    type="time"
+                                                    value={settingsForm[field.key]}
+                                                    onChange={(e) => setSettingsForm(prev => ({ ...prev, [field.key]: e.target.value }))}
+                                                    required
+                                                    className="w-full bg-white border border-gray-200 rounded-lg px-2 py-2 text-xs font-semibold focus:border-[#A63228] outline-none"
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <p className="text-[8px] text-gray-500 mt-2">Time In is rejected after its closing time. Time Out is accepted only during its configured window.</p>
+                                </div>
+
+                                <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                                    <h4 className="text-[10px] font-bold text-gray-900 uppercase mb-2">Deductions & Overtime</h4>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                        {[
+                                            ['late_tier_1_deduction', 'Late Tier 1 (₱)'],
+                                            ['late_tier_2_deduction', 'Late Tier 2 (₱)'],
+                                            ['overtime_rate_per_interval', 'Overtime per interval (₱)'],
+                                            ['overtime_interval_minutes', 'Overtime interval (minutes)']
+                                        ].map(([key, label]) => (
+                                            <div key={key}>
+                                                <label className="block text-[8px] font-bold text-gray-600 mb-1 uppercase">{label}</label>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    step={key === 'overtime_interval_minutes' ? '1' : '0.01'}
+                                                    value={settingsForm[key]}
+                                                    onChange={(e) => setSettingsForm(prev => ({ ...prev, [key]: e.target.value }))}
+                                                    required
+                                                    className="w-full bg-white border border-gray-200 rounded-lg px-2 py-2 text-xs font-semibold focus:border-[#A63228] outline-none"
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <p className="text-[8px] text-gray-500 mt-2">Overtime is included only for minutes recorded and approved by an Admin on a date marked as requiring overtime. Incomplete intervals do not earn a partial interval.</p>
                                 </div>
 
                                 <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 flex items-center justify-between">

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { api } from '../api'
@@ -54,9 +54,25 @@ export default function Projects() {
     const [saving, setSaving] = useState(false);
     const [dateError, setDateError] = useState('');
     const [contractError, setContractError] = useState('');
+    const [contractFocused, setContractFocused] = useState(false);
     const [budgetProject, setBudgetProject] = useState(null);
+    const contractInputRef = useRef(null);
 
     const MAX_AMOUNT = 999999999999;
+    const formatCurrency = (value) => {
+        if (String(value ?? '').trim() === '') return '';
+        const amount = Number(value);
+        return Number.isFinite(amount)
+            ? amount.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+            : '';
+    };
+    const formatEditingCurrency = (value) => {
+        const [integerPart, ...fractionParts] = value.split('.');
+        const integer = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',') || '0';
+        return fractionParts.length
+            ? `${integer}.${fractionParts.join('')}`
+            : integer;
+    };
 
     const getTodayISO = () => {
         const d = new Date();
@@ -68,7 +84,8 @@ export default function Projects() {
     const todayISO = getTodayISO();
 
     const handleInputChange = (e) => {
-        const { name, value } = e.target;
+        const { name } = e.target;
+        let { value } = e.target;
         if (name === 'startDate') {
             if (value && formData.targetDate && value > formData.targetDate) {
                 setDateError('Start date cannot be after target date.');
@@ -82,6 +99,14 @@ export default function Projects() {
                 setDateError('');
             }
         } else if (name === 'contract') {
+            value = value.replace(/[^\d.]/g, '');
+            const decimalIndex = value.indexOf('.');
+            if (decimalIndex !== -1) {
+                value = `${value.slice(0, decimalIndex + 1)}${value
+                    .slice(decimalIndex + 1)
+                    .replace(/\./g, '')
+                    .slice(0, 2)}`;
+            }
             const num = parseFloat(value);
             if (num > MAX_AMOUNT) {
                 setContractError('Budget allocated cannot exceed ₱999,999,999,999.');
@@ -92,6 +117,42 @@ export default function Projects() {
             }
         }
         setFormData(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleContractChange = (e) => {
+        const input = e.target;
+        const charactersBeforeCursor = input.value
+            .slice(0, input.selectionStart ?? input.value.length)
+            .replace(/[^\d.]/g, '').length;
+        let value = input.value.replace(/[^\d.]/g, '');
+        const decimalIndex = value.indexOf('.');
+        if (decimalIndex !== -1) {
+            value = `${value.slice(0, decimalIndex + 1)}${value
+                .slice(decimalIndex + 1)
+                .replace(/\./g, '')
+                .slice(0, 2)}`;
+        }
+
+        const amount = parseFloat(value);
+        if (amount > MAX_AMOUNT) {
+            setContractError('Budget allocated cannot exceed ₱999,999,999,999.');
+        } else {
+            setContractError('');
+        }
+        setFormData(prev => ({ ...prev, contract: value }));
+
+        const formatted = formatEditingCurrency(value);
+        requestAnimationFrame(() => {
+            const field = contractInputRef.current;
+            if (!field) return;
+            let cursor = 0;
+            let countedCharacters = 0;
+            while (cursor < formatted.length && countedCharacters < charactersBeforeCursor) {
+                if (/[\d.]/.test(formatted[cursor])) countedCharacters += 1;
+                cursor += 1;
+            }
+            field.setSelectionRange(cursor, cursor);
+        });
     };
 
     const activeOngoingProject = projects.find(p => isOngoingStatus(p.status));
@@ -493,18 +554,22 @@ export default function Projects() {
                                     <div className="flex justify-between items-center mb-1">
                                         <label className="block text-[8px] font-bold text-gray-700 uppercase">Contract Amount / Budget (₱) <span className="text-[#A63228]">*</span></label>
                                     </div>
-                                    <input
-                                        type="number"
-                                        step="0.01"
-                                        min="0.01"
-                                        max="999999999999"
-                                        name="contract"
-                                        value={formData.contract}
-                                        onChange={handleInputChange}
-                                        required
-                                        className={`w-full bg-[#f4f1ee] rounded-md px-2.5 py-1.5 text-[10px] font-extrabold focus:border-[#A63228] outline-none border transition-colors ${contractError ? 'border-red-500 text-red-600' : 'border-transparent'}`}
-                                        placeholder="0.00"
-                                    />
+                                    <div className="relative">
+                                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] font-extrabold text-gray-500">₱</span>
+                                        <input
+                                            ref={contractInputRef}
+                                            type="text"
+                                            inputMode="decimal"
+                                            name="contract"
+                                            value={contractFocused ? formatEditingCurrency(formData.contract) : formatCurrency(formData.contract)}
+                                            onFocus={() => setContractFocused(true)}
+                                            onBlur={() => setContractFocused(false)}
+                                            onChange={handleContractChange}
+                                            required
+                                            className={`w-full bg-[#f4f1ee] rounded-md pl-6 pr-2.5 py-1.5 text-[10px] font-extrabold focus:border-[#A63228] outline-none border transition-colors ${contractError ? 'border-red-500 text-red-600' : 'border-transparent'}`}
+                                            placeholder="0.00"
+                                        />
+                                    </div>
                                     {contractError && (
                                         <p className="text-[8px] text-red-600 font-bold mt-1 flex items-center gap-1">
                                             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>

@@ -74,7 +74,11 @@ export default function ProjectDetails() {
 
     const today = new Date().toISOString().split('T')[0]
     const todayAtt = attendance.filter(a => a.date === today)
-    const presentToday = todayAtt.filter(a => a.status === 'Present').length
+    const presentToday = todayAtt.filter(a => {
+        const status = String(a.status || '').trim().toLowerCase()
+        return status === 'present' || status === 'full day' || status === 'late' ||
+            status === 'double late' || status.includes('halfday') || status.includes('half day')
+    }).length
     const absentToday = todayAtt.filter(a => a.status === 'Absent').length
     const todayWage = todayAtt.filter(a => a.status === 'Present').reduce((s, a) => s + Number(a.rate || 0), 0)
 

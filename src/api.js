@@ -7,7 +7,7 @@ export function getApiBaseUrl() {
 const BASE_URL = getApiBaseUrl()
 
 function getHeaders(customHeaders = {}) {
-  const headers = { 'Content-Type': 'application/json', ...customHeaders }
+  const headers = { 'Content-Type': 'application/json', 'x-client-platform': 'web', ...customHeaders }
   try {
     const session = JSON.parse(sessionStorage.getItem('adminSession') || localStorage.getItem('adminSession') || '{}')
     const profile = JSON.parse(sessionStorage.getItem('adminProfile') || localStorage.getItem('adminProfile') || '{}')
