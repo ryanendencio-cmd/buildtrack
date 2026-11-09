@@ -1264,6 +1264,17 @@ function startServer() {
         finalActorRole = req.body?.actor_role || req.headers['x-actor-role'] || 'Administrator'
       }
 
+      // Strip undefined values from details to avoid Firestore errors
+      const sanitizeDetails = (obj) => {
+        if (obj === null || obj === undefined) return null
+        if (typeof obj !== 'object' || Array.isArray(obj)) return obj
+        return Object.fromEntries(
+          Object.entries(obj)
+            .filter(([, v]) => v !== undefined)
+            .map(([k, v]) => [k, v === null ? null : sanitizeDetails(v)])
+        )
+      }
+
       const logData = {
         action: action || 'ACTION_LOGGED',
         module: module || 'System',
@@ -1273,7 +1284,7 @@ function startServer() {
         actor_id: finalActorId || null,
         target_id: target_id ? String(target_id) : null,
         target_name: target_name ? String(target_name) : null,
-        details: details || null,
+        details: sanitizeDetails(details),
         ip_address: String(ip_address),
         user_agent: String(user_agent),
         status: status || 'SUCCESS',
