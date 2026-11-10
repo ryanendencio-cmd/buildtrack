@@ -2,10 +2,14 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { api } from '../api'
+import Pagination from '../components/Pagination'
+import { usePagination } from '../components/usePagination'
 
 export default function Assets() {
     const { id } = useParams();
     const navigate = useNavigate();
+    const now = new Date();
+    const todayDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
     const [modalState, setModalState] = useState('NONE');
     const [selectedEquipment, setSelectedEquipment] = useState(null);
@@ -126,7 +130,8 @@ export default function Assets() {
     const [filterDateTo, setFilterDateTo] = useState('');
 
     const [formData, setFormData] = useState({
-        name: '', status: 'Available', condition: 'Good', user: '', quantity: 1, borrowQty: 1
+        name: '', status: 'Available', condition: 'Good', user: '', quantity: 1, borrowQty: 1,
+        expectedReturnDate: '', expectedReturnTime: ''
     });
 
     const handleInputChange = (e) => {
@@ -155,7 +160,9 @@ export default function Assets() {
             condition: item.condition || 'Good',
             user: workers[0]?.name || '',
             quantity: item.qty || 1,
-            borrowQty: 1
+            borrowQty: 1,
+            expectedReturnDate: '',
+            expectedReturnTime: ''
         });
         setModalState('BORROW');
     };
@@ -174,7 +181,9 @@ export default function Assets() {
             condition: item.condition || 'Good',
             user: workers[0]?.name || '',
             quantity: item.qty || 1,
-            borrowQty: 1
+            borrowQty: 1,
+            expectedReturnDate: '',
+            expectedReturnTime: ''
         });
         setModalState('BORROW');
     };
@@ -192,6 +201,17 @@ export default function Assets() {
             alert('Please select or enter the borrower name.');
             return;
         }
+        if (!formData.expectedReturnDate) {
+            alert('Please choose an expected return date.');
+            return;
+        }
+        if (formData.expectedReturnTime) {
+            const dueAt = new Date(`${formData.expectedReturnDate}T${formData.expectedReturnTime}`);
+            if (Number.isNaN(dueAt.getTime()) || dueAt <= new Date()) {
+                alert('Expected return time must be in the future.');
+                return;
+            }
+        }
         const maxQty = selectedEquipment.qty || (selectedEquipment.ids || []).length || 1;
         const qty = Math.min(Math.max(parseInt(formData.borrowQty, 10) || 1, 1), maxQty);
         const idsToProcess = (selectedEquipment.ids || [selectedEquipment.id]).slice(0, qty);
@@ -207,6 +227,8 @@ export default function Assets() {
                     assigned_to: borrowerName,
                     user: borrowerName,
                     borrow_at: nowIso,
+                    expected_return_date: formData.expectedReturnDate,
+                    expected_return_time: formData.expectedReturnTime || null,
                     condition: formData.condition || item?.condition || 'Good'
                 });
             }));
@@ -221,7 +243,7 @@ export default function Assets() {
             });
 
             setEquipment(prev => prev.map(eq => idsToProcess.includes(eq.id)
-                ? { ...eq, status: 'In Use', assigned_to: borrowerName, user: borrowerName, borrow_at: nowIso, condition: formData.condition || eq.condition }
+                ? { ...eq, status: 'In Use', assigned_to: borrowerName, user: borrowerName, borrow_at: nowIso, expected_return_date: formData.expectedReturnDate, expected_return_time: formData.expectedReturnTime || null, condition: formData.condition || eq.condition }
                 : eq
             ));
 
@@ -275,6 +297,8 @@ export default function Assets() {
                     assigned_to: null,
                     user: '—',
                     borrow_at: null,
+                    expected_return_date: null,
+                    expected_return_time: null,
                     condition: formData.condition,
                     type: formData.condition
                 });
@@ -291,7 +315,7 @@ export default function Assets() {
             });
 
             setEquipment(prev => prev.map(eq => idsToProcess.includes(eq.id)
-                ? { ...eq, status: newStatus, assigned_to: null, user: '—', borrow_at: null, condition: formData.condition }
+                ? { ...eq, status: newStatus, assigned_to: null, user: '—', borrow_at: null, expected_return_date: null, expected_return_time: null, condition: formData.condition }
                 : eq
             ));
             setSuccessMsg(`${qty} ${selectedEquipment.name}(s) returned and recorded.`);
@@ -397,13 +421,13 @@ export default function Assets() {
     const card1Count = returnedCount > 0 && availableCount === 0 ? returnedCount : availableCount;
     const card1Label = returnedCount > 0 && availableCount === 0 ? 'RETURNED' : 'AVAILABLE';
 
-    // Group equipment rows: same name + status + condition (+ borrower if In Use) = one row with a qty count
+    // Keep distinct return deadlines separate when grouping borrowed tools.
     const groupedEquipment = useMemo(() => {
         return Object.values(
             equipment.reduce((acc, item) => {
                 const cond = item.condition || item.type || 'Good';
                 const borrower = item.status === 'In Use' ? (item.assigned_to || item.user || 'Site Worker') : '—';
-                const key = `${item.name}||${item.status}||${cond}||${borrower}`;
+                const key = `${item.name}||${item.status}||${cond}||${borrower}||${item.expected_return_date || ''}||${item.expected_return_time || ''}`;
                 if (!acc[key]) {
                     acc[key] = { ...item, borrower, condition: cond, qty: 1, ids: [item.id] };
                 } else {
@@ -571,6 +595,20 @@ export default function Assets() {
             return true;
         });
     }, [borrowHistory, filterBorrower, searchItem, filterItemSelect, filterDatePreset, filterDateFrom, filterDateTo]);
+    const unreturnedGrouped = Object.values(filteredUnreturnedTools.reduce((acc, tool) => {
+        const borrower = tool.borrower || tool.user || tool.assigned_to || 'Site Worker';
+        const condition = tool.condition || tool.type || 'Good';
+        const key = `${tool.name}||${borrower}||${condition}`;
+        if (!acc[key]) {
+            acc[key] = { ...tool, borrower, condition, qty: 1 };
+        } else {
+            acc[key].qty += 1;
+        }
+        return acc;
+    }, {}));
+    const equipmentPagination = usePagination(filteredGroupedEquipment, `${searchItem}|${filterItemSelect}|${filterStatus}|${filterBorrower}|${filterDatePreset}|${filterDateFrom}|${filterDateTo}`);
+    const unreturnedPagination = usePagination(unreturnedGrouped, `${searchItem}|${filterItemSelect}|${filterBorrower}|${filterDatePreset}|${filterDateFrom}|${filterDateTo}`);
+    const historyPagination = usePagination(filteredBorrowHistory, `${searchItem}|${filterItemSelect}|${filterBorrower}|${filterDatePreset}|${filterDateFrom}|${filterDateTo}`);
 
     const selectStyles = {
         backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3e%3cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3e%3c/svg%3e")`,
@@ -806,7 +844,7 @@ export default function Assets() {
                         </tr>
                     </thead>
                     <tbody>
-                        {filteredGroupedEquipment.length > 0 ? filteredGroupedEquipment.map((item) => (
+                        {filteredGroupedEquipment.length > 0 ? equipmentPagination.pageItems.map((item) => (
                             <tr key={`${item.name}-${item.status}-${item.condition}-${item.borrower || 'none'}`}>
                                 <td className="py-2.5 text-[10px] font-extrabold text-gray-900 border-b border-gray-50 pl-2">{item.name}</td>
                                 <td className="py-2.5 border-b border-gray-50 text-center">
@@ -864,6 +902,7 @@ export default function Assets() {
                         )}
                     </tbody>
                 </table>
+                <Pagination {...equipmentPagination} />
             </div>
 
             <div id="unreturned-tools-section" className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 mb-4 overflow-x-auto">
@@ -883,6 +922,7 @@ export default function Assets() {
                         {isFilterActive ? 'No unreturned tools match the active filters.' : 'All tools returned.'}
                     </p>
                 ) : (
+                    <>
                     <table className="w-full text-left border-collapse min-w-[600px]">
                         <thead>
                             <tr>
@@ -895,19 +935,7 @@ export default function Assets() {
                             </tr>
                         </thead>
                         <tbody>
-                            {Object.values(
-                                filteredUnreturnedTools.reduce((acc, tool) => {
-                                    const borrower = tool.borrower || tool.user || tool.assigned_to || 'Site Worker';
-                                    const condition = tool.condition || tool.type || 'Good';
-                                    const key = `${tool.name}||${borrower}||${condition}`;
-                                    if (!acc[key]) {
-                                        acc[key] = { ...tool, borrower, condition, qty: 1 };
-                                    } else {
-                                        acc[key].qty += 1;
-                                    }
-                                    return acc;
-                                }, {})
-                            ).map((tool, idx) => {
+                            {unreturnedPagination.pageItems.map((tool, idx) => {
                                 const borrower = tool.borrower;
                                 const rawDate = tool.borrow_at || tool.updated_at || tool.created_at;
                                 const borrowDate = rawDate ? new Date(rawDate) : null;
@@ -927,13 +955,23 @@ export default function Assets() {
                                                     'bg-red-50 text-red-700'
                                                 }`}>{cond}</span>
                                         </td>
-                                        <td className="py-2.5 text-[9px] text-gray-600 border-b border-gray-50">{dateStr}</td>
+                                        <td className="py-2.5 text-[9px] text-gray-600 border-b border-gray-50">
+                                            {dateStr}
+                                            {tool.expected_return_date && (
+                                                <span className="block text-[8px] font-semibold text-[#A63228]">
+                                                    Due: {tool.expected_return_date}
+                                                    {tool.expected_return_time ? ` • ${tool.expected_return_time}` : ''}
+                                                </span>
+                                            )}
+                                        </td>
                                         <td className="py-2.5 text-[9px] text-gray-600 border-b border-gray-50">{timeStr}</td>
                                     </tr>
                                 );
                             })}
                         </tbody>
                     </table>
+                    <Pagination {...unreturnedPagination} />
+                    </>
                 )}
             </div>
 
@@ -985,6 +1023,7 @@ export default function Assets() {
                         {isFilterActive ? 'No borrowing history matches the active filter criteria.' : 'No borrowing history recorded yet.'}
                     </p>
                 ) : (
+                    <>
                     <table className="w-full text-left border-collapse min-w-[650px]">
                         <thead>
                             <tr>
@@ -998,7 +1037,7 @@ export default function Assets() {
                             </tr>
                         </thead>
                         <tbody>
-                            {filteredBorrowHistory.map((item, idx) => {
+                            {historyPagination.pageItems.map((item, idx) => {
                                 const dt = item.date_time ? new Date(item.date_time) : (item.created_at ? new Date(item.created_at) : null);
                                 const dateStr = dt && !isNaN(dt) ? dt.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
                                 const timeStr = dt && !isNaN(dt) ? dt.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', hour12: true }) : '—';
@@ -1029,6 +1068,8 @@ export default function Assets() {
                             })}
                         </tbody>
                     </table>
+                    <Pagination {...historyPagination} />
+                    </>
                 )}
             </div>
 
@@ -1084,6 +1125,7 @@ export default function Assets() {
                                         required
                                         className="w-full bg-[#f4f1ee] border border-transparent rounded-xl px-4 py-3 text-sm font-medium focus:border-[#A63228] outline-none"
                                     />
+                                    <p className="mt-1 text-xs text-gray-500">If no time is set, the tool is due by the end of that date.</p>
                                 </div>
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-wider">Tool Condition</label>
@@ -1126,6 +1168,35 @@ export default function Assets() {
                                         ))}
                                     </div>
                                 )}
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-wider">
+                                        Expected Return Date
+                                    </label>
+                                    <input
+                                        type="date"
+                                        name="expectedReturnDate"
+                                        min={todayDate}
+                                        value={formData.expectedReturnDate || ''}
+                                        onChange={handleInputChange}
+                                        required
+                                        className="w-full bg-[#f4f1ee] border border-transparent rounded-xl px-4 py-3 text-sm font-medium focus:border-[#A63228] outline-none"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-wider">
+                                        Return Time <span className="font-normal text-gray-400">(optional)</span>
+                                    </label>
+                                    <input
+                                        type="time"
+                                        name="expectedReturnTime"
+                                        value={formData.expectedReturnTime || ''}
+                                        onChange={handleInputChange}
+                                        className="w-full bg-[#f4f1ee] border border-transparent rounded-xl px-4 py-3 text-sm font-medium focus:border-[#A63228] outline-none"
+                                    />
+                                </div>
                             </div>
 
                             <div className="flex gap-3 mt-2">

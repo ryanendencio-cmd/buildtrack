@@ -1,11 +1,9 @@
 import React, { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import PhilippineAddressSelector from '../components/PhilippineAddressSelector'
 import { api } from '../api'
 
 export default function Profile() {
-    const navigate = useNavigate();
     const defaultProfile = {
         firstName: '',
         middleName: '',
@@ -22,31 +20,8 @@ export default function Profile() {
     const formatName = (profile) => [profile.firstName, profile.middleName, profile.lastName]
         .filter(Boolean).join(' ') || profile.name || profile.fullName || 'Administrator';
 
-    const handleLogout = async () => {
-        if (window.confirm('Are you sure you want to log out?')) {
-            try {
-                const adminId = localStorage.getItem('adminId') || profileData.id;
-                const name = formatName(profileData) || 'Administrator';
-                const role = profileData.role || 'Administrator';
-
-                await api.post('/logout', {
-                    userId: adminId,
-                    name,
-                    role,
-                    client: 'Web Admin App'
-                }).catch(() => {});
-            } catch {
-                // Ignore network error on logout
-            } finally {
-                localStorage.removeItem('user');
-                localStorage.removeItem('adminId');
-                localStorage.removeItem('adminSession');
-                localStorage.removeItem('adminToken');
-                localStorage.removeItem('adminProfile');
-                sessionStorage.clear();
-                navigate('/login');
-            }
-        }
+    const handleLogout = () => {
+        window.dispatchEvent(new Event('open-logout-modal'));
     };
 
     // ── STATE FOR PROFILE DATA ──

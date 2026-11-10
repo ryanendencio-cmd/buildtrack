@@ -1,28 +1,25 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { api } from '../api'
 import { NotificationContext } from './notificationContext'
 
-const STORAGE_KEY = 'readNotificationIds'
-
-function getReadIds() {
-    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]') } catch { return [] }
-}
-
-function saveReadIds(ids) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(ids))
-}
-
 export function NotificationProvider({ children }) {
     const [notifications, setNotifications] = useState([])
+    const fetchSequence = useRef(0)
 
     const fetchNotifications = () => {
+        const requestSequence = ++fetchSequence.current
         api.get('/notifications').then(data => {
-            if (Array.isArray(data)) {
-                const readIds = getReadIds()
-                setNotifications(data.map(n => ({
-                    ...n,
-                    read: Boolean(n.read) || readIds.includes(n.id)
-                })))
+            if (Array.isArray(data) && requestSequence === fetchSequence.current) {
+                setNotifications(previous => {
+                    const previouslyRead = new Set(
+                        previous
+                            .filter(notification => notification.read)
+                            .map(notification => String(notification.id))
+                    )
+                    return data.map(notification => previouslyRead.has(String(notification.id))
+                        ? { ...notification, read: true }
+                        : notification)
+                })
             }
         }).catch(() => {})
     }
@@ -34,18 +31,20 @@ export function NotificationProvider({ children }) {
         return () => clearInterval(timer)
     }, [])
 
-    const markAsRead = (id) => {
-        const readIds = getReadIds()
-        if (!readIds.includes(id)) saveReadIds([...readIds, id])
+    const markAsRead = async (id) => {
+        await api.put(`/notifications/${id}/read`, {})
+        fetchSequence.current += 1
         setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n))
-        api.put(`/notifications/${id}/read`, {}).catch(() => {})
     }
 
-    const markAllAsRead = () => {
-        const allIds = notifications.map(n => n.id)
-        saveReadIds(allIds)
+    const markAllAsRead = async () => {
+        await api.put('/notifications/mark-all-read', {
+            notificationIds: notifications
+                .filter(n => n.id != null)
+                .map(n => String(n.id))
+        })
+        fetchSequence.current += 1
         setNotifications(prev => prev.map(n => ({ ...n, read: true })))
-        api.put('/notifications/mark-all-read', {}).catch(() => {})
     }
 
     const unreadCount = notifications.filter(n => !n.read).length

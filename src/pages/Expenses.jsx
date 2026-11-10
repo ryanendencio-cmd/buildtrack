@@ -4,6 +4,8 @@ import AdminLayout from '../components/AdminLayout'
 import Tesseract from 'tesseract.js'
 import { api } from '../api'
 import { CONSTRUCTION_MATERIALS, getUnitsForMaterial, getDefaultUnitForMaterial, resolveStandardMaterial } from '../constants/materials'
+import Pagination from '../components/Pagination'
+import { usePagination } from '../components/usePagination'
 
 function SearchableMaterialDropdown({ value, onChange, placeholder, category }) {
     const [isOpen, setIsOpen] = useState(false);
@@ -811,6 +813,11 @@ export default function Expenses() {
         const matchCategory = filterCategory === 'All' || (exp.category || '').toLowerCase() === filterCategory.toLowerCase();
         return matchDate && matchCategory;
     });
+    const displayedExpensePagination = usePagination(displayedExpenses, `${id || ''}|${filterDate}|${filterCategory}`);
+    const sortedReceipts = getSortedReceipts(expensesList);
+    const sortedDeletedReceipts = getSortedReceipts(deletedExpenses);
+    const activeReceiptPagination = usePagination(sortedReceipts, gallerySort);
+    const deletedReceiptPagination = usePagination(sortedDeletedReceipts, gallerySort);
     const allocatedBudget = currentProjectData?.allocated || 0;
     const totalActualExpense = expensesList.reduce((sum, item) => sum + Number(item.amount || 0), 0);
     const remainingBudget = allocatedBudget - totalActualExpense;
@@ -1004,7 +1011,7 @@ export default function Expenses() {
                                             </td>
                                         </tr>
                                     ) : (
-                                        displayedExpenses.map((exp) => (
+                                        displayedExpensePagination.pageItems.map((exp) => (
                                             <tr key={exp.id} className="hover:bg-gray-50/60 transition-colors">
                                                 <td className="py-2.5 text-[10px] font-bold text-gray-800 border-b border-gray-50">{formatDisplayDate(exp.date)}</td>
                                                 <td className="py-2.5 border-b border-gray-50"><span className="text-[9px] font-bold text-gray-900 uppercase tracking-wider">{exp.category}</span></td>
@@ -1015,6 +1022,7 @@ export default function Expenses() {
                                     )}
                                 </tbody>
                             </table>
+                            <Pagination {...displayedExpensePagination} />
                         </div>
                         <div className="flex justify-between items-center mt-3 pt-2 border-t border-gray-100 text-[10px]">
                             <span className="font-extrabold text-gray-600 uppercase tracking-wider">
@@ -1036,7 +1044,7 @@ export default function Expenses() {
                             <p className="text-[10px] text-gray-400 italic">No receipts available{filterDate ? ` for ${formatDisplayDate(filterDate)}` : ''}.</p>
                         ) : (
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                {displayedExpenses.map(exp => {
+                                {displayedExpensePagination.pageItems.map(exp => {
                                     const receiptImg = getReceiptImage(exp);
                                     return (
                                         <div key={exp.id} onClick={() => openReceiptViewer(exp)} className="bg-[#f9fafb] p-2.5 rounded-xl border border-gray-100 flex flex-col cursor-pointer hover:border-[#A63228] hover:shadow-md transition-all group">
@@ -1128,7 +1136,7 @@ export default function Expenses() {
                                     <p className="text-xs text-gray-400 italic text-center py-10">No active receipts available.</p>
                                 ) : (
                                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                                        {getSortedReceipts(expensesList).map(exp => {
+                                        {activeReceiptPagination.pageItems.map(exp => {
                                             const receiptImg = getReceiptImage(exp);
                                             return (
                                                 <div key={exp.id} onClick={() => openReceiptViewer(exp)} className="bg-[#f9fafb] p-3 rounded-xl border border-gray-200 flex flex-col cursor-pointer hover:border-[#A63228] hover:shadow-md transition-all group">
@@ -1166,6 +1174,7 @@ export default function Expenses() {
                                         })}
                                     </div>
                                 )}
+                                <Pagination {...activeReceiptPagination} />
                             </>
                         )}
 
@@ -1176,7 +1185,7 @@ export default function Expenses() {
                                     <p className="text-xs text-gray-400 italic text-center py-10">Trash is empty.</p>
                                 ) : (
                                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                                        {getSortedReceipts(deletedExpenses).map(exp => {
+                                        {deletedReceiptPagination.pageItems.map(exp => {
                                             const receiptImg = getReceiptImage(exp);
                                             return (
                                                 <div key={exp.id} className="bg-gray-50 p-3 rounded-xl border border-gray-200 flex flex-col relative overflow-hidden group">
@@ -1217,6 +1226,7 @@ export default function Expenses() {
                                         })}
                                     </div>
                                 )}
+                                <Pagination {...deletedReceiptPagination} />
                             </>
                         )}
                     </div>

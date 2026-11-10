@@ -2,6 +2,7 @@ const express = require('express')
 const cors = require('cors')
 const bcrypt = require('bcrypt')
 const nodemailer = require('nodemailer')
+const crypto = require('crypto')
 const jwt = require('jsonwebtoken')
 const { MySQLFirestoreAdapter, FieldValue } = require('./mysql-adapter')
 const {
@@ -22,6 +23,149 @@ const db = new MySQLFirestoreAdapter({
   database: process.env.DB_NAME || 'buildtrack_db',
   port: Number(process.env.DB_PORT) || 3306
 })
+
+const PUBLIC_EMAIL_DOMAINS = new Set([
+  'gmail.com',
+  'yahoo.com',
+  'outlook.com',
+  'hotmail.com',
+  'icloud.com',
+  'proton.me',
+  'zohomail.com',
+  'gmx.com',
+  'aol.com',
+  'yandex.com'
+])
+const EMAIL_OTP_LIFETIME_MS = 5 * 60 * 1000
+const EMAIL_OTP_RESEND_DELAY_MS = 60 * 1000
+const EMAIL_OTP_MAX_ATTEMPTS = 5
+const emailOtpChallenges = new Map()
+const emailOtpSendTimes = new Map()
+const emailVerificationTokens = new Map()
+
+function validateWorkerEmail(value) {
+  if (value == null || value === '') return { email: null }
+  if (typeof value !== 'string') {
+    return { error: 'Email must be a string.' }
+  }
+
+  const cleanEmail = value.trim()
+  if (!cleanEmail) return { email: null }
+
+  const match = /^([A-Za-z0-9._+-]+)@([A-Za-z0-9.-]+)$/.exec(cleanEmail)
+  if (!match) return { error: 'Enter a valid email address.' }
+
+  const [, username, rawDomain] = match
+  const domain = rawDomain.toLowerCase()
+  if (
+    username.startsWith('.') ||
+    username.endsWith('.') ||
+    username.includes('..') ||
+    !PUBLIC_EMAIL_DOMAINS.has(domain)
+  ) {
+    return {
+      error: `Use an email username with one of these domains: ${[...PUBLIC_EMAIL_DOMAINS].join(', ')}.`
+    }
+  }
+
+  return { email: `${username}@${domain}` }
+}
+
+function validateWorkerPhoto(value) {
+  if (value == null || value === '') return { photo: null }
+  if (typeof value !== 'string') {
+    return { error: 'Profile photo must be an image.' }
+  }
+
+  const match = /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/]+={0,2})$/.exec(value)
+  if (!match) {
+    return { error: 'Profile photo must be a JPG, PNG, or WebP image.' }
+  }
+
+  const [, mimeType, encoded] = match
+  const bytes = Buffer.from(encoded, 'base64')
+  if (bytes.length > 512 * 1024 || bytes.toString('base64') !== encoded) {
+    return { error: 'Profile photo must be 512 KB or smaller.' }
+  }
+
+  const isPng = mimeType === 'png' &&
+    bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+  const isJpeg = mimeType === 'jpeg' &&
+    bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
+  const isWebp = mimeType === 'webp' &&
+    bytes.toString('ascii', 0, 4) === 'RIFF' &&
+    bytes.toString('ascii', 8, 12) === 'WEBP'
+  if (!isPng && !isJpeg && !isWebp) {
+    return { error: 'The selected file is not a valid image.' }
+  }
+
+  return { photo: value }
+}
+
+function emailOtpKey(purpose, email) {
+  return `${purpose}:${email.toLowerCase()}`
+}
+
+function notificationReadStateId(notificationId) {
+  return crypto.createHash('sha256').update(notificationId).digest('hex')
+}
+
+function consumeEmailVerificationToken(token, purpose, email) {
+  if (typeof token !== 'string' || !token || typeof email !== 'string') {
+    return false
+  }
+  const record = emailVerificationTokens.get(token)
+  emailVerificationTokens.delete(token)
+  return Boolean(
+    record &&
+    record.purpose === purpose &&
+    record.email === email.toLowerCase() &&
+    record.expiresAt > Date.now()
+  )
+}
+
+async function findAccountByEmail(email) {
+  const workers = await db.collection('workers')
+    .where('email', '==', email)
+    .get()
+  const verifiedWorker = workers.docs.find(doc => doc.data().email_verified === true)
+  if (verifiedWorker) {
+    return { collectionName: 'workers', doc: verifiedWorker }
+  }
+
+  const admins = await db.collection('admins')
+    .where('email', '==', email)
+    .limit(1)
+    .get()
+  return admins.empty
+    ? null
+    : { collectionName: 'admins', doc: admins.docs[0] }
+}
+
+function createSmtpTransporter() {
+  const host = process.env.SMTP_HOST?.trim()
+  const port = Number(process.env.SMTP_PORT || 587)
+  const from = process.env.SMTP_FROM?.trim() || process.env.SMTP_USER?.trim()
+  if (!host || !Number.isInteger(port) || port < 1 || port > 65535 || !from) {
+    return { error: 'SMTP is not configured. Set SMTP_HOST, SMTP_PORT, and SMTP_FROM.' }
+  }
+
+  const user = process.env.SMTP_USER?.trim()
+  const pass = process.env.SMTP_PASS
+  if ((user && !pass) || (!user && pass)) {
+    return { error: 'Configure both SMTP_USER and SMTP_PASS, or leave both unset.' }
+  }
+
+  return {
+    transporter: nodemailer.createTransport({
+      host,
+      port,
+      secure: process.env.SMTP_SECURE === 'true' || port === 465,
+      ...(user && pass ? { auth: { user, pass } } : {})
+    }),
+    from
+  }
+}
 
 function workerRegistrationYear(createdAt) {
   if (createdAt == null || createdAt === '') return null
@@ -1166,7 +1310,19 @@ function startServer() {
         }
       })
 
-      const combined = [...alerts, ...savedList]
+      const readStateSnap = await db.collection('notification_read_states').get()
+      const readStateByNotificationId = new Map(
+        readStateSnap.docs
+          .map(doc => doc.data())
+          .filter(state => state.read === true && typeof state.notification_id === 'string')
+          .map(state => [state.notification_id, true])
+      )
+
+      const combined = [...alerts, ...savedList].map(notification => ({
+        ...notification,
+        read: notification.read === true ||
+          readStateByNotificationId.get(String(notification.id)) === true
+      }))
       combined.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
 
       res.json(combined)
@@ -1201,20 +1357,54 @@ function startServer() {
   // PUT /api/notifications/:id/read
   app.put('/api/notifications/:id/read', async (req, res) => {
     try {
-      const docRef = db.collection('notifications').doc(req.params.id)
+      const notificationId = req.params.id
+      const docRef = db.collection('notifications').doc(notificationId)
       const doc = await docRef.get()
       if (doc.exists) {
         await docRef.update({ read: true, updated_at: FieldValue.serverTimestamp() })
       }
+      await db.collection('notification_read_states')
+        .doc(notificationReadStateId(notificationId))
+        .set({
+          notification_id: notificationId,
+          read: true,
+          updated_at: FieldValue.serverTimestamp()
+        }, { merge: true })
       res.json({ success: true })
     } catch (err) {
-      res.json({ success: true })
+      console.error('Failed to mark notification as read:', err.message)
+      res.status(500).json({ error: 'Unable to mark notification as read.' })
     }
   })
 
   // PUT /api/notifications/mark-all-read
   app.put('/api/notifications/mark-all-read', async (req, res) => {
     try {
+      const requestedIds = req.body.notificationIds
+      if (requestedIds !== undefined &&
+          (!Array.isArray(requestedIds) || requestedIds.length > 5000 ||
+           requestedIds.some(id => typeof id !== 'string' || !id.trim() || id.length > 512))) {
+        return res.status(400).json({ error: 'Notification IDs must be a list of valid IDs.' })
+      }
+
+      const notificationIds = [...new Set((requestedIds || []).map(id => id.trim()))]
+      for (let offset = 0; offset < notificationIds.length; offset += 400) {
+        const batch = db.batch()
+        notificationIds.slice(offset, offset + 400).forEach(notificationId => {
+          batch.set(
+            db.collection('notification_read_states')
+              .doc(notificationReadStateId(notificationId)),
+            {
+              notification_id: notificationId,
+              read: true,
+              updated_at: FieldValue.serverTimestamp()
+            },
+            { merge: true }
+          )
+        })
+        await batch.commit()
+      }
+
       const snap = await db.collection('notifications').where('read', '==', false).get()
       const batch = db.batch()
       snap.docs.forEach(doc => {
@@ -1223,7 +1413,8 @@ function startServer() {
       await batch.commit()
       res.json({ success: true })
     } catch (err) {
-      res.json({ success: true })
+      console.error('Failed to mark all notifications as read:', err.message)
+      res.status(500).json({ error: 'Unable to mark all notifications as read.' })
     }
   })
 
@@ -1433,7 +1624,7 @@ function startServer() {
   // ── AUDIT LOGS ENDPOINTS ──
   app.get('/api/audit-logs', async (req, res) => {
     try {
-      const { module, action, status, search, startDate, endDate, limit = 250 } = req.query
+      const { module, action, status, search, startDate, endDate } = req.query
       let snap = await db.collection('audit_logs').get()
       if (snap.empty) {
         await backfillAuditLogsIfEmpty()
@@ -1486,16 +1677,30 @@ function startServer() {
 
       // Filter by date range
       if (startDate) {
-        const startMs = new Date(startDate).setHours(0, 0, 0, 0)
+        const startMs = new Date(`${startDate}T00:00:00`).getTime()
         results = results.filter(log => (log.timestamp || 0) >= startMs)
       }
       if (endDate) {
-        const endMs = new Date(endDate).setHours(23, 59, 59, 999)
+        const endMs = new Date(`${endDate}T23:59:59.999`).getTime()
         results = results.filter(log => (log.timestamp || 0) <= endMs)
       }
 
-      const maxLimit = parseInt(limit, 10) || 250
-      res.json(results.slice(0, maxLimit))
+      if (req.query.page !== undefined || req.query.pageSize !== undefined) {
+        const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1)
+        const pageSize = Math.min(100, Math.max(1, Number.parseInt(req.query.pageSize, 10) || 10))
+        const offset = (page - 1) * pageSize
+        return res.json({
+          items: results.slice(offset, offset + pageSize),
+          total: results.length,
+          page,
+          pageSize
+        })
+      }
+
+      if (req.query.export === 'true') {
+        return res.json(results)
+      }
+      res.json(results.slice(0, Math.min(5000, Number.parseInt(req.query.limit, 10) || 250)))
     } catch (err) {
       res.status(500).json({ error: err.message })
     }
@@ -1625,6 +1830,7 @@ function startServer() {
       const results = snapshot.docs.map(doc => {
         const data = doc.data()
         delete data.password
+        delete data.profile_photo
         return { id: doc.id, ...data }
       })
       res.json(results)
@@ -1823,6 +2029,23 @@ function startServer() {
       if (has('birthday')) updateData.birthday = birthday || null
       if (has('age')) updateData.age = age ?? null
       if (has('phone')) updateData.phone = phone || null
+      if (has('email')) {
+        const result = validateWorkerEmail(req.body.email)
+        if (result.error) {
+          return res.status(400).json({ error: result.error })
+        }
+        updateData.email = result.email
+        if ((result.email || '') !== (oldWorker.email || '')) {
+          updateData.email_verified = false
+        }
+      }
+      if (has('profile_photo')) {
+        const result = validateWorkerPhoto(req.body.profile_photo)
+        if (result.error) {
+          return res.status(400).json({ error: result.error })
+        }
+        updateData.profile_photo = result.photo
+      }
       if (has('address')) updateData.address = address || null
       if (has('role')) updateData.role = role || 'Worker'
       if (has('daily_rate')) updateData.daily_rate = daily_rate || 600
@@ -3223,9 +3446,29 @@ function startServer() {
   app.post('/api/assets/:project_id', handleCreateAsset)
 
   app.put('/api/assets/:id', async (req, res) => {
-    const { name, type, status, assigned_to, user, borrow_at, condition, project_id } = req.body
+    const {
+      name, type, status, assigned_to, user, borrow_at, condition, project_id,
+      expected_return_date, expected_return_time
+    } = req.body
     const cond = condition || type || 'Good'
     const assignedUser = assigned_to !== undefined ? assigned_to : (user && user !== '—' ? user : null)
+    if (expected_return_date != null) {
+      const parsedReturnDate = typeof expected_return_date === 'string' &&
+        /^\d{4}-\d{2}-\d{2}$/.test(expected_return_date)
+        ? new Date(`${expected_return_date}T00:00:00Z`)
+        : null
+      if (!parsedReturnDate ||
+          Number.isNaN(parsedReturnDate.getTime()) ||
+          parsedReturnDate.toISOString().slice(0, 10) !== expected_return_date) {
+        return res.status(400).json({ error: 'Expected return date must be a valid YYYY-MM-DD date.' })
+      }
+    }
+    if (expected_return_time != null &&
+        (expected_return_date == null ||
+         typeof expected_return_time !== 'string' ||
+         !/^([01]\d|2[0-3]):[0-5]\d$/.test(expected_return_time))) {
+      return res.status(400).json({ error: 'Expected return time must use HH:mm and requires a return date.' })
+    }
     try {
       const updateData = {
         name: name ? String(name).trim() : '',
@@ -3234,6 +3477,19 @@ function startServer() {
         status: status || 'Available',
         assigned_to: assignedUser || null,
         borrow_at: borrow_at || null
+      }
+      const isBorrowed = ['in use', 'checked out', 'borrowed']
+        .includes(String(status || '').toLowerCase())
+      if (!isBorrowed) {
+        updateData.expected_return_date = null
+        updateData.expected_return_time = null
+      } else {
+        if (Object.prototype.hasOwnProperty.call(req.body, 'expected_return_date')) {
+          updateData.expected_return_date = expected_return_date || null
+        }
+        if (Object.prototype.hasOwnProperty.call(req.body, 'expected_return_time')) {
+          updateData.expected_return_time = expected_return_time || null
+        }
       }
       if (project_id !== undefined) {
         const pid = await resolveProjectId(project_id)
@@ -4490,8 +4746,175 @@ function startServer() {
   })
 
   // ── REGISTRATION ──
+  app.post('/api/email-otp/send', async (req, res) => {
+    const emailResult = validateWorkerEmail(req.body.email)
+    if (emailResult.error || !emailResult.email) {
+      return res.status(400).json({ error: emailResult.error || 'Email is required.' })
+    }
+
+    const email = emailResult.email.toLowerCase()
+    const purpose = req.body.purpose
+    if (!['registration', 'password_reset'].includes(purpose)) {
+      return res.status(400).json({ error: 'Invalid email verification purpose.' })
+    }
+
+    const key = emailOtpKey(purpose, email)
+    const lastSentAt = emailOtpSendTimes.get(key) || 0
+    const retryAfterSeconds = Math.ceil(
+      (lastSentAt + EMAIL_OTP_RESEND_DELAY_MS - Date.now()) / 1000
+    )
+    if (retryAfterSeconds > 0) {
+      return res.status(429).json({
+        error: `Please wait ${retryAfterSeconds} seconds before requesting another code.`
+      })
+    }
+
+    try {
+      const account = purpose === 'password_reset'
+        ? await findAccountByEmail(email)
+        : true
+
+      if (purpose === 'password_reset' && !account) {
+        emailOtpSendTimes.set(key, Date.now())
+        return res.json({
+          success: true,
+          message: 'If an account uses that email, a verification code will be sent.'
+        })
+      }
+
+      const smtp = createSmtpTransporter()
+      if (smtp.error) {
+        return res.status(503).json({ error: smtp.error })
+      }
+
+      const code = String(crypto.randomInt(100000, 1000000))
+      await smtp.transporter.sendMail({
+        from: smtp.from,
+        to: email,
+        subject: purpose === 'registration'
+          ? 'BuildTrack email verification code'
+          : 'BuildTrack password reset code',
+        text: `Your BuildTrack verification code is ${code}. It expires in 5 minutes. Do not share this code with anyone.`,
+        html: `<p>Your BuildTrack verification code is:</p><p style="font-size:24px;font-weight:bold;letter-spacing:6px">${code}</p><p>This code expires in 5 minutes. Do not share it with anyone.</p>`
+      })
+
+      emailOtpChallenges.set(key, {
+        codeHash: crypto.createHash('sha256').update(code).digest('hex'),
+        attempts: 0,
+        expiresAt: Date.now() + EMAIL_OTP_LIFETIME_MS
+      })
+      emailOtpSendTimes.set(key, Date.now())
+      return res.json({
+        success: true,
+        message: 'If an account uses that email, a verification code will be sent.'
+      })
+    } catch (error) {
+      console.error('Failed to send email OTP:', error.message)
+      return res.status(502).json({ error: 'Unable to send email OTP. Check SMTP configuration and try again.' })
+    }
+  })
+
+  app.post('/api/email-otp/verify', (req, res) => {
+    const emailResult = validateWorkerEmail(req.body.email)
+    if (emailResult.error || !emailResult.email) {
+      return res.status(400).json({ error: emailResult.error || 'Email is required.' })
+    }
+
+    const { purpose, code } = req.body
+    if (!['registration', 'password_reset'].includes(purpose) ||
+        typeof code !== 'string' || !/^\d{6}$/.test(code)) {
+      return res.status(400).json({ error: 'Enter the valid 6-digit verification code.' })
+    }
+
+    const email = emailResult.email.toLowerCase()
+    const key = emailOtpKey(purpose, email)
+    const challenge = emailOtpChallenges.get(key)
+    if (!challenge || challenge.expiresAt <= Date.now()) {
+      emailOtpChallenges.delete(key)
+      return res.status(400).json({ error: 'Verification code is invalid or expired.' })
+    }
+
+    if (challenge.attempts >= EMAIL_OTP_MAX_ATTEMPTS) {
+      emailOtpChallenges.delete(key)
+      return res.status(429).json({ error: 'Too many attempts. Request a new code.' })
+    }
+    challenge.attempts += 1
+    const codeHash = crypto.createHash('sha256').update(code).digest('hex')
+    if (!crypto.timingSafeEqual(
+      Buffer.from(challenge.codeHash, 'hex'),
+      Buffer.from(codeHash, 'hex')
+    )) {
+      if (challenge.attempts >= EMAIL_OTP_MAX_ATTEMPTS) {
+        emailOtpChallenges.delete(key)
+      }
+      return res.status(400).json({ error: 'Verification code is invalid or expired.' })
+    }
+
+    emailOtpChallenges.delete(key)
+    const verificationToken = crypto.randomBytes(32).toString('hex')
+    emailVerificationTokens.set(verificationToken, {
+      purpose,
+      email,
+      expiresAt: Date.now() + 10 * 60 * 1000
+    })
+    return res.json({ success: true, verificationToken })
+  })
+
+  app.post('/api/password/reset/email', async (req, res) => {
+    const { verificationToken, newPassword } = req.body
+    if (typeof newPassword !== 'string' ||
+        newPassword.length < 8 ||
+        newPassword.length > 20 ||
+        !/[A-Z]/.test(newPassword) ||
+        !/[a-z]/.test(newPassword) ||
+        !/[0-9]/.test(newPassword)) {
+      return res.status(400).json({
+        error: 'Password must be 8 to 20 characters and include uppercase, lowercase, and a number.'
+      })
+    }
+
+    const tokenRecord = emailVerificationTokens.get(verificationToken)
+    if (!tokenRecord || tokenRecord.purpose !== 'password_reset' ||
+        tokenRecord.expiresAt <= Date.now()) {
+      emailVerificationTokens.delete(verificationToken)
+      return res.status(400).json({ error: 'Email verification has expired. Request a new code.' })
+    }
+    emailVerificationTokens.delete(verificationToken)
+
+    try {
+      const account = await findAccountByEmail(tokenRecord.email)
+      if (!account) {
+        return res.status(400).json({ error: 'The account could not be found.' })
+      }
+      const hashedPassword = await bcrypt.hash(newPassword, 10)
+      await db.collection(account.collectionName).doc(account.doc.id)
+        .update({ password: hashedPassword })
+      return res.json({ success: true, message: 'Password updated successfully.' })
+    } catch (error) {
+      console.error('Failed to reset password with email OTP:', error.message)
+      return res.status(500).json({ error: 'Unable to update password. Please try again.' })
+    }
+  })
+
   app.post('/api/register', async (req, res) => {
-    const { firstName, middleName, lastName, username, birthday, age, phone, address, address_obj, role, position, password } = req.body
+    const { firstName, middleName, lastName, username, birthday, age, phone, email, email_verification_token, profile_photo, address, address_obj, role, position, password } = req.body
+    const emailResult = validateWorkerEmail(email)
+    if (emailResult.error) {
+      return res.status(400).json({ error: emailResult.error })
+    }
+    if (email_verification_token &&
+        !consumeEmailVerificationToken(
+          email_verification_token,
+          'registration',
+          emailResult.email
+        )) {
+      return res.status(400).json({ error: 'Email verification is invalid or expired.' })
+    }
+    const emailVerified = Boolean(email_verification_token && emailResult.email)
+    const photoResult = validateWorkerPhoto(profile_photo)
+    if (photoResult.error) {
+      return res.status(400).json({ error: photoResult.error })
+    }
 
     try {
       const fullName = `${firstName}${middleName ? ' ' + middleName : ''} ${lastName}`.trim()
@@ -4504,7 +4927,7 @@ function startServer() {
       await ensureWorkerCodes()
       const newWorker = {
         first_name: firstName, middle_name: middleName || null, last_name: lastName, full_name: fullName, username: username ? String(username).trim() : null,
-        birthday, age, phone, address, address_obj: address_obj || null, role, position: position || null, password: hashedPassword,
+        birthday, age, phone, email: emailResult.email, email_verified: emailVerified, profile_photo: photoResult.photo, address, address_obj: address_obj || null, role, position: position || null, password: hashedPassword,
         daily_rate: 600, worker_code: await createWorkerCode(workerRegistrationYear(new Date())),
         approval_status: 'Pending', status: 'Active',
         created_at: FieldValue.serverTimestamp()

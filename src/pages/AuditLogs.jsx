@@ -1,9 +1,13 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import AdminLayout from '../components/AdminLayout';
 import { api } from '../api';
+import Pagination from '../components/Pagination';
 
 export default function AuditLogs() {
   const [logs, setLogs] = useState([]);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [totalLogs, setTotalLogs] = useState(0);
   const [stats, setStats] = useState({ total: 0, todayCount: 0, authCount: 0, financialCount: 0, workforceCount: 0 });
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -14,101 +18,103 @@ export default function AuditLogs() {
   const [customEndDate, setCustomEndDate] = useState('');
   const [selectedLog, setSelectedLog] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const fetchSequence = useRef(0);
 
   // Fetch audit logs and statistics
-  const fetchAuditData = async () => {
+  const getAuditFilters = useCallback(() => {
+    const params = new URLSearchParams({
+      module: selectedModule,
+      status: selectedStatus,
+      search: searchTerm.trim()
+    });
+    const now = new Date();
+    const formatLocalDate = (date) => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+    if (dateFilter === 'Today') {
+      params.set('startDate', formatLocalDate(now));
+    } else if (dateFilter === 'Yesterday') {
+      const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+      params.set('startDate', formatLocalDate(yesterday));
+      params.set('endDate', formatLocalDate(yesterday));
+    } else if (dateFilter === 'Last7Days') {
+      const start = new Date(now);
+      start.setDate(start.getDate() - 7);
+      params.set('startDate', formatLocalDate(start));
+    } else if (dateFilter === 'Last30Days') {
+      const start = new Date(now);
+      start.setDate(start.getDate() - 30);
+      params.set('startDate', formatLocalDate(start));
+    } else if (dateFilter === 'Custom') {
+      if (customStartDate) params.set('startDate', customStartDate);
+      if (customEndDate) params.set('endDate', customEndDate);
+    }
+    return params;
+  }, [selectedModule, selectedStatus, searchTerm, dateFilter, customStartDate, customEndDate]);
+
+  const fetchAuditData = useCallback(async (targetPage = page, targetPageSize = pageSize) => {
+    const sequence = ++fetchSequence.current;
     setIsRefreshing(true);
     try {
+      const filters = getAuditFilters();
+      filters.set('page', String(targetPage));
+      filters.set('pageSize', String(targetPageSize));
       const [logsData, statsData] = await Promise.all([
-        api.get('/audit-logs?limit=300').catch(() => []),
+        api.get(`/audit-logs?${filters.toString()}`).catch(() => ({ items: [], total: 0 })),
         api.get('/audit-logs/stats').catch(() => ({ total: 0, todayCount: 0, authCount: 0, financialCount: 0, workforceCount: 0 }))
       ]);
 
-      if (Array.isArray(logsData)) {
-        setLogs(logsData);
-      }
+      if (sequence !== fetchSequence.current) return;
+      setLogs(Array.isArray(logsData.items) ? logsData.items : []);
+      setTotalLogs(Number(logsData.total) || 0);
       if (statsData && !statsData.error) {
         setStats(statsData);
       }
     } catch (err) {
       console.error('Failed to load audit logs:', err);
     } finally {
-      setLoading(false);
-      setIsRefreshing(false);
+      if (sequence === fetchSequence.current) {
+        setLoading(false);
+        setIsRefreshing(false);
+      }
     }
-  };
+  }, [getAuditFilters, page, pageSize]);
 
   useEffect(() => {
-    fetchAuditData();
-  }, []);
+    fetchAuditData(page, pageSize);
+  }, [fetchAuditData, page, pageSize]);
 
-  // Filter logs based on search, module, status, and date range
-  const filteredLogs = useMemo(() => {
-    return logs.filter((log) => {
-      // Module filter
-      if (selectedModule !== 'All' && String(log.module || '').toLowerCase() !== selectedModule.toLowerCase()) {
-        return false;
-      }
-
-      // Status filter
-      if (selectedStatus !== 'All' && String(log.status || '').toUpperCase() !== selectedStatus.toUpperCase()) {
-        return false;
-      }
-
-      // Date Range filter
-      const logTime = log.timestamp || 0;
-      const now = new Date();
-      if (dateFilter === 'Today') {
-        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-        if (logTime < startOfToday) return false;
-      } else if (dateFilter === 'Yesterday') {
-        const startOfYesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1).getTime();
-        const endOfYesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-        if (logTime < startOfYesterday || logTime >= endOfYesterday) return false;
-      } else if (dateFilter === 'Last7Days') {
-        const sevenDaysAgo = now.getTime() - (7 * 24 * 60 * 60 * 1000);
-        if (logTime < sevenDaysAgo) return false;
-      } else if (dateFilter === 'Last30Days') {
-        const thirtyDaysAgo = now.getTime() - (30 * 24 * 60 * 60 * 1000);
-        if (logTime < thirtyDaysAgo) return false;
-      } else if (dateFilter === 'Custom') {
-        if (customStartDate) {
-          const startMs = new Date(customStartDate).setHours(0, 0, 0, 0);
-          if (logTime < startMs) return false;
-        }
-        if (customEndDate) {
-          const endMs = new Date(customEndDate).setHours(23, 59, 59, 999);
-          if (logTime > endMs) return false;
-        }
-      }
-
-      // Search keyword filter
-      if (searchTerm.trim()) {
-        const q = searchTerm.toLowerCase().trim();
-        const matches =
-          (log.description || '').toLowerCase().includes(q) ||
-          (log.actor_name || '').toLowerCase().includes(q) ||
-          (log.actor_role || '').toLowerCase().includes(q) ||
-          (log.action || '').toLowerCase().includes(q) ||
-          (log.target_name || '').toLowerCase().includes(q) ||
-          (log.module || '').toLowerCase().includes(q) ||
-          (log.ip_address || '').toLowerCase().includes(q);
-        if (!matches) return false;
-      }
-
-      return true;
-    });
-  }, [logs, selectedModule, selectedStatus, dateFilter, customStartDate, customEndDate, searchTerm]);
+  const logPagination = {
+    page,
+    pageSize,
+    total: totalLogs,
+    pageCount: Math.max(1, Math.ceil(totalLogs / pageSize)),
+    setPage,
+    setPageSize: (size) => setPageSize(Number(size))
+  };
 
   // Export filtered logs to CSV
-  const handleExportCSV = () => {
-    if (filteredLogs.length === 0) {
+  const handleExportCSV = async () => {
+    const filters = getAuditFilters();
+    filters.set('export', 'true');
+    let exportLogs;
+    try {
+      exportLogs = await api.get(`/audit-logs?${filters.toString()}`);
+    } catch (error) {
+      console.error('Failed to export audit logs:', error);
+      alert('Failed to export audit logs. Please try again.');
+      return;
+    }
+    if (!Array.isArray(exportLogs) || exportLogs.length === 0) {
       alert('No logs available to export based on current filter.');
       return;
     }
 
     const headers = ['Log ID', 'Date', 'Time', 'Actor Name', 'Actor Role', 'Module', 'Action', 'Description', 'Status', 'IP Address', 'User Agent'];
-    const rows = filteredLogs.map(log => [
+    const rows = exportLogs.map(log => [
       `"${log.id || ''}"`,
       `"${log.date || ''}"`,
       `"${log.time || ''}"`,
@@ -135,7 +141,7 @@ export default function AuditLogs() {
     api.post('/audit-logs', {
       action: 'AUDIT_LOGS_EXPORTED',
       module: 'Authentication',
-      description: `Admin exported ${filteredLogs.length} audit records to CSV file.`,
+      description: `Admin exported ${exportLogs.length} audit records to CSV file.`,
       status: 'SUCCESS'
     }).catch(() => {});
   };
@@ -300,7 +306,7 @@ export default function AuditLogs() {
               type="text"
               placeholder="Maghanap ayon sa user, action, module, detalye, o IP..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => { setPage(1); setSearchTerm(e.target.value); }}
               className="w-full bg-[#f4f1ee] border border-transparent rounded-lg pl-8 pr-7 py-2 text-xs font-medium focus:border-[#A63228] outline-none text-gray-800 placeholder-gray-400"
             />
             <svg className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -308,7 +314,7 @@ export default function AuditLogs() {
             </svg>
             {searchTerm && (
               <button
-                onClick={() => setSearchTerm('')}
+                onClick={() => { setPage(1); setSearchTerm(''); }}
                 className="absolute right-2.5 top-2 text-gray-400 hover:text-gray-600 text-xs font-bold"
               >
                 ✕
@@ -320,7 +326,7 @@ export default function AuditLogs() {
           <div className="md:col-span-3">
             <select
               value={selectedModule}
-              onChange={(e) => setSelectedModule(e.target.value)}
+              onChange={(e) => { setPage(1); setSelectedModule(e.target.value); }}
               className="w-full bg-[#f4f1ee] border border-transparent rounded-lg px-2.5 py-2 text-xs font-bold text-gray-700 outline-none focus:border-[#A63228]"
             >
               <option value="All">All Modules</option>
@@ -340,7 +346,7 @@ export default function AuditLogs() {
           <div className="md:col-span-2">
             <select
               value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value)}
+              onChange={(e) => { setPage(1); setSelectedStatus(e.target.value); }}
               className="w-full bg-[#f4f1ee] border border-transparent rounded-lg px-2.5 py-2 text-xs font-bold text-gray-700 outline-none focus:border-[#A63228]"
             >
               <option value="All">All Statuses</option>
@@ -353,7 +359,7 @@ export default function AuditLogs() {
           <div className="md:col-span-3">
             <select
               value={dateFilter}
-              onChange={(e) => setDateFilter(e.target.value)}
+              onChange={(e) => { setPage(1); setDateFilter(e.target.value); }}
               className="w-full bg-[#f4f1ee] border border-transparent rounded-lg px-2.5 py-2 text-xs font-bold text-gray-700 outline-none focus:border-[#A63228]"
             >
               <option value="All">All Time</option>
@@ -374,7 +380,7 @@ export default function AuditLogs() {
               <input
                 type="date"
                 value={customStartDate}
-                onChange={(e) => setCustomStartDate(e.target.value)}
+                onChange={(e) => { setPage(1); setCustomStartDate(e.target.value); }}
                 className="w-full bg-[#f4f1ee] border border-transparent rounded-lg px-2.5 py-1.5 text-xs font-medium focus:border-[#A63228] outline-none text-gray-800"
               />
             </div>
@@ -383,7 +389,7 @@ export default function AuditLogs() {
               <input
                 type="date"
                 value={customEndDate}
-                onChange={(e) => setCustomEndDate(e.target.value)}
+                onChange={(e) => { setPage(1); setCustomEndDate(e.target.value); }}
                 className="w-full bg-[#f4f1ee] border border-transparent rounded-lg px-2.5 py-1.5 text-xs font-medium focus:border-[#A63228] outline-none text-gray-800"
               />
             </div>
@@ -397,7 +403,7 @@ export default function AuditLogs() {
           <div className="flex items-center gap-2">
             <h3 className="text-[10px] font-extrabold text-gray-900 tracking-wider uppercase">ACTIVITY AUDIT TRAIL</h3>
             <span className="text-[9px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
-              {filteredLogs.length} Records
+              {totalLogs} Records
             </span>
           </div>
           <span className="text-[8px] text-gray-400 font-bold uppercase tracking-widest hidden sm:inline">
@@ -427,8 +433,8 @@ export default function AuditLogs() {
                     </div>
                   </td>
                 </tr>
-              ) : filteredLogs.length > 0 ? (
-                filteredLogs.map((log) => {
+              ) : logs.length > 0 ? (
+                logs.map((log) => {
                   const initial = (log.actor_name || 'AD').trim().charAt(0).toUpperCase();
                   const isSuccess = (log.status || 'SUCCESS').toUpperCase() === 'SUCCESS';
 
@@ -521,6 +527,7 @@ export default function AuditLogs() {
               )}
             </tbody>
           </table>
+          <Pagination {...logPagination} />
         </div>
       </div>
 
@@ -621,4 +628,3 @@ export default function AuditLogs() {
     </AdminLayout>
   );
 }
-

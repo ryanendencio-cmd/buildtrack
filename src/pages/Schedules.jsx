@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import AdminLayout from '../components/AdminLayout'
 import { api } from '../api'
+import Pagination from '../components/Pagination'
+import { usePagination } from '../components/usePagination'
 
 const blank = (dateStr) => ({
   project_id: '',
@@ -129,6 +131,8 @@ export default function Schedules() {
     Object.values(map).forEach(arr => arr.sort((a, b) => (a.title || '').localeCompare(b.title || '')))
     return map
   }, [items, categoryFilter])
+  const dayItems = itemsByDate[dayModal] || []
+  const dayPagination = usePagination(dayItems, `${dayModal || ''}|${categoryFilter}`)
 
   // Build weeks: each row is an array of 7 Date|null cells (Sun..Sat)
   const weeks = useMemo(() => {
@@ -296,7 +300,7 @@ export default function Schedules() {
               <button onClick={() => setDayModal(null)} className="text-gray-400 hover:text-gray-700 text-sm font-bold">✕</button>
             </div>
             <div className="flex flex-col gap-2 max-h-80 overflow-y-auto">
-              {(itemsByDate[dayModal] || []).map(it => (
+              {dayPagination.pageItems.map(it => (
                 <div
                   key={it.id}
                   className="p-2.5 rounded-lg border border-gray-100 hover:bg-gray-50 flex justify-between items-start gap-2 bg-[#f9fafb]"
@@ -320,6 +324,7 @@ export default function Schedules() {
                 </div>
               ))}
             </div>
+            <Pagination {...dayPagination} />
             <button
               onClick={() => { setDayModal(null); show(null, dayModal) }}
               className="mt-3 w-full bg-[#E8C547] text-gray-900 py-1.5 rounded-lg text-[10px] font-bold hover:bg-[#d4b33d]"

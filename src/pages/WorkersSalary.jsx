@@ -2,6 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import AdminLayout from '../components/AdminLayout';
 import { api } from '../api';
+import Pagination from '../components/Pagination';
+import { usePagination } from '../components/usePagination';
 
 export default function WorkersSalary() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -171,6 +173,10 @@ export default function WorkersSalary() {
       (w.role || '').toLowerCase().includes(q)
     );
   }, [payrollData.workers, searchWorker]);
+  const payrollPagination = usePagination(filteredWorkers, `${searchWorker}|${startDate}|${endDate}|${selectedProject}`);
+  const payrollHistoryPagination = usePagination(pastPayrolls, activeTab);
+  const workerLogPagination = usePagination(selectedWorkerModal?.daily_logs || [], selectedWorkerModal?.worker_id || '');
+  const workerAdvancePagination = usePagination(selectedWorkerModal?.cash_advances || [], selectedWorkerModal?.worker_id || '');
 
   // Save Payroll (Draft or Released)
   const handleSavePayroll = async (status = 'Draft') => {
@@ -682,7 +688,7 @@ export default function WorkersSalary() {
                       </td>
                     </tr>
                   ) : filteredWorkers.length > 0 ? (
-                    filteredWorkers.map(w => (
+                    payrollPagination.pageItems.map(w => (
                       <tr key={w.worker_id} className="hover:bg-gray-50/50 transition-colors">
                         {/* Worker Name & Role */}
                         <td className="py-2.5 px-3">
@@ -802,6 +808,7 @@ export default function WorkersSalary() {
                   )}
                 </tbody>
               </table>
+              <Pagination {...payrollPagination} />
             </div>
 
             {/* ── PRINT-ONLY SIGNATURE SECTION ── */}
@@ -849,7 +856,7 @@ export default function WorkersSalary() {
               </thead>
               <tbody className="divide-y divide-gray-50 text-[10px]">
                 {pastPayrolls.length > 0 ? (
-                  pastPayrolls.map(p => (
+                  payrollHistoryPagination.pageItems.map(p => (
                     <tr key={p.id} className="hover:bg-gray-50/50 transition-colors">
                       <td className="py-2.5 px-3 font-extrabold text-gray-900">
                         {p.cutoff_start} → {p.cutoff_end}
@@ -906,6 +913,7 @@ export default function WorkersSalary() {
                 )}
               </tbody>
             </table>
+            <Pagination {...payrollHistoryPagination} />
           </div>
         </div>
       )}
@@ -979,7 +987,7 @@ export default function WorkersSalary() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 text-[9px]">
-                      {selectedWorkerModal.daily_logs?.map(log => (
+                      {workerLogPagination.pageItems.map(log => (
                         <tr key={log.date} className="hover:bg-gray-50/50">
                           <td className="py-1.5 px-2 font-bold text-gray-900">{log.date}</td>
                           <td className="py-1.5 px-2 text-center text-gray-600 font-mono">
@@ -1018,6 +1026,7 @@ export default function WorkersSalary() {
                       ))}
                     </tbody>
                   </table>
+                  <Pagination {...workerLogPagination} />
                 </div>
               </div>
 
@@ -1028,7 +1037,7 @@ export default function WorkersSalary() {
                     Deductions: Approved Cash Advances
                   </h4>
                   <div className="border border-rose-100 bg-rose-50/30 rounded-lg p-2 space-y-1">
-                    {selectedWorkerModal.cash_advances.map(ca => (
+                    {workerAdvancePagination.pageItems.map(ca => (
                       <div key={ca.id} className="flex justify-between items-center text-[9px]">
                         <span className="font-bold text-gray-800">
                           {ca.date} — {ca.reason}
@@ -1039,6 +1048,7 @@ export default function WorkersSalary() {
                       </div>
                     ))}
                   </div>
+                  <Pagination {...workerAdvancePagination} />
                 </div>
               )}
 

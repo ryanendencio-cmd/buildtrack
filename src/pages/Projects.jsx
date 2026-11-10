@@ -5,6 +5,8 @@ import { api } from '../api'
 import PhilippineAddressSelector from '../components/PhilippineAddressSelector'
 import { parseLocationToAddress } from '../services/psgc'
 import AddBudgetModal from '../components/AddBudgetModal'
+import Pagination from '../components/Pagination'
+import { usePagination } from '../components/usePagination'
 
 const isOngoingStatus = (statusStr) => {
     const s = (statusStr || '').toUpperCase();
@@ -324,6 +326,7 @@ export default function Projects() {
 
         return matchSearch && matchStatus;
     });
+    const projectPagination = usePagination(filteredProjects, `${searchTerm}|${statusFilter}`);
 
     const ongoingCount = projects.filter(p => isOngoingStatus(p.status)).length;
     const upcomingCount = projects.filter(p => isUpcomingStatus(p.status)).length;
@@ -432,7 +435,7 @@ export default function Projects() {
 
             <div className="bg-gray-50 rounded-b-xl shadow-sm border border-gray-100 p-4 mb-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {filteredProjects.length > 0 ? filteredProjects.map(proj => (
+                    {filteredProjects.length > 0 ? projectPagination.pageItems.map(proj => (
                         <div key={proj.id} className="bg-white rounded-xl border border-gray-200 shadow-sm p-3 flex flex-col hover:border-[#A63228] transition-colors">
                             <h3 className="text-[10px] font-extrabold text-gray-900 mb-1 leading-snug">{proj.name}</h3>
                             <p className="text-[8px] text-gray-500 mb-2 flex items-start gap-1 leading-normal">
@@ -468,6 +471,7 @@ export default function Projects() {
                                     View Dashboard →
                                 </Link>
                             </div>
+                            <Pagination {...projectPagination} />
                         </div>
                     )) : (
                         <div className="col-span-full py-10 text-center text-xs text-gray-400 italic">No projects found matching your filter.</div>

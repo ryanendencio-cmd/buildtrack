@@ -5,6 +5,8 @@ import PhilippineAddressSelector from '../components/PhilippineAddressSelector'
 import { parseLocationToAddress } from '../services/psgc'
 import { api } from '../api'
 import { QRCodeSVG } from 'qrcode.react'
+import Pagination from '../components/Pagination'
+import { usePagination } from '../components/usePagination'
 
 const POSITION_OPTIONS = [
     'Worker',
@@ -457,6 +459,8 @@ export default function Workers() {
         const matchesStatus = statusFilter === 'All' || w.status === statusFilter;
         return matchesSearch && matchesStatus;
     });
+    const workerPagination = usePagination(filteredWorkers, `${searchTerm}|${statusFilter}`);
+    const pendingPagination = usePagination(pendingWorkers, activeTab);
 
     const activeCount = approvedWorkers.filter(w => w.status === 'Active').length;
     const inactiveCount = approvedWorkers.filter(w => w.status === 'Inactive').length;
@@ -565,7 +569,7 @@ export default function Workers() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {filteredWorkers.length > 0 ? filteredWorkers.map((worker) => (
+                                {filteredWorkers.length > 0 ? workerPagination.pageItems.map((worker) => (
                                     <tr 
                                         key={worker.id} 
                                         onClick={() => setViewWorker(worker)}
@@ -646,6 +650,7 @@ export default function Workers() {
                                 )}
                             </tbody>
                         </table>
+                        <Pagination {...workerPagination} />
                     </div>
                 </>
             )}
@@ -667,7 +672,7 @@ export default function Workers() {
                             </tr>
                         </thead>
                         <tbody>
-                            {pendingWorkers.length > 0 ? pendingWorkers.map((worker) => (
+                            {pendingWorkers.length > 0 ? pendingPagination.pageItems.map((worker) => (
                                 <tr 
                                     key={worker.id} 
                                     onClick={() => setViewWorker(worker)} 
@@ -740,6 +745,7 @@ export default function Workers() {
                             )}
                         </tbody>
                     </table>
+                    <Pagination {...pendingPagination} />
                 </div>
             )}
 

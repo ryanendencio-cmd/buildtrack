@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { api } from '../api'
+import Pagination from '../components/Pagination'
+import { usePagination } from '../components/usePagination'
 
 export default function Reports() {
     const [selectedMonth, setSelectedMonth] = useState(() => {
@@ -140,6 +142,7 @@ export default function Reports() {
     const kpis = getKpis();
     const headers = getHeaders();
     const rows = getRows();
+    const reportPagination = usePagination(rows, `${reportType}|${selectedProject}|${selectedMonth}`);
 
     return (
         <AdminLayout>
@@ -250,7 +253,7 @@ export default function Reports() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {rows.length > 0 ? rows.map(row => (
+                                    {rows.length > 0 ? reportPagination.pageItems.map(row => (
                                         <tr key={row.id}>
                                             {row.cols.map((col, ci) => (
                                                 <td key={ci} className={`py-2.5 text-[10px] border-b border-gray-50 ${ci === row.cols.length - 1 ? 'text-right pr-2 font-extrabold' : 'font-medium text-gray-700'} ${getStatusColor(col)}`}>
@@ -264,6 +267,7 @@ export default function Reports() {
                                 </tbody>
                             </table>
                         )}
+                        {!loading && <Pagination {...reportPagination} />}
                     </div>
                 </div>
             )}

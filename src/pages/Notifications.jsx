@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { useNotifications } from '../context/useNotifications'
 import { api } from '../api'
+import Pagination from '../components/Pagination'
+import { usePagination } from '../components/usePagination'
 
 // Helper to resolve the specific module & destination URL for any notification
 export const resolveNotificationDestination = (notif) => {
@@ -153,6 +155,7 @@ export default function Notifications() {
     const [announcementSeverity, setAnnouncementSeverity] = useState('Medium');
     const [isPostingAnnouncement, setIsPostingAnnouncement] = useState(false);
     const [announcementError, setAnnouncementError] = useState('');
+    const [notificationActionError, setNotificationActionError] = useState('');
     const { notifications, markAsRead, markAllAsRead, unreadCount, refreshNotifications } = useNotifications();
 
     const filteredNotifs = notifications.filter(n => {
@@ -172,6 +175,7 @@ export default function Notifications() {
         const timeB = b.timestamp || new Date(b.date || 0).getTime() || 0;
         return sortOrder === 'Newest First' ? timeB - timeA : timeA - timeB;
     });
+    const notificationPagination = usePagination(filteredNotifs, `${filter}|${sortOrder}`);
 
     const selectStyles = {
         backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3e%3cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3e%3c/svg%3e")`,
@@ -214,18 +218,18 @@ export default function Notifications() {
     };
 
     // Handle clicking Acknowledge or View: Marks as read if unread AND navigates directly to target
-    const handleAcknowledgeAndNavigate = (notif) => {
+    const handleAcknowledgeAndNavigate = async (notif) => {
         if (!notif.read) {
-            markAsRead(notif.id);
+            try {
+                setNotificationActionError('');
+                await markAsRead(notif.id);
+            } catch (error) {
+                setNotificationActionError(error.message || 'Unable to mark notification as read.');
+                return;
+            }
         }
         const dest = resolveNotificationDestination(notif);
         navigate(dest.path);
-    };
-
-    // Acknowledge without leaving page
-    const handleAcknowledgeOnly = (e, notifId) => {
-        e.stopPropagation();
-        markAsRead(notifId);
     };
 
     return (
@@ -258,7 +262,14 @@ export default function Notifications() {
                     </button>
                     <button
                         type="button"
-                        onClick={markAllAsRead}
+                        onClick={async () => {
+                            setNotificationActionError('');
+                            try {
+                                await markAllAsRead();
+                            } catch (error) {
+                                setNotificationActionError(error.message || 'Unable to mark notifications as read.');
+                            }
+                        }}
                         disabled={unreadCount === 0}
                         className={`px-4 py-2 rounded-lg font-bold text-[10px] shadow-xs transition-colors flex items-center justify-center gap-1.5 w-full md:w-auto cursor-pointer ${unreadCount > 0 ? 'bg-[#E8C547] text-gray-900 hover:bg-[#d4b33d]' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
                     >
@@ -266,6 +277,12 @@ export default function Notifications() {
                     </button>
                 </div>
             </div>
+
+            {notificationActionError && (
+                <p role="alert" className="text-[10px] text-red-700 mb-3">
+                    {notificationActionError}
+                </p>
+            )}
 
             {showAnnouncementForm && (
                 <form onSubmit={handlePostAnnouncement} className="bg-white rounded-xl border border-gray-100 shadow-xs p-3 mb-3">
@@ -353,7 +370,7 @@ export default function Notifications() {
             <div className="bg-white rounded-b-xl shadow-xs border border-gray-100 p-2.5 mb-6 min-h-[400px]">
                 {filteredNotifs.length > 0 ? (
                     <div className="flex flex-col gap-2">
-                        {filteredNotifs.map(notif => {
+                        {notificationPagination.pageItems.map(notif => {
                             const dest = resolveNotificationDestination(notif);
                             const isCashAdvance = (notif.title || '').includes('Cash Advance') || dest.module === 'Cash Advance Management';
 
@@ -443,6 +460,7 @@ export default function Notifications() {
                         <p className="text-[10px] text-gray-500">No active alerts for {filter !== 'All' ? `the "${filter}" category` : 'this category'}.</p>
                     </div>
                 )}
+                <Pagination {...notificationPagination} />
             </div>
         </AdminLayout>
     );

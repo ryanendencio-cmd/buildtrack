@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { api } from '../api'
 import { CONSTRUCTION_MATERIALS, getUnitsForMaterial, getDefaultUnitForMaterial, resolveStandardMaterial } from '../constants/materials'
+import Pagination from '../components/Pagination'
+import { usePagination } from '../components/usePagination'
 
 export default function Materials() {
     const { id } = useParams();
@@ -55,6 +57,7 @@ export default function Materials() {
     ];
 
     const displayedMaterials = combinedMaterials.filter(m => m.date === selectedDate);
+    const materialPagination = usePagination(displayedMaterials, `${currentProjectId}|${selectedDate}`);
 
     const [modalState, setModalState] = useState('NONE');
     const [logDate, setLogDate] = useState(selectedDate);
@@ -221,7 +224,7 @@ export default function Materials() {
                         </tr>
                     </thead>
                     <tbody>
-                        {displayedMaterials.length > 0 ? displayedMaterials.map((mat) => (
+                        {displayedMaterials.length > 0 ? materialPagination.pageItems.map((mat) => (
                             <tr key={mat.id} className="hover:bg-gray-50/30 transition-colors">
                                 <td className="py-2.5 pl-4 border-b border-gray-50">
                                     <p className="text-[10px] font-extrabold text-gray-900">{mat.name}</p>
@@ -249,6 +252,7 @@ export default function Materials() {
                         )}
                     </tbody>
                 </table>
+                <Pagination {...materialPagination} />
             </div>
 
             {modalState === 'ADD' && (

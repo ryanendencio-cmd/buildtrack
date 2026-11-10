@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { api } from '../api'
+import Pagination from '../components/Pagination'
+import { usePagination } from '../components/usePagination'
 
 const attendanceTimeFields = [
     { key: 'morning_time_in_start', label: 'Morning Time In Opens' },
@@ -333,6 +335,7 @@ export default function Attendance() {
     };
 
     const displayedWorkers = allWorkers.filter(w => w.date === selectedDate);
+    const attendancePagination = usePagination(displayedWorkers, `${id || ''}|${selectedDate}`);
     const isPastDate = selectedDate < todayISO;
 
     const [modalState, setModalState] = useState('NONE');
@@ -973,7 +976,7 @@ export default function Attendance() {
                         </tr>
                     </thead>
                     <tbody>
-                        {displayedWorkers.length > 0 ? displayedWorkers.map((worker) => {
+                        {displayedWorkers.length > 0 ? attendancePagination.pageItems.map((worker) => {
                             const earned = getWorkerWage(worker);
                             const mIn = worker.morningIn || worker.morning_in || '—';
                             const mOut = worker.morningOut || worker.morning_out || '—';
@@ -1075,6 +1078,7 @@ export default function Attendance() {
                         )}
                     </tbody>
                 </table>
+                <Pagination {...attendancePagination} />
             </div>
 
 

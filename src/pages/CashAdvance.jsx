@@ -2,6 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { api } from '../api'
+import Pagination from '../components/Pagination'
+import { usePagination } from '../components/usePagination'
 
 const ADVANCE_REASONS = [
     'Emergency / Medical Expenses',
@@ -406,6 +408,7 @@ export default function CashAdvance() {
 
     const validAdvances = Array.isArray(cashAdvances) ? cashAdvances : [];
     const displayedAdvances = validAdvances.filter(adv => !filterDate || normalizeDate(adv?.date) === filterDate);
+    const advancePagination = usePagination(displayedAdvances, `${id || ''}|${filterDate}`);
     const tableTotal = displayedAdvances.reduce((sum, item) => sum + Number(item?.amount || 0), 0);
 
     const selectStyles = {
@@ -609,7 +612,7 @@ export default function CashAdvance() {
                                     </td>
                                 </tr>
                             ) : (
-                                displayedAdvances.map((adv) => {
+                                advancePagination.pageItems.map((adv) => {
                                     const isApproved = adv.status === 'Approved';
                                     const isRejected = adv.status === 'Rejected';
                                     return (
@@ -684,6 +687,7 @@ export default function CashAdvance() {
                             )}
                         </tbody>
                     </table>
+                    <Pagination {...advancePagination} />
                 </div>
 
                 <div className="flex justify-between items-center mt-3 pt-2 border-t border-gray-100 text-[10px]">

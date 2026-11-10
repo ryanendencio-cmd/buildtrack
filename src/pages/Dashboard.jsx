@@ -2,6 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { api } from '../api'
+import Pagination from '../components/Pagination'
+import { usePagination } from '../components/usePagination'
 
 const isUpcomingStatus = (statusStr) => {
   const s = (statusStr || '').toUpperCase();
@@ -118,6 +120,8 @@ export default function Dashboard() {
     if (activityFilter === 'MATERIAL') return scopedRecentActivities.filter(e => e.type === 'material');
     return scopedRecentActivities;
   }, [scopedRecentActivities, activityFilter]);
+  const projectListPagination = usePagination(projects, selectedProjectId);
+  const recentReceiptPagination = usePagination(scopedRecentActivities, selectedProjectId);
 
   const [isProjectPickerOpen, setIsProjectPickerOpen] = useState(false);
   const [projectSearchQuery, setProjectSearchQuery] = useState('');
@@ -1118,7 +1122,7 @@ export default function Dashboard() {
             <tbody>
               {projects.length === 0 ? (
                 <tr><td colSpan={3} className="py-4 text-center text-[10px] text-gray-400">No active projects.</td></tr>
-              ) : projects.map(p => {
+              ) : projectListPagination.pageItems.map(p => {
                 const isSelected = String(p.id) === String(selectedProjectId);
                 return (
                   <tr 
@@ -1147,6 +1151,7 @@ export default function Dashboard() {
               })}
             </tbody>
           </table>
+          <Pagination {...projectListPagination} />
         </div>
 
         {/* Recent Activity List: Expense Receipts */}
@@ -1165,12 +1170,12 @@ export default function Dashboard() {
             </div>
 
             {/* Scrollable Container with max height (prevents card from stretching the dashboard) */}
-            <div className="flex flex-col max-h-[170px] overflow-y-auto pr-1.5 scrollbar-custom divide-y divide-gray-50">
+            <div className="flex flex-col pr-1.5 divide-y divide-gray-50">
               {scopedRecentActivities.length === 0 ? (
                 <p className="text-[10px] text-gray-400 text-center py-6">
                   No expense receipts recorded yet.
                 </p>
-              ) : scopedRecentActivities.map((item, i) => (
+              ) : recentReceiptPagination.pageItems.map((item, i) => (
                 <div key={i} className="flex justify-between items-center py-1.5 hover:bg-gray-50/50 px-1 rounded transition-colors">
                   <div className="flex items-center gap-2 min-w-0 pr-2">
                     <span className="text-[7px] font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0 bg-red-50 text-[#A63228] border border-red-100">
@@ -1189,11 +1194,12 @@ export default function Dashboard() {
                 </div>
               ))}
             </div>
+            <Pagination {...recentReceiptPagination} />
           </div>
 
           {/* Quick Footer Links */}
           <div className="pt-2 border-t border-gray-100 flex justify-between items-center mt-1 text-[8.5px]">
-            <span className="text-gray-400 font-medium">Scroll to view more records</span>
+            <span className="text-gray-400 font-medium">Use pagination to view more records</span>
             <div className="flex items-center gap-2 font-bold">
               <Link to="/expenses" className="text-[#A63228] hover:underline">View All Expenses & Receipts →</Link>
             </div>

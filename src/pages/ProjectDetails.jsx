@@ -3,6 +3,8 @@ import { Link, useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { api } from '../api'
 import AddBudgetModal from '../components/AddBudgetModal'
+import Pagination from '../components/Pagination'
+import { usePagination } from '../components/usePagination'
 
 export default function ProjectDetails() {
     const { id } = useParams()
@@ -13,6 +15,7 @@ export default function ProjectDetails() {
     const [assets, setAssets] = useState([])
     const [additions, setAdditions] = useState([])
     const [loading, setLoading] = useState(true)
+    const additionsPagination = usePagination(additions, id)
 
     const [completeModal, setCompleteModal] = useState(false)
     const [successModal, setSuccessModal] = useState(false)
@@ -317,7 +320,7 @@ export default function ProjectDetails() {
                             </span>
                         </div>
                         <div className="flex flex-col gap-2 max-h-48 overflow-y-auto pr-1 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-gray-200 [&::-webkit-scrollbar-thumb]:rounded-full">
-                            {additions.map((entry) => (
+                            {additionsPagination.pageItems.map((entry) => (
                                 <div key={entry.id} className="flex justify-between items-center border-b border-gray-50 pb-2 hover:bg-gray-50/50 px-1 rounded transition-colors">
                                     <div className="flex flex-col">
                                         <strong className="text-[9.5px] text-gray-900 font-bold">{entry.note || 'Additional budget'}</strong>
@@ -327,6 +330,7 @@ export default function ProjectDetails() {
                                 </div>
                             ))}
                         </div>
+                        <Pagination {...additionsPagination} />
                     </div>
                 )}
             </div>
