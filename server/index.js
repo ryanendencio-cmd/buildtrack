@@ -2040,8 +2040,29 @@ function startServer() {
           return res.status(400).json({ error: result.error })
         }
         updateData.email = result.email
-        if ((result.email || '') !== (oldWorker.email || '')) {
-          updateData.email_verified = false
+        if ((result.email || '').toLowerCase() !== (oldWorker.email || '').toLowerCase()) {
+          if (result.email) {
+            const [existingWorkers, existingAdmins] = await Promise.all([
+              db.collection('workers').where('email', '==', result.email).get(),
+              db.collection('admins').where('email', '==', result.email).get()
+            ])
+            if (
+              existingWorkers.docs.some(doc => doc.id !== req.params.id) ||
+              !existingAdmins.empty
+            ) {
+              return res.status(409).json({ error: 'Email is already in use.' })
+            }
+            if (!consumeEmailVerificationToken(
+              req.body.email_verification_token,
+              'email_change',
+              result.email
+            )) {
+              return res.status(400).json({ error: 'Email verification is invalid or expired.' })
+            }
+            updateData.email_verified = true
+          } else {
+            updateData.email_verified = false
+          }
         }
       }
       if (has('profile_photo')) {
@@ -4759,7 +4780,7 @@ function startServer() {
 
     const email = emailResult.email.toLowerCase()
     const purpose = req.body.purpose
-    if (!['registration', 'password_reset'].includes(purpose)) {
+    if (!['registration', 'password_reset', 'email_change'].includes(purpose)) {
       return res.status(400).json({ error: 'Invalid email verification purpose.' })
     }
 
@@ -4798,7 +4819,9 @@ function startServer() {
         to: email,
         subject: purpose === 'registration'
           ? 'BuildTrack email verification code'
-          : 'BuildTrack password reset code',
+          : purpose === 'email_change'
+            ? 'BuildTrack email change verification code'
+            : 'BuildTrack password reset code',
         text: `Your BuildTrack verification code is ${code}. It expires in 5 minutes. Do not share this code with anyone.`,
         html: `<p>Your BuildTrack verification code is:</p><p style="font-size:24px;font-weight:bold;letter-spacing:6px">${code}</p><p>This code expires in 5 minutes. Do not share it with anyone.</p>`
       })
@@ -4826,7 +4849,7 @@ function startServer() {
     }
 
     const { purpose, code } = req.body
-    if (!['registration', 'password_reset'].includes(purpose) ||
+    if (!['registration', 'password_reset', 'email_change'].includes(purpose) ||
         typeof code !== 'string' || !/^\d{6}$/.test(code)) {
       return res.status(400).json({ error: 'Enter the valid 6-digit verification code.' })
     }
@@ -4907,15 +4930,17 @@ function startServer() {
     if (emailResult.error) {
       return res.status(400).json({ error: emailResult.error })
     }
-    if (email_verification_token &&
-        !consumeEmailVerificationToken(
-          email_verification_token,
-          'registration',
-          emailResult.email
-        )) {
+    if (!emailResult.email) {
+      return res.status(400).json({ error: 'Email is required.' })
+    }
+    if (!consumeEmailVerificationToken(
+      email_verification_token,
+      'registration',
+      emailResult.email
+    )) {
       return res.status(400).json({ error: 'Email verification is invalid or expired.' })
     }
-    const emailVerified = Boolean(email_verification_token && emailResult.email)
+    const emailVerified = true
     const photoResult = validateWorkerPhoto(profile_photo)
     if (photoResult.error) {
       return res.status(400).json({ error: photoResult.error })
@@ -5431,6 +5456,7 @@ function startServer() {
   app.post('/api/admin/profile/save', async (req, res) => {
     const {
       adminId, firstName, middleName, lastName, email, phone, homeAddress, addressObj,
+      email_verification_token,
       role, empId, dept, department, assignedProjectSite, terminalId, pushNotificationsEnabled, biometricLoginEnabled, status,
       username, birthday, age, password
     } = req.body
@@ -5448,6 +5474,11 @@ function startServer() {
         targetId = snapshot.docs[0].id
       }
 
+      const currentAdmin = await db.collection('admins').doc(targetId).get()
+      if (!currentAdmin.exists) {
+        return res.status(404).json({ error: 'Admin account not found.' })
+      }
+
       const updateData = {
         full_name: fullName,
         first_name: firstName || null,
@@ -5460,7 +5491,39 @@ function startServer() {
       }
 
       // Only update these if they are provided
-      if (email !== undefined) updateData.email = email || null
+      if (email !== undefined) {
+        const oldEmail = (currentAdmin.data().email || '').toString().trim()
+        const emailUnchanged =
+          typeof email === 'string' && email.trim().toLowerCase() === oldEmail.toLowerCase()
+        let normalizedEmail = emailUnchanged ? oldEmail || null : null
+        if (!emailUnchanged) {
+          const emailResult = validateWorkerEmail(email)
+          if (emailResult.error) {
+            return res.status(400).json({ error: emailResult.error })
+          }
+          normalizedEmail = emailResult.email
+          if (normalizedEmail) {
+            const [existingAdmins, existingWorkers] = await Promise.all([
+              db.collection('admins').where('email', '==', normalizedEmail).get(),
+              db.collection('workers').where('email', '==', normalizedEmail).get()
+            ])
+            if (
+              existingAdmins.docs.some(doc => doc.id !== targetId) ||
+              !existingWorkers.empty
+            ) {
+              return res.status(409).json({ error: 'Email is already in use.' })
+            }
+            if (!consumeEmailVerificationToken(
+              email_verification_token,
+              'email_change',
+              normalizedEmail
+            )) {
+              return res.status(400).json({ error: 'Email verification is invalid or expired.' })
+            }
+          }
+        }
+        updateData.email = normalizedEmail
+      }
       if (username !== undefined) {
         const cleanUsername = typeof username === 'string' ? username.trim() : ''
         if (!/^[a-z0-9]{8,20}$/.test(cleanUsername)) {
