@@ -28,10 +28,25 @@ const DELETE_SENTINEL = Symbol('DELETE_FIELD');
 function getFirestore() {
   try {
     if (!admin.getApps().length) {
-      const credentialsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
       const projectId = process.env.FIREBASE_PROJECT_ID || process.env.GCLOUD_PROJECT;
+      const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+      const credentialsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
 
-      if (projectId && credentialsPath) {
+      if (projectId && serviceAccountJson) {
+        // Railway / cloud: load credentials from env var JSON string
+        try {
+          const serviceAccount = JSON.parse(serviceAccountJson);
+          admin.initializeApp({
+            credential: admin.cert(serviceAccount),
+            projectId
+          });
+          console.log('Firebase initialized from FIREBASE_SERVICE_ACCOUNT_JSON env var.');
+        } catch (parseErr) {
+          console.warn('Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON:', parseErr.message);
+          admin.initializeApp({ projectId });
+        }
+      } else if (projectId && credentialsPath) {
+        // Local dev: load credentials from file path
         const resolvedPath = path.isAbsolute(credentialsPath)
           ? credentialsPath
           : path.resolve(__dirname, credentialsPath);

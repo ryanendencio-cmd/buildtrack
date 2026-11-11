@@ -313,6 +313,11 @@ async function resolveProjectId(pid) {
 
 function startServer() {
 
+  // ── HEALTH CHECK (for Railway deployment) ──
+  app.get('/api/health', (req, res) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() })
+  })
+
   app.get('/api/schedules', async (req, res) => {
     try {
       const snapshot = await db.collection('schedules').get()
