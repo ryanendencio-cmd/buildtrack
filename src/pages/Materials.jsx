@@ -174,7 +174,7 @@ export default function Materials() {
         <AdminLayout>
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-3 gap-2">
                 <div>
-                    <span className="text-[9px] font-bold text-[#A63228] tracking-widest uppercase">INVENTORY</span>
+                    <span className="text-[11px] font-bold text-[#A63228] tracking-widest uppercase">INVENTORY</span>
                     <h1 className="text-lg font-extrabold text-gray-900 mt-0.5 tracking-tight">Material Management</h1>
                     <p className="text-[10px] text-gray-500 mt-0.5">Track daily usage of construction consumables.</p>
                 </div>
@@ -185,28 +185,28 @@ export default function Materials() {
 
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-3 mb-3 flex flex-col sm:flex-row justify-between gap-3">
                 <div className="w-full sm:w-auto">
-                    <label className="block text-[8px] font-bold text-gray-400 tracking-wider uppercase mb-1">PROJECT</label>
+                    <label className="block text-[11px] font-bold text-gray-400 tracking-wider uppercase mb-1">PROJECT</label>
                     <select value={currentProjectId} onChange={handleProjectChange} className="bg-[#f4f1ee] border border-transparent rounded-lg pl-2.5 pr-6 py-1.5 text-[10px] font-extrabold text-gray-800 outline-none appearance-none w-full min-w-[260px]" style={selectStyles}>
                         {dropdownProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </select>
                 </div>
                 <div>
-                    <label className="block text-[8px] font-bold text-gray-400 tracking-wider uppercase mb-1">DATE USED</label>
+                    <label className="block text-[11px] font-bold text-gray-400 tracking-wider uppercase mb-1">DATE USED</label>
                     <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="bg-[#f4f1ee] px-2 py-1.5 rounded-lg text-[10px] font-bold text-[#A63228] outline-none w-full sm:w-auto" />
                 </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-3">
                 <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-center text-center">
-                    <p className="text-[9px] font-bold text-gray-400 tracking-wider uppercase mb-0.5">ITEMS LOGGED TODAY</p>
+                    <p className="text-[11px] font-bold text-gray-400 tracking-wider uppercase mb-0.5">ITEMS LOGGED TODAY</p>
                     <h2 className="text-lg font-extrabold text-gray-900">{totalItemsLogged}</h2>
                 </div>
                 <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-center text-center">
-                    <p className="text-[9px] font-bold text-[#A63228] tracking-wider uppercase mb-0.5">DAILY MATERIAL COST</p>
+                    <p className="text-[11px] font-bold text-[#A63228] tracking-wider uppercase mb-0.5">DAILY MATERIAL COST</p>
                     <h2 className="text-lg font-extrabold text-[#A63228]">₱{dailyCost.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h2>
                 </div>
                 <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-center text-center">
-                    <p className="text-[9px] font-bold text-[#2e7d32] tracking-wider uppercase mb-0.5">PROJECT TOTAL MAT. COST</p>
+                    <p className="text-[11px] font-bold text-[#2e7d32] tracking-wider uppercase mb-0.5">PROJECT TOTAL MAT. COST</p>
                     <h2 className="text-lg font-extrabold text-[#2e7d32]">₱{totalProjectCost.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h2>
                 </div>
             </div>
@@ -215,12 +215,12 @@ export default function Materials() {
                 <table className="w-full text-left border-collapse min-w-[700px]">
                     <thead>
                         <tr className="bg-gray-50/50">
-                            <th className="text-[8px] font-extrabold text-gray-500 border-y border-gray-100 py-2 pl-4 w-[30%] uppercase tracking-wider">MATERIAL NAME</th>
-                            <th className="text-[8px] font-extrabold text-gray-500 border-y border-gray-100 py-2 w-[15%] uppercase tracking-wider text-center">QTY USED</th>
-                            <th className="text-[8px] font-extrabold text-gray-500 border-y border-gray-100 py-2 w-[15%] uppercase tracking-wider text-center">UNIT</th>
-                            <th className="text-[8px] font-extrabold text-gray-500 border-y border-gray-100 py-2 w-[25%] uppercase tracking-wider">REMARKS</th>
-                            <th className="text-[8px] font-extrabold text-gray-500 border-y border-gray-100 py-2 w-[15%] uppercase tracking-wider text-right pr-4">EST. COST</th>
-                            <th className="text-[8px] font-extrabold text-gray-500 border-y border-gray-100 py-2 w-[5%] uppercase tracking-wider"></th>
+                            <th className="text-[11px] font-extrabold text-gray-500 border-y border-gray-100 py-2 pl-4 w-[30%] uppercase tracking-wider">MATERIAL NAME</th>
+                            <th className="text-[11px] font-extrabold text-gray-500 border-y border-gray-100 py-2 w-[15%] uppercase tracking-wider text-center">QTY USED</th>
+                            <th className="text-[11px] font-extrabold text-gray-500 border-y border-gray-100 py-2 w-[15%] uppercase tracking-wider text-center">UNIT</th>
+                            <th className="text-[11px] font-extrabold text-gray-500 border-y border-gray-100 py-2 w-[25%] uppercase tracking-wider">REMARKS</th>
+                            <th className="text-[11px] font-extrabold text-gray-500 border-y border-gray-100 py-2 w-[15%] uppercase tracking-wider text-right pr-4">EST. COST</th>
+                            <th className="text-[11px] font-extrabold text-gray-500 border-y border-gray-100 py-2 w-[5%] uppercase tracking-wider"></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -232,10 +232,10 @@ export default function Materials() {
                                 <td className="py-2.5 border-b border-gray-50 text-center">
                                     <span className="text-[10px] font-bold text-[#1a1a1a] bg-gray-100 px-2 py-0.5 rounded-sm">{mat.qty}</span>
                                 </td>
-                                <td className="py-2.5 border-b border-gray-50 text-[9px] font-bold text-gray-600 uppercase text-center">
+                                <td className="py-2.5 border-b border-gray-50 text-[11px] font-bold text-gray-600 uppercase text-center">
                                     {mat.unit}
                                 </td>
-                                <td className="py-2.5 border-b border-gray-50 text-[9px] text-gray-600 italic">
+                                <td className="py-2.5 border-b border-gray-50 text-[11px] text-gray-600 italic">
                                     {mat.remarks || '—'}
                                 </td>
                                 <td className="py-2.5 border-b border-gray-50 text-[10px] font-extrabold text-[#A63228] text-right pr-4">
@@ -289,7 +289,7 @@ export default function Materials() {
                         <form onSubmit={handleLogMaterial} className="flex flex-col flex-1 overflow-hidden">
                             <div className="p-5 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center gap-3">
                                 <div>
-                                    <label className="block text-[9px] font-bold text-gray-700 mb-1 uppercase tracking-wider">DATE USED</label>
+                                    <label className="block text-[11px] font-bold text-gray-700 mb-1 uppercase tracking-wider">DATE USED</label>
                                     <input
                                         type="date"
                                         value={logDate}
@@ -325,8 +325,8 @@ export default function Materials() {
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                                             <div>
                                                 <div className="flex justify-between items-center mb-1">
-                                                    <label className="block text-[9px] font-bold text-gray-600 uppercase">MATERIAL NAME</label>
-                                                    <span className="text-[9px] text-gray-400 font-medium">Search or type custom</span>
+                                                    <label className="block text-[11px] font-bold text-gray-600 uppercase">MATERIAL NAME</label>
+                                                    <span className="text-[11px] text-gray-400 font-medium">Search or type custom</span>
                                                 </div>
                                                 <input
                                                     type="text"
@@ -339,7 +339,7 @@ export default function Materials() {
                                                 />
                                                 {row.name === 'Other' && (
                                                     <div className="mt-1.5 p-2 bg-amber-50/70 border border-amber-200 rounded-lg">
-                                                        <label className="block text-[8px] font-bold text-amber-800 uppercase mb-0.5">
+                                                        <label className="block text-[11px] font-bold text-amber-800 uppercase mb-0.5">
                                                             ✏️ SPECIFY CUSTOM MATERIAL NAME
                                                         </label>
                                                         <input
@@ -356,7 +356,7 @@ export default function Materials() {
                                             </div>
                                             <div className="grid grid-cols-2 gap-2">
                                                 <div>
-                                                    <label className="block text-[9px] font-bold text-gray-600 mb-1 uppercase">QTY USED</label>
+                                                    <label className="block text-[11px] font-bold text-gray-600 mb-1 uppercase">QTY USED</label>
                                                     <input
                                                         type="number"
                                                         step="0.01"
@@ -369,7 +369,7 @@ export default function Materials() {
                                                     />
                                                 </div>
                                                 <div>
-                                                    <label className="block text-[9px] font-bold text-gray-600 mb-1 uppercase">UNIT</label>
+                                                    <label className="block text-[11px] font-bold text-gray-600 mb-1 uppercase">UNIT</label>
                                                     <select
                                                         value={row.unit || getDefaultUnitForMaterial(row.name === 'Other' ? row.customName : row.name)}
                                                         onChange={(e) => handleRowChange(idx, 'unit', e.target.value)}
@@ -387,7 +387,7 @@ export default function Materials() {
 
                                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                                             <div>
-                                                <label className="block text-[9px] font-bold text-gray-600 mb-1 uppercase">UNIT COST (₱)</label>
+                                                <label className="block text-[11px] font-bold text-gray-600 mb-1 uppercase">UNIT COST (₱)</label>
                                                 <input
                                                     type="number"
                                                     min="0"
@@ -399,7 +399,7 @@ export default function Materials() {
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-[9px] font-bold text-gray-600 mb-1 uppercase">SUBTOTAL (₱)</label>
+                                                <label className="block text-[11px] font-bold text-gray-600 mb-1 uppercase">SUBTOTAL (₱)</label>
                                                 <input
                                                     type="text"
                                                     disabled
@@ -408,7 +408,7 @@ export default function Materials() {
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-[9px] font-bold text-gray-600 mb-1 uppercase">REMARKS / PURPOSE</label>
+                                                <label className="block text-[11px] font-bold text-gray-600 mb-1 uppercase">REMARKS / PURPOSE</label>
                                                 <input
                                                     type="text"
                                                     value={row.remarks}
@@ -432,7 +432,7 @@ export default function Materials() {
 
                             <div className="p-5 border-t border-gray-100 bg-gray-50 flex flex-col sm:flex-row justify-between items-center gap-3">
                                 <div className="text-left w-full sm:w-auto">
-                                    <span className="block text-[9px] font-extrabold text-gray-400 uppercase tracking-wider">TOTAL DAILY MATERIAL COST</span>
+                                    <span className="block text-[11px] font-extrabold text-gray-400 uppercase tracking-wider">TOTAL DAILY MATERIAL COST</span>
                                     <span className="text-base font-extrabold text-[#A63228]">
                                         ₱{materialRows.reduce((sum, r) => sum + ((parseFloat(r.qty) || 0) * (parseFloat(r.cost) || 0)), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                     </span>
@@ -467,7 +467,7 @@ export default function Materials() {
                             </svg>
                         </div>
                         <h3 className="text-[12px] font-extrabold text-gray-900 mb-1">Success!</h3>
-                        <p className="text-[9px] text-gray-500 mb-4 px-2 leading-relaxed">{successMsg}</p>
+                        <p className="text-[11px] text-gray-500 mb-4 px-2 leading-relaxed">{successMsg}</p>
                         <button onClick={resetAndClose} className="w-full py-2 bg-[#8B1A10] text-white rounded-lg text-[10px] font-bold hover:bg-[#72150d] transition-colors">
                             Done
                         </button>

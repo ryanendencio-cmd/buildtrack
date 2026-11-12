@@ -156,14 +156,14 @@ export default function PhilippineAddressSelector({
             {/* Region & Province */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>
-                    <label className="block text-[7px] font-bold text-gray-500 uppercase mb-0.5">
+                    <label className="block text-[10px] font-bold text-gray-500 uppercase mb-0.5">
                         Region <span className="text-[#A63228]">*</span>
                     </label>
                     <select
                         value={value.regionCode || ''}
                         onChange={handleRegionSelect}
                         disabled={disabled || loadingRegions}
-                        className="w-full bg-white border border-gray-200 rounded-md pl-2 pr-6 py-1 text-[9px] font-bold text-gray-800 outline-none appearance-none disabled:opacity-50 disabled:bg-gray-100"
+                        className="w-full bg-white border border-gray-200 rounded-md pl-2 pr-6 py-1 text-[11px] font-bold text-gray-800 outline-none appearance-none disabled:opacity-50 disabled:bg-gray-100"
                         style={selectStyles}
                     >
                         {loadingRegions ? (
@@ -182,14 +182,14 @@ export default function PhilippineAddressSelector({
                 </div>
 
                 <div>
-                    <label className="block text-[7px] font-bold text-gray-500 uppercase mb-0.5">
+                    <label className="block text-[10px] font-bold text-gray-500 uppercase mb-0.5">
                         Province <span className="text-[#A63228]">*</span>
                     </label>
                     <select
                         value={value.provinceCode || ''}
                         onChange={handleProvinceSelect}
                         disabled={disabled || !value.regionCode || loadingProvinces}
-                        className="w-full bg-white border border-gray-200 rounded-md pl-2 pr-6 py-1 text-[9px] font-bold text-gray-800 outline-none appearance-none disabled:opacity-50 disabled:bg-gray-100"
+                        className="w-full bg-white border border-gray-200 rounded-md pl-2 pr-6 py-1 text-[11px] font-bold text-gray-800 outline-none appearance-none disabled:opacity-50 disabled:bg-gray-100"
                         style={selectStyles}
                     >
                         {loadingProvinces ? (
@@ -213,14 +213,14 @@ export default function PhilippineAddressSelector({
             {/* Municipality/City & Barangay */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>
-                    <label className="block text-[7px] font-bold text-gray-500 uppercase mb-0.5">
+                    <label className="block text-[10px] font-bold text-gray-500 uppercase mb-0.5">
                         Municipality / City <span className="text-[#A63228]">*</span>
                     </label>
                     <select
                         value={value.cityCode || ''}
                         onChange={handleCitySelect}
                         disabled={disabled || !value.provinceCode || loadingCities}
-                        className="w-full bg-white border border-gray-200 rounded-md pl-2 pr-6 py-1 text-[9px] font-bold text-gray-800 outline-none appearance-none disabled:opacity-50 disabled:bg-gray-100"
+                        className="w-full bg-white border border-gray-200 rounded-md pl-2 pr-6 py-1 text-[11px] font-bold text-gray-800 outline-none appearance-none disabled:opacity-50 disabled:bg-gray-100"
                         style={selectStyles}
                     >
                         {loadingCities ? (
@@ -241,14 +241,14 @@ export default function PhilippineAddressSelector({
                 </div>
 
                 <div>
-                    <label className="block text-[7px] font-bold text-gray-500 uppercase mb-0.5">
+                    <label className="block text-[10px] font-bold text-gray-500 uppercase mb-0.5">
                         Barangay <span className="text-[#A63228]">*</span>
                     </label>
                     <select
                         value={value.barangayName || ''}
                         onChange={handleBarangaySelect}
                         disabled={disabled || !value.cityCode || loadingBarangays}
-                        className="w-full bg-white border border-gray-200 rounded-md pl-2 pr-6 py-1 text-[9px] font-bold text-gray-800 outline-none appearance-none disabled:opacity-50 disabled:bg-gray-100"
+                        className="w-full bg-white border border-gray-200 rounded-md pl-2 pr-6 py-1 text-[11px] font-bold text-gray-800 outline-none appearance-none disabled:opacity-50 disabled:bg-gray-100"
                         style={selectStyles}
                     >
                         {loadingBarangays ? (

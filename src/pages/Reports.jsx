@@ -148,7 +148,7 @@ export default function Reports() {
         <AdminLayout>
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-4 gap-2 print:hidden">
                 <div>
-                    <span className="text-[9px] font-bold text-[#A63228] tracking-widest uppercase">REPORTS</span>
+                    <span className="text-[11px] font-bold text-[#A63228] tracking-widest uppercase">REPORTS</span>
                     <h1 className="text-xl font-extrabold text-[#1a1a1a] mt-0.5 tracking-tight">Reports & Analytics</h1>
                     <p className="text-[10px] text-gray-500 mt-0.5">Generate monthly summaries and visual analytics.</p>
                 </div>
@@ -166,18 +166,18 @@ export default function Reports() {
 
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-3 mb-4 flex flex-col md:flex-row gap-3 print:hidden">
                 <div className="w-full md:w-40">
-                    <label className="block text-[8px] font-bold text-gray-400 tracking-wider uppercase mb-1">MONTH / YEAR</label>
+                    <label className="block text-[11px] font-bold text-gray-400 tracking-wider uppercase mb-1">MONTH / YEAR</label>
                     <input type="month" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} className="w-full bg-[#f4f1ee] border border-transparent rounded-lg px-2.5 py-1.5 text-[10px] font-extrabold text-gray-800 outline-none focus:border-[#A63228] cursor-pointer" />
                 </div>
                 <div className="flex-1">
-                    <label className="block text-[8px] font-bold text-gray-400 tracking-wider uppercase mb-1">PROJECT</label>
+                    <label className="block text-[11px] font-bold text-gray-400 tracking-wider uppercase mb-1">PROJECT</label>
                     <select value={selectedProject} onChange={e => setSelectedProject(e.target.value)} className="w-full bg-[#f4f1ee] border border-transparent rounded-lg pl-3 pr-8 py-1.5 text-[10px] font-extrabold text-gray-800 outline-none appearance-none" style={selectStyles}>
                         <option value="ALL">All Projects (Overview)</option>
                         {projects.map(p => <option key={p.id} value={p.id}>{p.name || p.title}</option>)}
                     </select>
                 </div>
                 <div className="w-full md:w-48">
-                    <label className="block text-[8px] font-bold text-gray-400 tracking-wider uppercase mb-1">REPORT CATEGORY</label>
+                    <label className="block text-[11px] font-bold text-gray-400 tracking-wider uppercase mb-1">REPORT CATEGORY</label>
                     <select value={reportType} onChange={e => setReportType(e.target.value)} className="w-full bg-[#f4f1ee] border border-transparent rounded-lg pl-3 pr-8 py-1.5 text-[10px] font-bold text-gray-800 outline-none appearance-none" style={selectStyles}>
                         <option value="Expenses">Expenses & Budget</option>
                         <option value="Manpower">Attendance & Manpower</option>
@@ -206,23 +206,23 @@ export default function Reports() {
                         </div>
                     </div>
                     <div className="text-right">
-                        <span className="inline-block px-2.5 py-0.5 rounded bg-gray-100 text-[9px] font-extrabold text-gray-800 uppercase tracking-wider">
+                        <span className="inline-block px-2.5 py-0.5 rounded bg-gray-100 text-[11px] font-extrabold text-gray-800 uppercase tracking-wider">
                             Official Report
                         </span>
-                        <p className="text-[8px] text-gray-500 mt-1">Printed: {new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}</p>
+                        <p className="text-[11px] text-gray-500 mt-1">Printed: {new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}</p>
                     </div>
                 </div>
                 <div className="mt-3 pt-2.5 border-t border-gray-200 grid grid-cols-3 gap-2 text-[10px]">
                     <div>
-                        <span className="text-gray-400 font-bold uppercase text-[8px] block">CATEGORY:</span>
+                        <span className="text-gray-400 font-bold uppercase text-[11px] block">CATEGORY:</span>
                         <strong className="text-gray-900 font-bold">{reportType} Report</strong>
                     </div>
                     <div>
-                        <span className="text-gray-400 font-bold uppercase text-[8px] block">PERIOD:</span>
+                        <span className="text-gray-400 font-bold uppercase text-[11px] block">PERIOD:</span>
                         <strong className="text-gray-900 font-bold">{displayMonth.toUpperCase()}</strong>
                     </div>
                     <div>
-                        <span className="text-gray-400 font-bold uppercase text-[8px] block">PROJECT:</span>
+                        <span className="text-gray-400 font-bold uppercase text-[11px] block">PROJECT:</span>
                         <strong className="text-gray-900 font-bold">{selectedProject === 'ALL' ? 'All Projects (Overview)' : (projects.find(p => String(p.id) === String(selectedProject))?.name || 'Selected Project')}</strong>
                     </div>
                 </div>
@@ -233,14 +233,14 @@ export default function Reports() {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-1">
                         {kpis.map((kpi, i) => (
                             <div key={i} className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100">
-                                <p className="text-[8px] font-bold text-gray-400 tracking-wider uppercase mb-1">{kpi.label}</p>
+                                <p className="text-[11px] font-bold text-gray-400 tracking-wider uppercase mb-1">{kpi.label}</p>
                                 <h2 className={`text-xl font-extrabold ${kpi.color}`}>{kpi.value}</h2>
                             </div>
                         ))}
                     </div>
 
                     <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 overflow-x-auto">
-                        <h3 className="text-[9px] font-extrabold text-gray-900 tracking-wider uppercase mb-3">{reportType} DATA ({displayMonth.toUpperCase()})</h3>
+                        <h3 className="text-[11px] font-extrabold text-gray-900 tracking-wider uppercase mb-3">{reportType} DATA ({displayMonth.toUpperCase()})</h3>
                         {loading ? (
                             <div className="flex justify-center py-10"><div className="w-8 h-8 border-4 border-gray-100 border-t-[#A63228] rounded-full animate-spin"></div></div>
                         ) : (
@@ -248,7 +248,7 @@ export default function Reports() {
                                 <thead>
                                     <tr>
                                         {headers.map((h, i) => (
-                                            <th key={i} className={`text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 uppercase tracking-wider ${i === headers.length - 1 ? 'text-right pr-2' : ''}`}>{h}</th>
+                                            <th key={i} className={`text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 uppercase tracking-wider ${i === headers.length - 1 ? 'text-right pr-2' : ''}`}>{h}</th>
                                         ))}
                                     </tr>
                                 </thead>
@@ -278,7 +278,7 @@ export default function Reports() {
                         {/* LINE GRAPH */}
                         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
                             <h3 className="text-xs font-extrabold text-gray-900 mb-1">Expense Trajectory</h3>
-                            <p className="text-[9px] text-gray-500 font-medium mb-4">Full year moving trend (Jan - Dec).</p>
+                            <p className="text-[11px] text-gray-500 font-medium mb-4">Full year moving trend (Jan - Dec).</p>
                             <div className="relative h-28 w-full mb-1">
                                 <div className="px-3 h-full w-full">
                                     <svg viewBox="0 -30 1100 160" className="w-full h-full overflow-visible">
@@ -300,7 +300,7 @@ export default function Reports() {
                                         {pointsWithData.length === 0 && <text x="550" y="65" fontSize="28" fill="#d1d5db" textAnchor="middle">No expense data yet</text>}
                                     </svg>
                                 </div>
-                                <div className="flex justify-between px-3 text-[7px] font-bold text-gray-400 uppercase mt-2">
+                                <div className="flex justify-between px-3 text-[10px] font-bold text-gray-400 uppercase mt-2">
                                     {MONTHS.map((m, i) => <span key={m} className={i === currentMonth ? 'text-gray-900' : ''}>{m}</span>)}
                                 </div>
                             </div>
@@ -309,7 +309,7 @@ export default function Reports() {
                         {/* BAR GRAPH */}
                         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
                             <h3 className="text-xs font-extrabold text-gray-900 mb-1">Monthly Volume</h3>
-                            <p className="text-[9px] text-gray-500 font-medium mb-4">Total expenses tracked annually.</p>
+                            <p className="text-[11px] text-gray-500 font-medium mb-4">Total expenses tracked annually.</p>
                             <div className="relative h-28 w-full flex flex-col justify-end">
                                 <div className="flex items-end justify-between h-24 px-3 border-b border-gray-100 pb-1">
                                     {monthlyData.map((val, i) => {
@@ -317,13 +317,13 @@ export default function Reports() {
                                         const isCurrent = i === currentMonth;
                                         return (
                                             <div key={i} className="w-[5%] flex flex-col items-center h-full justify-end relative group">
-                                                {val > 0 && <span className={`absolute -top-4 font-bold z-10 ${isCurrent ? 'text-[7px] text-[#1a1a1a] font-extrabold' : 'text-[6px] text-gray-400 hidden group-hover:block'}`}>₱{fmt(val)}</span>}
+                                                {val > 0 && <span className={`absolute -top-4 font-bold z-10 ${isCurrent ? 'text-[10px] text-[#1a1a1a] font-extrabold' : 'text-[6px] text-gray-400 hidden group-hover:block'}`}>₱{fmt(val)}</span>}
                                                 <div className={`w-full rounded-t-sm transition-all cursor-pointer ${isCurrent ? 'bg-[#A63228] shadow-sm' : val > 0 ? 'bg-[#fce8e6] hover:bg-[#A63228]' : 'bg-transparent'}`} style={{ height: `${heightPct}%` }} />
                                             </div>
                                         );
                                     })}
                                 </div>
-                                <div className="flex justify-between px-3 text-[7px] font-bold text-gray-400 uppercase mt-2">
+                                <div className="flex justify-between px-3 text-[10px] font-bold text-gray-400 uppercase mt-2">
                                     {MONTHS.map((m, i) => <span key={m} className={i === currentMonth ? 'text-gray-900' : ''}>{m}</span>)}
                                 </div>
                             </div>
@@ -345,7 +345,7 @@ export default function Reports() {
                                         const pct = totalCat > 0 ? Math.round((Number(cat.total) / totalCat) * 100) : 0;
                                         return (
                                             <div key={i}>
-                                                <div className="flex justify-between text-[9px] font-bold mb-1">
+                                                <div className="flex justify-between text-[11px] font-bold mb-1">
                                                     <span className="text-gray-600">{cat.category} ({pct}%)</span>
                                                     <span className={textColors[i % textColors.length]}>₱{Number(cat.total).toLocaleString()}</span>
                                                 </div>
@@ -510,15 +510,15 @@ export default function Reports() {
                             </div>
                             <div className="flex items-center gap-3">
                                 <div className="text-right border-r border-gray-200 pr-3">
-                                    <p className="text-[8px] font-bold text-gray-400 uppercase">Total Budget</p>
+                                    <p className="text-[11px] font-bold text-gray-400 uppercase">Total Budget</p>
                                     <p className="text-xs font-extrabold text-gray-900">₱{totalBudget.toLocaleString()}</p>
                                 </div>
                                 <div className="text-right border-r border-gray-200 pr-3">
-                                    <p className="text-[8px] font-bold text-gray-400 uppercase">Actual Spend</p>
+                                    <p className="text-[11px] font-bold text-gray-400 uppercase">Actual Spend</p>
                                     <p className="text-xs font-extrabold text-[#A63228]">₱{totalSpent.toLocaleString()}</p>
                                 </div>
                                 <div className="text-right">
-                                    <p className="text-[8px] font-bold text-gray-400 uppercase">Remaining</p>
+                                    <p className="text-[11px] font-bold text-gray-400 uppercase">Remaining</p>
                                     <p className="text-xs font-extrabold text-emerald-600">₱{remaining.toLocaleString()}</p>
                                 </div>
                             </div>
@@ -534,9 +534,9 @@ export default function Reports() {
                                     <h3 className="text-xs font-extrabold text-gray-900 uppercase tracking-wide">
                                         1. Descriptive Analytics — Historical Composition &amp; Monthly Volume
                                     </h3>
-                                    <p className="text-[9px] text-gray-500">Examines past and current transactions to summarize where project capital was deployed</p>
+                                    <p className="text-[11px] text-gray-500">Examines past and current transactions to summarize where project capital was deployed</p>
                                 </div>
-                                <span className="text-[8px] font-extrabold uppercase tracking-wider text-[#A63228] bg-rose-50 border border-rose-200 px-2 py-0.5 rounded">
+                                <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#A63228] bg-rose-50 border border-rose-200 px-2 py-0.5 rounded">
                                     Descriptive
                                 </span>
                             </div>
@@ -546,7 +546,7 @@ export default function Reports() {
                                 <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-xs flex flex-col justify-between">
                                     <div>
                                         <h4 className="text-[11px] font-extrabold text-gray-900 mb-0.5">Expense Share per Category</h4>
-                                        <p className="text-[8.5px] text-gray-400 mb-2">Proportional distribution across materials, labor, and operations</p>
+                                        <p className="text-[11px] text-gray-400 mb-2">Proportional distribution across materials, labor, and operations</p>
                                     </div>
 
                                     {pieSlices.length === 0 ? (
@@ -571,7 +571,7 @@ export default function Reports() {
                                             </div>
 
                                             {/* Legend */}
-                                            <div className="flex flex-col gap-1.5 w-full sm:w-auto text-[9px]">
+                                            <div className="flex flex-col gap-1.5 w-full sm:w-auto text-[11px]">
                                                 {pieSlices.map((s, idx) => (
                                                     <div key={idx} className="flex items-center justify-between sm:justify-start gap-3">
                                                         <div className="flex items-center gap-2">
@@ -590,7 +590,7 @@ export default function Reports() {
                                 <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-xs flex flex-col justify-between">
                                     <div>
                                         <h4 className="text-[11px] font-extrabold text-gray-900 mb-0.5">Monthly Spending Volume by Period</h4>
-                                        <p className="text-[8.5px] text-gray-400 mb-2">Historical monthly actual expenditures across the project timeline (Jan - Dec)</p>
+                                        <p className="text-[11px] text-gray-400 mb-2">Historical monthly actual expenditures across the project timeline (Jan - Dec)</p>
                                     </div>
 
                                     <div className="relative h-44 w-full">
@@ -636,7 +636,7 @@ export default function Reports() {
                                             })}
                                         </svg>
                                     </div>
-                                    <div className="flex items-center justify-between text-[7.5px] font-bold text-gray-500 border-t border-gray-100 pt-1 mt-1">
+                                    <div className="flex items-center justify-between text-[10px] font-bold text-gray-500 border-t border-gray-100 pt-1 mt-1">
                                         <div className="flex items-center gap-2">
                                             <span className="w-2.5 h-2.5 rounded-xs bg-[#3b82f6]"></span>
                                             <span>Past Monthly Spend</span>
@@ -660,9 +660,9 @@ export default function Reports() {
                                     <h3 className="text-xs font-extrabold text-gray-900 uppercase tracking-wide">
                                         2. Predictive Analytics — Time-Based Expense Forecast &amp; Trendline
                                     </h3>
-                                    <p className="text-[9px] text-gray-500">Projects future capital requirements based on continuous linear regression mathematical modeling</p>
+                                    <p className="text-[11px] text-gray-500">Projects future capital requirements based on continuous linear regression mathematical modeling</p>
                                 </div>
-                                <span className="text-[8px] font-extrabold uppercase tracking-wider text-[#A63228] bg-rose-50 border border-rose-200 px-2 py-0.5 rounded">
+                                <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#A63228] bg-rose-50 border border-rose-200 px-2 py-0.5 rounded">
                                     Predictive
                                 </span>
                             </div>
@@ -672,10 +672,10 @@ export default function Reports() {
                                 <div className="lg:col-span-4 bg-white rounded-xl border border-gray-200 p-3 shadow-xs">
                                     <div className="flex items-center justify-between border-b border-gray-200 pb-2 mb-2">
                                         <span className="text-[10px] font-extrabold text-gray-800">Monthly Expense Ledger</span>
-                                        <span className="text-[7.5px] font-bold text-[#A63228] bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded uppercase">Regression Model</span>
+                                        <span className="text-[10px] font-bold text-[#A63228] bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded uppercase">Regression Model</span>
                                     </div>
                                     <div className="max-h-[290px] overflow-y-auto">
-                                        <table className="w-full text-[9px] border-collapse">
+                                        <table className="w-full text-[11px] border-collapse">
                                             <thead>
                                                 <tr className="bg-gray-100 text-gray-700 font-extrabold border-b border-gray-300">
                                                     <th className="py-1 px-2 text-center border-r border-gray-200 w-16">Month</th>
@@ -692,14 +692,14 @@ export default function Reports() {
                                                         <td className="py-1 px-2 text-center border-r border-gray-200 font-semibold">{row.month}</td>
                                                         <td className="py-1 px-2 text-right">
                                                             {row.displayVal}
-                                                            {row.isForecastRow && <span className="text-[7px] text-amber-600 font-extrabold ml-1">*</span>}
+                                                            {row.isForecastRow && <span className="text-[10px] text-amber-600 font-extrabold ml-1">*</span>}
                                                         </td>
                                                     </tr>
                                                 ))}
                                             </tbody>
                                         </table>
                                     </div>
-                                    <p className="text-[7.5px] text-gray-400 mt-2 italic">* Future periods (Months 11-15) projected via linear regression equation y = mx + b</p>
+                                    <p className="text-[10px] text-gray-400 mt-2 italic">* Future periods (Months 11-15) projected via linear regression equation y = mx + b</p>
                                 </div>
 
                                 {/* WHITE CHART: Time-Based Expense Forecast & Run-Rate Projection */}
@@ -780,7 +780,7 @@ export default function Reports() {
                                     </div>
 
                                     {/* Legend at Bottom */}
-                                    <div className="flex items-center justify-center gap-8 text-[8.5px] font-bold text-gray-600 pt-2 border-t border-gray-100">
+                                    <div className="flex items-center justify-center gap-8 text-[11px] font-bold text-gray-600 pt-2 border-t border-gray-100">
                                         <div className="flex items-center gap-2">
                                             <div className="w-5 h-0.5 bg-[#7A1E18]"></div>
                                             <span>Total Expenses</span>
@@ -814,9 +814,9 @@ export default function Reports() {
                                     <h3 className="text-xs font-extrabold text-gray-900 uppercase tracking-wide">
                                         3. Prescriptive Analytics — Target Budget Bar Comparison &amp; Action Plan
                                     </h3>
-                                    <p className="text-[9px] text-gray-500">Prescribes specific spending caps per cost center and provides actionable decision directives</p>
+                                    <p className="text-[11px] text-gray-500">Prescribes specific spending caps per cost center and provides actionable decision directives</p>
                                 </div>
-                                <span className="text-[8px] font-extrabold uppercase tracking-wider text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">
+                                <span className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">
                                     Prescriptive
                                 </span>
                             </div>
@@ -827,9 +827,9 @@ export default function Reports() {
                                     <div className="flex items-center justify-between mb-3 border-b border-gray-100 pb-2">
                                         <div>
                                             <h4 className="text-[11px] font-extrabold text-gray-900">Prescriptive Bar Chart: Actual Spend vs. Prescribed Budget Target</h4>
-                                            <p className="text-[8.5px] text-gray-500">Evaluates current spending against prescribed ceiling to dictate corrective measures</p>
+                                            <p className="text-[11px] text-gray-500">Evaluates current spending against prescribed ceiling to dictate corrective measures</p>
                                         </div>
-                                        <div className="flex items-center gap-3 text-[8px] font-bold">
+                                        <div className="flex items-center gap-3 text-[11px] font-bold">
                                             <div className="flex items-center gap-1.5">
                                                 <span className="w-3 h-2 bg-[#A63228] rounded-xs"></span>
                                                 <span className="text-gray-700">Actual Spend</span>
@@ -853,9 +853,9 @@ export default function Reports() {
                                                 const targetWidth = maxPrescriptiveVal > 0 ? Math.round((item.targetCap / maxPrescriptiveVal) * 100) : 0;
                                                 return (
                                                     <div key={idx} className="border-b border-gray-50 pb-2">
-                                                        <div className="flex justify-between items-center text-[8.5px] font-bold mb-1">
+                                                        <div className="flex justify-between items-center text-[11px] font-bold mb-1">
                                                             <span className="text-gray-800">{item.category}</span>
-                                                            <span className={`px-2 py-0.5 rounded text-[7.5px] font-extrabold ${item.isOver
+                                                            <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold ${item.isOver
                                                                     ? 'bg-red-100 text-red-800 border border-red-200'
                                                                     : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
                                                                 }`}>
@@ -865,22 +865,22 @@ export default function Reports() {
 
                                                         {/* Actual Spend Bar */}
                                                         <div className="flex items-center gap-2 mb-1">
-                                                            <span className="text-[7.5px] font-bold text-gray-400 w-12">Actual:</span>
+                                                            <span className="text-[10px] font-bold text-gray-400 w-12">Actual:</span>
                                                             <div className="flex-1 bg-gray-100 rounded-xs h-2.5 overflow-hidden">
                                                                 <div className="bg-[#A63228] h-full rounded-xs transition-all duration-500" style={{ width: `${actualWidth}%` }}></div>
                                                             </div>
-                                                            <span className="text-[8px] font-extrabold text-[#A63228] w-20 text-right">₱{item.actual.toLocaleString()}</span>
+                                                            <span className="text-[11px] font-extrabold text-[#A63228] w-20 text-right">₱{item.actual.toLocaleString()}</span>
                                                         </div>
 
                                                         {/* Prescribed Target Bar */}
                                                         <div className="flex items-center gap-2">
-                                                            <span className="text-[7.5px] font-bold text-gray-400 w-12">Target:</span>
+                                                            <span className="text-[10px] font-bold text-gray-400 w-12">Target:</span>
                                                             <div className="flex-1 bg-gray-100 rounded-xs h-2.5 overflow-hidden">
                                                                 <div className="bg-[#16a34a] h-full rounded-xs transition-all duration-500" style={{ width: `${targetWidth}%` }}></div>
                                                             </div>
                                                             <div className="w-24 text-right flex flex-col justify-center">
-                                                                <span className="text-[8px] font-extrabold text-[#16a34a]">₱{item.targetCap.toLocaleString()}</span>
-                                                                <span className="text-[6.5px] text-gray-400 font-semibold">{item.benchmarkLabel}</span>
+                                                                <span className="text-[11px] font-extrabold text-[#16a34a]">₱{item.targetCap.toLocaleString()}</span>
+                                                                <span className="text-[10px] text-gray-400 font-semibold">{item.benchmarkLabel}</span>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -894,7 +894,7 @@ export default function Reports() {
                                 <div className="lg:col-span-4 bg-white rounded-xl border border-gray-200 p-4 shadow-xs flex flex-col justify-between">
                                     <div>
                                         <h4 className="text-[11px] font-extrabold text-gray-900 mb-1">Budget Health &amp; Risk Distribution</h4>
-                                        <p className="text-[8.5px] text-gray-500 mb-2">Cost center exposure classification</p>
+                                        <p className="text-[11px] text-gray-500 mb-2">Cost center exposure classification</p>
                                     </div>
 
                                     {/* 3-Bar Chart */}
@@ -927,7 +927,7 @@ export default function Reports() {
                                             <text x="195" y="148" fill="#6b7280" fontSize="7" fontWeight="bold" textAnchor="middle">Watchlist</text>
                                         </svg>
                                     </div>
-                                    <p className="text-[7.5px] text-gray-500 text-center mt-2 border-t border-gray-100 pt-1">
+                                    <p className="text-[10px] text-gray-500 text-center mt-2 border-t border-gray-100 pt-1">
                                         {riskPct > 0
                                             ? 'Prescribes immediate cost containment for high-risk categories'
                                             : cautionPct > 0
@@ -940,10 +940,10 @@ export default function Reports() {
                             {/* EXECUTIVE ACTION MATRIX (Corporate Decision Table) */}
                             <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-xs mt-4">
                                 <h4 className="text-[11px] font-extrabold text-gray-900 mb-1">Executive Prescriptive Action Matrix</h4>
-                                <p className="text-[8.5px] text-gray-500 mb-3">Targeted operational directives based on statistical variance</p>
+                                <p className="text-[11px] text-gray-500 mb-3">Targeted operational directives based on statistical variance</p>
 
                                 <div className="overflow-x-auto">
-                                    <table className="w-full text-[9px] border-collapse">
+                                    <table className="w-full text-[11px] border-collapse">
                                         <thead>
                                             <tr className="bg-gray-50 text-gray-700 font-extrabold border-b border-gray-200 text-left">
                                                 <th className="py-2 px-2.5">Cost Center</th>
@@ -1002,7 +1002,7 @@ export default function Reports() {
                                                         <td className={`py-2.5 px-2.5 ${varianceClass}`}>{varianceText}</td>
                                                         <td className="py-2.5 px-2.5 text-gray-600">{actionText}</td>
                                                         <td className="py-2.5 px-2.5 text-center">
-                                                            <span className={`px-2 py-0.5 rounded text-[7.5px] font-extrabold border ${priorityClass}`}>
+                                                            <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold border ${priorityClass}`}>
                                                                 {priority}
                                                             </span>
                                                         </td>
@@ -1018,7 +1018,7 @@ export default function Reports() {
                                                     Reserve remaining capital buffer exclusively for unforeseen structural phases, geotechnical conditions, and material price fluctuations.
                                                 </td>
                                                 <td className="py-2.5 px-2.5 text-center">
-                                                    <span className="px-2 py-0.5 rounded text-[7.5px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                                    <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-200">
                                                         OPTIMAL
                                                     </span>
                                                 </td>
@@ -1037,11 +1037,11 @@ export default function Reports() {
                     <div className="text-right flex flex-col items-end">
                         <p className="text-gray-600 mb-9 text-[10px] font-semibold">Approved by:</p>
                         <div className="w-56 border-b border-gray-800"></div>
-                        <p className="text-gray-500 text-[8.5px] uppercase tracking-wider font-semibold">Project Engineer / Management</p>
-                        <p className="text-gray-400 text-[8px]">Sotalbo Construction</p>
+                        <p className="text-gray-500 text-[11px] uppercase tracking-wider font-semibold">Project Engineer / Management</p>
+                        <p className="text-gray-400 text-[11px]">Sotalbo Construction</p>
                     </div>
                 </div>
-                <div className="text-[8px] text-gray-400 mt-8 text-center border-t border-gray-100 pt-3">
+                <div className="text-[11px] text-gray-400 mt-8 text-center border-t border-gray-100 pt-3">
                     <p>Generated by S-CON BuildTrack Management System • {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
                 </div>
             </div>
@@ -1054,7 +1054,7 @@ export default function Reports() {
                             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                         </svg>
                         <h3 className="text-[10px] font-extrabold text-gray-900 mb-1">Generating File...</h3>
-                        <p className="text-[8px] text-gray-500 font-medium">Please wait a moment.</p>
+                        <p className="text-[11px] text-gray-500 font-medium">Please wait a moment.</p>
                     </div>
                 </div>
             )}
@@ -1071,7 +1071,7 @@ export default function Reports() {
                             </svg>
                         </div>
                         <h3 className="text-[11px] font-extrabold text-gray-900 mb-1">Export Successful!</h3>
-                        <p className="text-[9px] text-gray-500 font-medium mb-4 px-2">Your report has been downloaded.</p>
+                        <p className="text-[11px] text-gray-500 font-medium mb-4 px-2">Your report has been downloaded.</p>
                         <button onClick={() => setModalState('NONE')} className="w-full py-2 bg-[#8B1A10] text-white rounded-lg text-[10px] font-bold hover:bg-[#72150d] transition-colors">Done</button>
                     </div>
                 </div>

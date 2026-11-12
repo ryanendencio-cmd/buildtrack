@@ -6,6 +6,27 @@ import { api } from '../api'
 export default function AdminLayout({ children }) {
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(true);
   const [showLogoutModal, setShowLogoutModal] = React.useState(false);
+  const [isDarkMode, setIsDarkMode] = React.useState(() => {
+    try {
+      return localStorage.getItem('buildtrack_theme') === 'dark' ||
+        (!localStorage.getItem('buildtrack_theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    } catch {
+      return false;
+    }
+  });
+
+  React.useEffect(() => {
+    try {
+      if (isDarkMode) {
+        document.documentElement.classList.add('dark');
+        localStorage.setItem('buildtrack_theme', 'dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+        localStorage.setItem('buildtrack_theme', 'light');
+      }
+    } catch {}
+  }, [isDarkMode]);
+
   const [adminProfile, setAdminProfile] = React.useState(() => {
     try {
       const saved = JSON.parse(sessionStorage.getItem('adminProfile') || localStorage.getItem('adminProfile') || '{}');
@@ -91,7 +112,7 @@ export default function AdminLayout({ children }) {
         },
         {
           name: 'Expenses Management', path: '/expenses',
-          icon: (<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><text x="2" y="19" fontSize="18" fontWeight="bold" stroke="none" fill="currentColor">₱</text></svg>)
+          icon: (<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><text x="12" y="17.5" fontSize="17" fontWeight="bold" textAnchor="middle" stroke="none" fill="currentColor">₱</text></svg>)
         },
         {
           name: 'Cash Advance', path: '/cash-advance',
@@ -145,65 +166,113 @@ export default function AdminLayout({ children }) {
   ];
 
   return (
-    <div className="flex h-screen bg-[#f3efea] overflow-hidden text-gray-800 print:h-auto print:bg-white print:overflow-visible">
+    <div className="flex h-screen bg-[#f3efea] overflow-hidden text-gray-800 print:h-auto print:bg-white print:overflow-visible transition-colors duration-200">
 
-      {/* ── LEFT SIDEBAR ── */}
+      {/* ── MOBILE BACKDROP OVERLAY ── */}
+      {isSidebarOpen && (
+        <div
+          onClick={() => setIsSidebarOpen(false)}
+          className="fixed inset-0 bg-black/40 backdrop-blur-2xs z-35 md:hidden transition-opacity"
+        />
+      )}
+
+      {/* ── LEFT SIDEBAR (Full width on open, mini icon-only on desktop when collapsed) ── */}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 w-60 bg-white shadow-xl border-r border-gray-100/80 transform transition-transform duration-300 ease-in-out flex flex-col print:hidden ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
-          }`}
+        className={`fixed inset-y-0 left-0 z-40 bg-white shadow-xl border-r border-gray-100/80 transition-all duration-300 ease-in-out flex flex-col print:hidden ${
+          isSidebarOpen
+            ? 'w-60 translate-x-0'
+            : '-translate-x-full md:translate-x-0 md:w-[70px]'
+        }`}
       >
         {/* Sidebar Header */}
-        <div className="h-14 flex items-center justify-between px-4 border-b border-gray-100 shrink-0">
-          <img src="/logo.png" alt="S-CON Logo" className="h-7 object-contain" />
-          <button
-            onClick={() => setIsSidebarOpen(false)}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-[#A63228] hover:bg-red-50 transition-all"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="3" y1="12" x2="21" y2="12"></line>
-              <line x1="3" y1="6" x2="21" y2="6"></line>
-              <line x1="3" y1="18" x2="21" y2="18"></line>
-            </svg>
-          </button>
+        <div className={`h-14 flex items-center border-b border-gray-100 shrink-0 ${
+          isSidebarOpen ? 'justify-between px-4' : 'justify-center px-2'
+        }`}>
+          {isSidebarOpen ? (
+            <>
+              <img src="/logo.png" alt="S-CON Logo" className="h-7 object-contain sidebar-logo transition-all" />
+              <button
+                onClick={() => setIsSidebarOpen(false)}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-[#A63228] hover:bg-red-50 transition-all cursor-pointer"
+                title="Collapse Sidebar"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="3" y1="12" x2="21" y2="12"></line>
+                  <line x1="3" y1="6" x2="21" y2="6"></line>
+                  <line x1="3" y1="18" x2="21" y2="18"></line>
+                </svg>
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => setIsSidebarOpen(true)}
+              className="w-10 h-10 rounded-xl bg-white hover:bg-red-50 text-gray-700 hover:text-[#A63228] border border-gray-200/80 hover:border-[#A63228]/30 flex items-center justify-center transition-all cursor-pointer shadow-2xs hover:scale-105"
+              title="Expand Sidebar"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="3" y1="12" x2="21" y2="12"></line>
+                <line x1="3" y1="6" x2="21" y2="6"></line>
+                <line x1="3" y1="18" x2="21" y2="18"></line>
+              </svg>
+            </button>
+          )}
         </div>
 
         {/* Nav Sections */}
-        <nav className="px-3 pt-3 pb-1 flex-1 overflow-y-auto space-y-3">
-          {navSections.map(section => (
-            <div key={section.label}>
-              {/* Section Label */}
-              <p className="px-2 pb-1 text-[9px] font-extrabold uppercase tracking-widest text-gray-400 select-none">
-                {section.label}
-              </p>
-              <div className="space-y-0.5">
+        <nav className={`pt-3 pb-1 flex-1 overflow-y-auto ${isSidebarOpen ? 'px-2.5 space-y-3' : 'px-2 space-y-2'}`}>
+          {navSections.map((section, idx) => (
+            <div key={section.label} className={isSidebarOpen ? '' : 'flex flex-col items-center'}>
+              {/* Section Label (Text when open, clean subtle gap when collapsed) */}
+              {isSidebarOpen ? (
+                <p className="px-2 pb-1 text-[10px] font-extrabold uppercase tracking-widest text-gray-400 select-none">
+                  {section.label}
+                </p>
+              ) : (
+                idx > 0 && <div className="w-4 h-px bg-gray-200/50 my-1"></div>
+              )}
+              <div className={`space-y-0.5 ${isSidebarOpen ? 'w-full' : 'w-full flex flex-col items-center'}`}>
                 {section.items.map(item => {
                   const isActive = location.pathname.toLowerCase().startsWith(item.path.toLowerCase());
                   return (
                     <Link
                       key={item.name}
                       to={item.path}
+                      title={!isSidebarOpen ? item.name : undefined}
                       onClick={() => window.innerWidth < 768 && setIsSidebarOpen(false)}
-                      className={`group flex items-center justify-between px-3 py-2.5 rounded-xl text-[12px] font-semibold transition-all duration-150 ${isActive
-                        ? 'bg-gradient-to-r from-[#fce8e6] to-[#fdf4f3] text-[#A63228]'
-                        : 'text-gray-500 hover:bg-gray-50 hover:text-[#A63228]'
-                        }`}
+                      className={`group flex items-center rounded-xl transition-all duration-150 ${
+                        isSidebarOpen
+                          ? 'justify-between px-3 py-2.5 text-[12px] font-semibold'
+                          : 'w-10 h-10 justify-center relative'
+                      } ${
+                        isActive
+                          ? 'bg-gradient-to-r from-[#fce8e6] to-[#fdf4f3] text-[#A63228] shadow-2xs font-bold'
+                          : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
+                      }`}
                     >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <span className={`flex-shrink-0 transition-colors duration-150 ${isActive ? 'text-[#A63228]' : 'text-gray-400 group-hover:text-[#A63228]'}`}>
+                      <div className={`flex items-center ${isSidebarOpen ? 'gap-2.5 min-w-0' : 'justify-center'}`}>
+                        <span className={`flex-shrink-0 transition-colors duration-150 ${isActive ? 'text-[#A63228]' : 'text-gray-400 group-hover:text-gray-800'}`}>
                           {item.icon}
                         </span>
-                        <span className="leading-tight truncate">{item.name}</span>
+                        {isSidebarOpen && <span className="leading-tight truncate">{item.name}</span>}
                       </div>
-                      <div className="flex items-center gap-1 flex-shrink-0 ml-1">
-                        {item.badge > 0 && (
-                          <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded-full ${isActive ? 'bg-[#A63228] text-white' : 'bg-[#fce8e6] text-[#A63228]'}`}>
-                            {item.badge}
-                          </span>
-                        )}
-                        {isActive && !item.badge && (
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#A63228]"></span>
-                        )}
-                      </div>
+
+                      {/* Badges / Active indicators */}
+                      {isSidebarOpen ? (
+                        <div className="flex items-center gap-1 flex-shrink-0 ml-1">
+                          {item.badge > 0 && (
+                            <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-full ${isActive ? 'bg-[#A63228] text-white' : 'bg-[#fce8e6] text-[#A63228]'}`}>
+                              {item.badge}
+                            </span>
+                          )}
+                          {isActive && !item.badge && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#A63228]"></span>
+                          )}
+                        </div>
+                      ) : (
+                        item.badge > 0 && (
+                          <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#A63228] ring-2 ring-white"></span>
+                        )
+                      )}
                     </Link>
                   );
                 })}
@@ -212,24 +281,34 @@ export default function AdminLayout({ children }) {
           ))}
         </nav>
 
-        <div className="p-3 border-t border-gray-100 shrink-0 flex items-center justify-between gap-1">
+        {/* Profile / Logout Footer */}
+        <div className={`p-2.5 border-t border-gray-100 shrink-0 flex ${
+          isSidebarOpen ? 'items-center justify-between gap-1' : 'flex-col items-center gap-2'
+        }`}>
           <Link
             to="/profile"
-            className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer flex-1 min-w-0"
+            className={`flex items-center rounded-xl hover:bg-gray-100 transition-all cursor-pointer ${
+              isSidebarOpen ? 'gap-2.5 px-2 py-1.5 flex-1 min-w-0' : 'w-10 h-10 justify-center'
+            }`}
+            title={adminProfile.name || 'Administrator'}
             onClick={() => window.innerWidth < 768 && setIsSidebarOpen(false)}
           >
-            <div className="w-8 h-8 rounded-full bg-[#EAD9D8] text-[#A63228] flex items-center justify-center font-bold text-xs shrink-0">
+            <div className="w-8 h-8 rounded-full bg-[#EAD9D8] text-[#A63228] flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
               {(adminProfile.name || 'Administrator').split(/\s+/).filter(Boolean).slice(-2).map(part => part[0]).join('').toUpperCase() || 'AD'}
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-xs font-extrabold text-[#1a1a1a] truncate">{adminProfile.name}</p>
-              <p className="text-[9px] text-gray-500 font-bold uppercase tracking-wider truncate">{adminProfile.role}</p>
-            </div>
+            {isSidebarOpen && (
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-extrabold text-[#1a1a1a] truncate">{adminProfile.name}</p>
+                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider truncate">{adminProfile.role}</p>
+              </div>
+            )}
           </Link>
           <button
             onClick={handleLogoutClick}
             title="Log Out"
-            className="p-2 rounded-lg text-gray-400 hover:text-[#A63228] hover:bg-red-50 transition-all shrink-0"
+            className={`rounded-xl text-gray-400 hover:text-[#A63228] hover:bg-red-50 transition-all shrink-0 cursor-pointer flex items-center justify-center ${
+              isSidebarOpen ? 'p-2' : 'w-10 h-10'
+            }`}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
@@ -242,22 +321,54 @@ export default function AdminLayout({ children }) {
 
       {/* ── MAIN CONTENT ── */}
       <main
-        className={`flex-1 flex flex-col min-w-0 h-full overflow-hidden transition-all duration-300 ease-in-out ${isSidebarOpen ? 'md:ml-60' : 'ml-0'} print:ml-0 print:h-auto print:overflow-visible print:w-full`}
+        className={`flex-1 flex flex-col min-w-0 h-full overflow-hidden transition-all duration-300 ease-in-out ${
+          isSidebarOpen ? 'md:ml-60' : 'ml-0 md:ml-[70px]'
+        } print:ml-0 print:h-auto print:overflow-visible print:w-full`}
       >
-        <header className="flex items-center justify-between px-4 md:px-6 shrink-0 h-12 border-b border-gray-100/50 bg-white/40 backdrop-blur-sm print:hidden">
-          <div className="flex items-center gap-2">
+        {/* ── TOP HEADER (Clean with Night Mode Toggle) ── */}
+        <header className="flex items-center justify-between px-3 md:px-6 shrink-0 h-11 border-b border-gray-100/70 bg-white/70 backdrop-blur-md print:hidden transition-colors">
+          {/* Mobile drawer toggle (only appears on mobile when sidebar is hidden) */}
+          <div className="flex items-center">
             {!isSidebarOpen && (
               <button
                 onClick={() => setIsSidebarOpen(true)}
-                className="p-2 rounded-lg bg-white shadow-sm border border-gray-100 text-gray-600 hover:text-[#A63228] hover:bg-gray-50 transition-all"
+                className="p-1.5 rounded-lg bg-white shadow-2xs border border-gray-200/70 text-gray-600 hover:text-[#A63228] hover:bg-red-50 transition-all cursor-pointer md:hidden"
+                title="Open Sidebar"
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="3" y1="12" x2="21" y2="12"></line>
                   <line x1="3" y1="6" x2="21" y2="6"></line>
                   <line x1="3" y1="18" x2="21" y2="18"></line>
                 </svg>
               </button>
             )}
+          </div>
+
+          {/* Right: Only Night/Dark Mode Toggle */}
+          <div className="flex items-center ml-auto">
+            <button
+              onClick={() => setIsDarkMode(!isDarkMode)}
+              className="p-2 rounded-lg text-gray-500 hover:text-[#A63228] hover:bg-gray-100 transition-all cursor-pointer flex items-center justify-center"
+              title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            >
+              {isDarkMode ? (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-amber-400">
+                  <circle cx="12" cy="12" r="5" />
+                  <line x1="12" y1="1" x2="12" y2="3" />
+                  <line x1="12" y1="21" x2="12" y2="23" />
+                  <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+                  <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+                  <line x1="1" y1="12" x2="3" y2="12" />
+                  <line x1="21" y1="12" x2="23" y2="12" />
+                  <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+                  <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+                </svg>
+              ) : (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-600">
+                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                </svg>
+              )}
+            </button>
           </div>
         </header>
 

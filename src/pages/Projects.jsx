@@ -352,7 +352,7 @@ export default function Projects() {
         <AdminLayout>
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-3 gap-2">
                 <div>
-                    <span className="text-[9px] font-bold text-[#A63228] tracking-widest uppercase">PROJECTS MANAGEMENT</span>
+                    <span className="text-[11px] font-bold text-[#A63228] tracking-widest uppercase">PROJECTS MANAGEMENT</span>
                     <h1 className="text-lg font-extrabold text-gray-900 mt-0.5 tracking-tight">Projects Management</h1>
                     <p className="text-[10px] text-gray-500 mt-0.5">Manage and monitor all your construction projects.</p>
                 </div>
@@ -372,12 +372,12 @@ export default function Projects() {
                             <p className="text-[11px] font-extrabold text-amber-900">
                                 🔒 Currently Active Project: <span className="underline">{activeOngoingProject.name}</span>
                             </p>
-                            <p className="text-[9px] text-amber-700 font-medium mt-0.5">
+                            <p className="text-[11px] text-amber-700 font-medium mt-0.5">
                                 Policy: Only 1 active project at a time. New projects will be added as "Upcoming / Standby".
                             </p>
                         </div>
                     </div>
-                    <span className="text-[9px] font-extrabold px-2.5 py-1 bg-amber-200/60 text-amber-900 rounded-lg shrink-0">
+                    <span className="text-[11px] font-extrabold px-2.5 py-1 bg-amber-200/60 text-amber-900 rounded-lg shrink-0">
                         1/1 Active Limit Reached
                     </span>
                 </div>
@@ -390,7 +390,7 @@ export default function Projects() {
                         <p className="text-[11px] font-extrabold text-green-900">
                             ✅ Ready for a New Project
                         </p>
-                        <p className="text-[9px] text-green-700 font-medium mt-0.5">
+                        <p className="text-[11px] text-green-700 font-medium mt-0.5">
                             There are no ongoing projects currently. You can now add a new project.
                         </p>
                     </div>
@@ -399,23 +399,23 @@ export default function Projects() {
 
             <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-3">
                 <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-center text-center">
-                    <p className="text-[8px] font-bold text-gray-400 tracking-wider uppercase mb-0.5">TOTAL PROJECTS</p>
+                    <p className="text-[11px] font-bold text-gray-400 tracking-wider uppercase mb-0.5">TOTAL PROJECTS</p>
                     <h2 className="text-lg font-extrabold text-gray-900">{projects.length}</h2>
                 </div>
                 <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-center text-center">
-                    <p className="text-[8px] font-bold text-[#2e7d32] tracking-wider uppercase mb-0.5">ONGOING</p>
+                    <p className="text-[11px] font-bold text-[#2e7d32] tracking-wider uppercase mb-0.5">ONGOING</p>
                     <h2 className="text-lg font-extrabold text-[#2e7d32]">{ongoingCount}</h2>
                 </div>
                 <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-center text-center">
-                    <p className="text-[8px] font-bold text-[#d97706] tracking-wider uppercase mb-0.5">UPCOMING</p>
+                    <p className="text-[11px] font-bold text-[#d97706] tracking-wider uppercase mb-0.5">UPCOMING</p>
                     <h2 className="text-lg font-extrabold text-[#d97706]">{upcomingCount}</h2>
                 </div>
                 <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-center text-center">
-                    <p className="text-[8px] font-bold text-gray-400 tracking-wider uppercase mb-0.5">COMPLETED</p>
+                    <p className="text-[11px] font-bold text-gray-400 tracking-wider uppercase mb-0.5">COMPLETED</p>
                     <h2 className="text-lg font-extrabold text-gray-900">{completedCount}</h2>
                 </div>
                 <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-center text-center col-span-2 md:col-span-1">
-                    <p className="text-[8px] font-bold text-[#A63228] tracking-wider uppercase mb-0.5">TOTAL CONTRACT VALUE</p>
+                    <p className="text-[11px] font-bold text-[#A63228] tracking-wider uppercase mb-0.5">TOTAL CONTRACT VALUE</p>
                     <h2 className="text-lg font-extrabold text-[#A63228]">₱{totalBudget.toLocaleString()}</h2>
                 </div>
             </div>
@@ -438,36 +438,36 @@ export default function Projects() {
                     {filteredProjects.length > 0 ? projectPagination.pageItems.map(proj => (
                         <div key={proj.id} className="bg-white rounded-xl border border-gray-200 shadow-sm p-3 flex flex-col hover:border-[#A63228] transition-colors">
                             <h3 className="text-[10px] font-extrabold text-gray-900 mb-1 leading-snug">{proj.name}</h3>
-                            <p className="text-[8px] text-gray-500 mb-2 flex items-start gap-1 leading-normal">
+                            <p className="text-[11px] text-gray-500 mb-2 flex items-start gap-1 leading-normal">
                                 <svg className="shrink-0 mt-0.5" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
                                 <span>{proj.location}</span>
                             </p>
                             <div className="flex items-center justify-between mb-2 bg-[#f9fafb] border border-gray-100 rounded-lg px-2 py-1.5">
                                 <div>
-                                    <p className="text-[7px] font-bold text-gray-400 uppercase tracking-wider">Current Budget</p>
+                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Current Budget</p>
                                     <p className="text-[11px] font-extrabold text-[#A63228]">₱{Number(proj.budget || 0).toLocaleString()}</p>
                                 </div>
                                 {(proj.status || '').toUpperCase() !== 'COMPLETED' && (
-                                    <button type="button" onClick={() => setBudgetProject(proj)} className="text-[8px] font-bold bg-[#E8C547] text-gray-900 px-2 py-1 rounded-md hover:bg-[#d4b33d] transition-colors">
+                                    <button type="button" onClick={() => setBudgetProject(proj)} className="text-[11px] font-bold bg-[#E8C547] text-gray-900 px-2 py-1 rounded-md hover:bg-[#d4b33d] transition-colors">
                                         + Add Budget
                                     </button>
                                 )}
                             </div>
                             <div className="mt-auto border-t border-gray-50 pt-2 flex justify-between items-center">
                                 <div className="flex items-center gap-1.5">
-                                    <span className={`text-[7px] font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider ${isOngoingStatus(proj.status) ? 'bg-[#fce8e6] text-[#A63228]' : isUpcomingStatus(proj.status) ? 'bg-[#fef3c7] text-[#d97706]' : 'bg-[#e6f4ea] text-[#2e7d32]'}`}>
+                                    <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider ${isOngoingStatus(proj.status) ? 'bg-[#fce8e6] text-[#A63228]' : isUpcomingStatus(proj.status) ? 'bg-[#fef3c7] text-[#d97706]' : 'bg-[#e6f4ea] text-[#2e7d32]'}`}>
                                         {isOngoingStatus(proj.status) ? 'ONGOING' : isUpcomingStatus(proj.status) ? 'UPCOMING' : 'COMPLETED'}
                                     </span>
                                     {(proj.status || '').toUpperCase() !== 'COMPLETED' && (
-                                        <button onClick={() => openEditModal(proj)} className="text-[7px] font-bold text-gray-600 hover:text-[#A63228] bg-gray-100 hover:bg-red-50 px-1.5 py-0.5 rounded transition-colors">
+                                        <button onClick={() => openEditModal(proj)} className="text-[10px] font-bold text-gray-600 hover:text-[#A63228] bg-gray-100 hover:bg-red-50 px-1.5 py-0.5 rounded transition-colors">
                                             Edit
                                         </button>
                                     )}
-                                    <button onClick={() => handleDeleteProject(proj.id)} className="text-[7px] font-bold text-gray-400 hover:text-red-600 transition-colors">
+                                    <button onClick={() => handleDeleteProject(proj.id)} className="text-[10px] font-bold text-gray-400 hover:text-red-600 transition-colors">
                                         Delete
                                     </button>
                                 </div>
-                                <Link to={`/project-details/${proj.id}`} className="text-[#A63228] text-[9px] font-bold hover:underline">
+                                <Link to={`/project-details/${proj.id}`} className="text-[#A63228] text-[11px] font-bold hover:underline">
                                     View Dashboard →
                                 </Link>
                             </div>
@@ -485,7 +485,7 @@ export default function Projects() {
                         <div className="flex justify-between items-center p-4 border-b border-gray-100 shrink-0">
                             <div>
                                 <h3 className="text-xs font-extrabold text-[#1a1a1a]">{modalState === 'ADD' ? 'Add New Project' : 'Edit Project Details'}</h3>
-                                <p className="text-[8px] text-gray-500 font-medium mt-0.5">Fill in the project details below.</p>
+                                <p className="text-[11px] text-gray-500 font-medium mt-0.5">Fill in the project details below.</p>
                             </div>
                             <button onClick={() => setModalState('NONE')} className="text-gray-400 hover:text-gray-700 bg-gray-50 p-1 rounded-full hover:bg-gray-100 transition-colors">
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
@@ -494,12 +494,12 @@ export default function Projects() {
                         <div className="p-4 overflow-y-auto">
                             <form onSubmit={handleInitialSubmit} className="flex flex-col gap-3">
                                 <div>
-                                    <label className="block text-[8px] font-bold text-gray-700 mb-1 uppercase">Project Title <span className="text-[#A63228]">*</span></label>
+                                    <label className="block text-[11px] font-bold text-gray-700 mb-1 uppercase">Project Title <span className="text-[#A63228]">*</span></label>
                                     <input type="text" name="title" value={formData.title} onChange={handleInputChange} required className="w-full bg-[#f4f1ee] rounded-md px-2.5 py-1.5 text-[10px] font-medium focus:border-[#A63228] outline-none" placeholder="e.g. House Construction" />
                                 </div>
 
                                 <div className="bg-[#f9fafb] p-3 rounded-lg border border-gray-200">
-                                    <label className="block text-[8px] font-extrabold text-gray-700 uppercase mb-2">Location Details (Philippines)</label>
+                                    <label className="block text-[11px] font-extrabold text-gray-700 uppercase mb-2">Location Details (Philippines)</label>
 
                                     <PhilippineAddressSelector
                                         value={addressState}
@@ -507,13 +507,13 @@ export default function Projects() {
                                     />
 
                                     <div className="mt-2">
-                                        <label className="block text-[7px] font-bold text-gray-500 uppercase mb-0.5">Purok / Street / Bldg No. <span className="text-gray-400 font-normal">(Optional)</span></label>
+                                        <label className="block text-[10px] font-bold text-gray-500 uppercase mb-0.5">Purok / Street / Bldg No. <span className="text-gray-400 font-normal">(Optional)</span></label>
                                         <input
                                             type="text"
                                             name="street"
                                             value={addressState.street || ''}
                                             onChange={(e) => setAddressState(prev => ({ ...prev, street: e.target.value }))}
-                                            className="w-full bg-white border border-gray-200 rounded-md px-2 py-1 text-[9px] font-medium text-gray-800 outline-none"
+                                            className="w-full bg-white border border-gray-200 rounded-md px-2 py-1 text-[11px] font-medium text-gray-800 outline-none"
                                             placeholder="e.g. Unit 4, Purok 3, Main Street"
                                         />
                                     </div>
@@ -522,8 +522,8 @@ export default function Projects() {
                                 <div className="grid grid-cols-2 gap-2">
                                     <div>
                                         <div className="flex justify-between items-center mb-1">
-                                            <label className="block text-[8px] font-bold text-gray-700 uppercase">Start Date</label>
-                                            <span className="text-[7px] text-gray-400 font-semibold">Optional</span>
+                                            <label className="block text-[11px] font-bold text-gray-700 uppercase">Start Date</label>
+                                            <span className="text-[10px] text-gray-400 font-semibold">Optional</span>
                                         </div>
                                         <input
                                             type="date"
@@ -535,8 +535,8 @@ export default function Projects() {
                                     </div>
                                     <div>
                                         <div className="flex justify-between items-center mb-1">
-                                            <label className="block text-[8px] font-bold text-gray-700 uppercase">Target Date</label>
-                                            <span className="text-[7px] text-gray-400 font-semibold">Optional</span>
+                                            <label className="block text-[11px] font-bold text-gray-700 uppercase">Target Date</label>
+                                            <span className="text-[10px] text-gray-400 font-semibold">Optional</span>
                                         </div>
                                         <input
                                             type="date"
@@ -549,14 +549,14 @@ export default function Projects() {
                                     </div>
                                 </div>
                                 {dateError && (
-                                    <p className="text-[8px] text-red-600 font-bold -mt-1 flex items-center gap-1">
+                                    <p className="text-[11px] text-red-600 font-bold -mt-1 flex items-center gap-1">
                                         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
                                         {dateError}
                                     </p>
                                 )}
                                 <div>
                                     <div className="flex justify-between items-center mb-1">
-                                        <label className="block text-[8px] font-bold text-gray-700 uppercase">Contract Amount / Budget (₱) <span className="text-[#A63228]">*</span></label>
+                                        <label className="block text-[11px] font-bold text-gray-700 uppercase">Contract Amount / Budget (₱) <span className="text-[#A63228]">*</span></label>
                                     </div>
                                     <div className="relative">
                                         <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] font-extrabold text-gray-500">₱</span>
@@ -575,7 +575,7 @@ export default function Projects() {
                                         />
                                     </div>
                                     {contractError && (
-                                        <p className="text-[8px] text-red-600 font-bold mt-1 flex items-center gap-1">
+                                        <p className="text-[11px] text-red-600 font-bold mt-1 flex items-center gap-1">
                                             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
                                             {contractError}
                                         </p>
@@ -584,7 +584,7 @@ export default function Projects() {
 
                                 {modalState === 'EDIT' && (
                                     <div>
-                                        <label className="block text-[8px] font-bold text-gray-700 mb-1 uppercase">Project Status</label>
+                                        <label className="block text-[11px] font-bold text-gray-700 mb-1 uppercase">Project Status</label>
                                         <select
                                             name="status"
                                             value={formData.status}
@@ -616,17 +616,17 @@ export default function Projects() {
                 <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 transition-all">
                     <div className="bg-white rounded-xl p-5 w-full max-w-[300px] shadow-2xl relative text-center">
                         <h3 className="text-sm font-extrabold text-[#1a1a1a] mb-1">Confirm Details</h3>
-                        <p className="text-[9px] text-gray-500 mb-4 font-medium">Please review the project information.</p>
+                        <p className="text-[11px] text-gray-500 mb-4 font-medium">Please review the project information.</p>
                         <div className="bg-[#f4f1ee] rounded-lg p-3 text-left mb-5 border border-[#e5dfd8]">
                             <p className="text-[10px] font-extrabold text-gray-900 mb-1 leading-snug">{formData.title}</p>
-                            <p className="text-[8px] text-gray-600 mb-1 leading-normal"><strong className="text-gray-700">Location:</strong> {assembledLocationPreview}</p>
-                            <p className="text-[8px] text-gray-600 mb-1">Start: <span className="font-bold text-gray-900">{formData.startDate}</span>{formData.targetDate ? ` · Target: ${formData.targetDate}` : ''}</p>
-                            <p className="text-[8px] text-gray-600 mb-2">Status: <span className="font-bold text-[#A63228]">{formData.status}</span></p>
+                            <p className="text-[11px] text-gray-600 mb-1 leading-normal"><strong className="text-gray-700">Location:</strong> {assembledLocationPreview}</p>
+                            <p className="text-[11px] text-gray-600 mb-1">Start: <span className="font-bold text-gray-900">{formData.startDate}</span>{formData.targetDate ? ` · Target: ${formData.targetDate}` : ''}</p>
+                            <p className="text-[11px] text-gray-600 mb-2">Status: <span className="font-bold text-[#A63228]">{formData.status}</span></p>
                             <p className="text-[11px] font-extrabold text-[#A63228]">₱{parseFloat(formData.contract || 0).toLocaleString()}</p>
                         </div>
                         <div className="flex gap-2">
-                            <button onClick={() => { setModalState(formData.id ? 'EDIT' : 'ADD'); setDateError(''); }} disabled={saving} className="flex-1 py-1.5 bg-white border border-[#A63228] text-[#A63228] rounded-lg text-[9px] font-bold hover:bg-red-50 transition-colors">Back</button>
-                            <button onClick={handleConfirmSave} disabled={saving} className="flex-1 py-1.5 bg-[#8B1A10] text-white rounded-lg text-[9px] font-bold hover:bg-[#72150d] transition-colors disabled:opacity-60">
+                            <button onClick={() => { setModalState(formData.id ? 'EDIT' : 'ADD'); setDateError(''); }} disabled={saving} className="flex-1 py-1.5 bg-white border border-[#A63228] text-[#A63228] rounded-lg text-[11px] font-bold hover:bg-red-50 transition-colors">Back</button>
+                            <button onClick={handleConfirmSave} disabled={saving} className="flex-1 py-1.5 bg-[#8B1A10] text-white rounded-lg text-[11px] font-bold hover:bg-[#72150d] transition-colors disabled:opacity-60">
                                 {saving ? 'Saving...' : 'Confirm'}
                             </button>
                         </div>

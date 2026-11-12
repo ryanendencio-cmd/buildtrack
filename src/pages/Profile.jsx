@@ -77,20 +77,10 @@ export default function Profile() {
     const [modalState, setModalState] = useState('NONE'); // NONE, EDIT_PROFILE, CHANGE_PASS, TWO_FACTOR, SUCCESS
     const [formData, setFormData] = useState({});
     const [successMsg, setSuccessMsg] = useState('');
-    const [emailOtpSentFor, setEmailOtpSentFor] = useState('');
-    const [emailOtpCode, setEmailOtpCode] = useState('');
-    const [emailVerificationToken, setEmailVerificationToken] = useState('');
-    const [verifiedEmail, setVerifiedEmail] = useState('');
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
-        if (name === 'email') {
-            setEmailOtpSentFor('');
-            setEmailOtpCode('');
-            setEmailVerificationToken('');
-            setVerifiedEmail('');
-        }
     };
 
     const capitalizeWords = (value) => value
@@ -124,10 +114,6 @@ export default function Profile() {
             addressObj: addrObj
         });
         setErrorMsg('');
-        setEmailOtpSentFor('');
-        setEmailOtpCode('');
-        setEmailVerificationToken('');
-        setVerifiedEmail('');
         setModalState('EDIT_PROFILE');
     };
 
@@ -146,13 +132,6 @@ export default function Profile() {
     // ── SAVE PROFILE TO DATABASE ──
     const handleSaveProfile = async (e) => {
         e.preventDefault();
-        const submittedEmail = (formData.email || '').trim();
-        const normalizedEmail = submittedEmail.toLowerCase();
-        const emailChanged = normalizedEmail !== (profileData.email || '').trim().toLowerCase();
-        if (emailChanged && verifiedEmail !== normalizedEmail) {
-            setErrorMsg('Verify your new email address before saving.');
-            return;
-        }
         setSaving(true);
         setErrorMsg('');
 
@@ -186,13 +165,12 @@ export default function Profile() {
         const adminId = sessionStorage.getItem('adminId') || localStorage.getItem('adminId') || profileData.id || 1;
 
         try {
-            await api.post('/admin/profile/save', {
+            const result = await api.post('/admin/profile/save', {
                 adminId,
                 firstName: updatedProfile.firstName,
                 middleName: updatedProfile.middleName,
                 lastName: updatedProfile.lastName,
                 email: updatedProfile.email,
-                ...(emailChanged ? { email_verification_token: emailVerificationToken } : {}),
                 phone: updatedProfile.phone,
                 homeAddress: updatedProfile.homeAddress,
                 addressObj: updatedProfile.addressObj,
@@ -209,52 +187,6 @@ export default function Profile() {
         } catch (err) {
             console.error('Error saving profile to database:', err);
             setErrorMsg(err.message || 'Failed to save admin profile to database.');
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    const sendEmailChangeOtp = async () => {
-        const email = (formData.email || '').trim();
-        if (!email || email.toLowerCase() === (profileData.email || '').trim().toLowerCase()) {
-            setErrorMsg('Enter a different email address first.');
-            return;
-        }
-
-        setSaving(true);
-        setErrorMsg('');
-        try {
-            await api.post('/email-otp/send', { email, purpose: 'email_change' });
-            setEmailOtpSentFor(email.toLowerCase());
-            setEmailOtpCode('');
-            setEmailVerificationToken('');
-            setVerifiedEmail('');
-        } catch (err) {
-            setErrorMsg(err.message || 'Unable to send verification code.');
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    const verifyEmailChangeOtp = async () => {
-        const email = (formData.email || '').trim();
-        if (!/^\d{6}$/.test(emailOtpCode)) {
-            setErrorMsg('Enter the complete 6-digit verification code.');
-            return;
-        }
-
-        setSaving(true);
-        setErrorMsg('');
-        try {
-            const result = await api.post('/email-otp/verify', {
-                email,
-                purpose: 'email_change',
-                code: emailOtpCode
-            });
-            setEmailVerificationToken(result.verificationToken);
-            setVerifiedEmail(email.toLowerCase());
-        } catch (err) {
-            setErrorMsg(err.message || 'Unable to verify email address.');
         } finally {
             setSaving(false);
         }
@@ -313,7 +245,7 @@ export default function Profile() {
             {/* ── HEADER ── */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-4 gap-2">
                 <div>
-                    <span className="text-[9px] font-bold text-[#A63228] tracking-widest uppercase">PROFILE</span>
+                    <span className="text-[11px] font-bold text-[#A63228] tracking-widest uppercase">PROFILE</span>
                     <h1 className="text-xl font-extrabold text-gray-900 mt-0.5 tracking-tight">Admin Profile</h1>
                     <p className="text-[10px] text-gray-500 mt-0.5">Manage your account information and settings.</p>
                 </div>
@@ -389,14 +321,14 @@ export default function Profile() {
                                 <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Password</span>
                                 <div className="flex items-center gap-4">
                                     <span className="text-xs font-bold text-gray-900 tracking-widest">••••••••••••</span>
-                                    <button onClick={openChangePassword} className="border border-[#A63228] text-[#A63228] px-3 py-1 rounded-md text-[9px] font-extrabold hover:bg-red-50 transition-colors uppercase">Change</button>
+                                    <button onClick={openChangePassword} className="border border-[#A63228] text-[#A63228] px-3 py-1 rounded-md text-[11px] font-extrabold hover:bg-red-50 transition-colors uppercase">Change</button>
                                 </div>
                             </div>
                             <div className="flex justify-between items-center py-2.5 border-b border-gray-50">
                                 <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Two-Factor Auth</span>
                                 <div className="flex items-center gap-4">
                                     <span className={`text-xs font-bold ${is2FAEnabled ? 'text-[#2e7d32]' : 'text-gray-900'}`}>{is2FAEnabled ? 'Enabled' : 'Disabled'}</span>
-                                    <button onClick={open2FAModal} className={`border px-3 py-1 rounded-md text-[9px] font-extrabold transition-colors uppercase ${is2FAEnabled ? 'border-gray-300 text-gray-600 hover:bg-gray-100' : 'border-[#A63228] text-[#A63228] hover:bg-red-50'}`}>
+                                    <button onClick={open2FAModal} className={`border px-3 py-1 rounded-md text-[11px] font-extrabold transition-colors uppercase ${is2FAEnabled ? 'border-gray-300 text-gray-600 hover:bg-gray-100' : 'border-[#A63228] text-[#A63228] hover:bg-red-50'}`}>
                                         {is2FAEnabled ? 'Turn Off' : 'Enable'}
                                     </button>
                                 </div>
@@ -435,162 +367,244 @@ export default function Profile() {
 
             {/* 1. EDIT PROFILE MODAL */}
             {modalState === 'EDIT_PROFILE' && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 transition-all">
-                    <div className="bg-white rounded-2xl p-7 w-full max-w-[480px] shadow-2xl relative">
-                        <h3 className="text-lg font-extrabold text-[#1a1a1a] mb-1.5">Edit Profile</h3>
-                        <p className="text-xs text-gray-500 mb-4 font-medium">Update your personal information to keep your account current.</p>
-
-                        {errorMsg && (
-                            <div className="mb-4 p-3 bg-red-50 border border-red-200 text-[#A63228] text-xs font-bold rounded-lg">
-                                {errorMsg}
-                            </div>
-                        )}
-
-                        <form onSubmit={handleSaveProfile} className="flex flex-col gap-4">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-xs font-extrabold text-gray-700 mb-1.5 uppercase tracking-wider">First Name</label>
-                                    <input type="text" name="firstName" value={formData.firstName || ''} onChange={handleNameChange} required className="w-full bg-[#f4f1ee] rounded-lg px-4 py-3 text-sm font-medium focus:border-[#A63228] outline-none transition-colors border border-transparent" />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-extrabold text-gray-700 mb-1.5 uppercase tracking-wider">Middle Name</label>
-                                    <input type="text" name="middleName" value={formData.middleName || ''} onChange={handleNameChange} className="w-full bg-[#f4f1ee] rounded-lg px-4 py-3 text-sm font-medium focus:border-[#A63228] outline-none transition-colors border border-transparent" />
-                                </div>
-                                <div className="sm:col-span-2">
-                                    <label className="block text-xs font-extrabold text-gray-700 mb-1.5 uppercase tracking-wider">Last Name</label>
-                                    <input type="text" name="lastName" value={formData.lastName || ''} onChange={handleNameChange} required className="w-full bg-[#f4f1ee] rounded-lg px-4 py-3 text-sm font-medium focus:border-[#A63228] outline-none transition-colors border border-transparent" />
-                                </div>
-                            </div>
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-5 transition-all">
+                    <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl relative flex flex-col max-h-[92vh] overflow-hidden border border-gray-100">
+                        {/* Modal Header (Sticky) */}
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0 bg-gray-50/50">
                             <div>
-                                <label className="block text-xs font-extrabold text-gray-700 mb-1.5 uppercase tracking-wider">Email Address</label>
-                                <input type="email" name="email" value={formData.email || ''} onChange={handleInputChange} required className="w-full bg-[#f4f1ee] rounded-lg px-4 py-3 text-sm font-medium focus:border-[#A63228] outline-none transition-colors border border-transparent" />
-                                {(formData.email || '').trim().toLowerCase() !== (profileData.email || '').trim().toLowerCase() && (
-                                    <div className="mt-2 flex flex-col gap-2">
-                                        <button type="button" onClick={sendEmailChangeOtp} disabled={saving} className="self-start text-xs font-bold text-[#A63228] disabled:opacity-50">
-                                            {emailOtpSentFor === (formData.email || '').trim().toLowerCase() ? 'Resend verification code' : 'Send verification code'}
-                                        </button>
-                                        {emailOtpSentFor === (formData.email || '').trim().toLowerCase() && (
-                                            <div className="flex gap-2">
-                                                <input
-                                                    type="text"
-                                                    inputMode="numeric"
-                                                    autoComplete="one-time-code"
-                                                    maxLength={6}
-                                                    value={emailOtpCode}
-                                                    onChange={(event) => {
-                                                        setEmailOtpCode(event.target.value.replace(/\D/g, '').slice(0, 6));
-                                                        setEmailVerificationToken('');
-                                                        setVerifiedEmail('');
-                                                    }}
-                                                    placeholder="6-digit code"
-                                                    aria-label="Email verification code"
-                                                    className="min-w-0 flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm"
-                                                />
-                                                <button type="button" onClick={verifyEmailChangeOtp} disabled={saving} className="rounded-lg bg-[#A63228] px-3 py-2 text-xs font-bold text-white disabled:opacity-50">
-                                                    Verify
-                                                </button>
+                                <h3 className="text-base sm:text-lg font-extrabold text-[#1a1a1a]">Edit Profile</h3>
+                                <p className="text-xs text-gray-500 font-medium mt-0.5">Update your personal information to keep your account current.</p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setModalState('NONE')}
+                                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                                title="Close"
+                            >
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                </svg>
+                            </button>
+                        </div>
+
+                        {/* Modal Body (Scrollable) */}
+                        <div className="flex-1 overflow-y-auto px-6 py-5">
+                            {errorMsg && (
+                                <div className="mb-4 p-3 bg-red-50 border border-red-200 text-[#A63228] text-xs font-bold rounded-xl flex items-center gap-2">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                                    <span>{errorMsg}</span>
+                                </div>
+                            )}
+
+                            <form id="edit-profile-form" onSubmit={handleSaveProfile} className="flex flex-col gap-4">
+                                {/* Name fields: 3-column layout */}
+                                <div>
+                                    <span className="text-[10px] font-bold text-[#A63228] uppercase tracking-wider block mb-2">Personal Details</span>
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                        <div>
+                                            <label className="block text-[11px] font-extrabold text-gray-700 mb-1 tracking-wide uppercase">First Name <span className="text-red-500">*</span></label>
+                                            <input 
+                                                type="text" 
+                                                name="firstName" 
+                                                value={formData.firstName || ''} 
+                                                onChange={handleNameChange} 
+                                                required 
+                                                className="w-full bg-white border border-gray-200/90 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-gray-800 focus:border-[#A63228] focus:ring-2 focus:ring-[#A63228]/10 outline-none transition-all shadow-2xs" 
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[11px] font-extrabold text-gray-700 mb-1 tracking-wide uppercase">Middle Name</label>
+                                            <input 
+                                                type="text" 
+                                                name="middleName" 
+                                                value={formData.middleName || ''} 
+                                                onChange={handleNameChange} 
+                                                className="w-full bg-white border border-gray-200/90 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-gray-800 focus:border-[#A63228] focus:ring-2 focus:ring-[#A63228]/10 outline-none transition-all shadow-2xs" 
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[11px] font-extrabold text-gray-700 mb-1 tracking-wide uppercase">Last Name <span className="text-red-500">*</span></label>
+                                            <input 
+                                                type="text" 
+                                                name="lastName" 
+                                                value={formData.lastName || ''} 
+                                                onChange={handleNameChange} 
+                                                required 
+                                                className="w-full bg-white border border-gray-200/90 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-gray-800 focus:border-[#A63228] focus:ring-2 focus:ring-[#A63228]/10 outline-none transition-all shadow-2xs" 
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Contact fields: 2-column layout */}
+                                <div>
+                                    <span className="text-[10px] font-bold text-[#A63228] uppercase tracking-wider block mb-2">Contact Details</span>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="block text-[11px] font-extrabold text-gray-700 mb-1 tracking-wide uppercase">Email Address <span className="text-red-500">*</span></label>
+                                            <input 
+                                                type="email" 
+                                                name="email" 
+                                                value={formData.email || ''} 
+                                                onChange={handleInputChange} 
+                                                required 
+                                                className="w-full bg-white border border-gray-200/90 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-gray-800 focus:border-[#A63228] focus:ring-2 focus:ring-[#A63228]/10 outline-none transition-all shadow-2xs" 
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[11px] font-extrabold text-gray-700 mb-1 tracking-wide uppercase">Phone Number <span className="text-red-500">*</span></label>
+                                            <input 
+                                                type="text" 
+                                                name="phone" 
+                                                value={formData.phone || ''} 
+                                                onChange={handlePhoneChange} 
+                                                maxLength="11" 
+                                                required 
+                                                placeholder="09XX XXX XXXX" 
+                                                className="w-full bg-white border border-gray-200/90 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-gray-800 focus:border-[#A63228] focus:ring-2 focus:ring-[#A63228]/10 outline-none transition-all shadow-2xs" 
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Home Address Container */}
+                                <div>
+                                    <span className="text-[10px] font-bold text-[#A63228] uppercase tracking-wider block mb-2">Residential Address</span>
+                                    <div className="w-full rounded-2xl border border-gray-200/90 p-4 bg-gray-50/50 space-y-3">
+                                        <div>
+                                            <label className="block text-[11px] font-extrabold text-gray-700 mb-1 tracking-wide uppercase">House No. / Building / Street / Subdivision</label>
+                                            <input
+                                                type="text"
+                                                name="street"
+                                                value={formData.street || ''}
+                                                onChange={handleInputChange}
+                                                placeholder="e.g. Unit 4B, 123 Rizal Ave, Villa Verde"
+                                                className="w-full bg-white border border-gray-200/90 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-gray-900 focus:border-[#A63228] focus:ring-2 focus:ring-[#A63228]/10 outline-none transition-all shadow-2xs"
+                                            />
+                                        </div>
+
+                                        <PhilippineAddressSelector 
+                                            value={formData.addressObj || {}} 
+                                            onChange={(newObj) => {
+                                                const locParts = [
+                                                    formData.street ? formData.street.trim() : '',
+                                                    newObj.barangayName ? `Brgy. ${newObj.barangayName}` : '',
+                                                    newObj.cityName,
+                                                    newObj.provinceName && newObj.provinceName !== 'NCR' && newObj.provinceName !== newObj.cityName ? newObj.provinceName : '',
+                                                    newObj.regionName
+                                                ].filter(Boolean);
+                                                const fullAddress = locParts.join(', ');
+                                                setFormData(prev => ({ ...prev, addressObj: newObj, homeAddress: fullAddress }));
+                                            }} 
+                                        />
+
+                                        {formData.homeAddress && (
+                                            <div className="mt-3 pt-3 border-t border-gray-200/70">
+                                                <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                                                    <span>Complete Address Preview</span>
+                                                </div>
+                                                <p className="text-xs font-extrabold text-gray-900 leading-relaxed bg-white p-2.5 rounded-lg border border-gray-200/60 shadow-2xs">{formData.homeAddress}</p>
                                             </div>
                                         )}
-                                        {verifiedEmail === (formData.email || '').trim().toLowerCase() && (
-                                            <span className="text-xs font-semibold text-green-700">Email verified</span>
-                                        )}
                                     </div>
-                                )}
-                            </div>
-                            <div>
-                                <label className="block text-xs font-extrabold text-gray-700 mb-1.5 uppercase tracking-wider">Phone Number</label>
-                                <input type="text" name="phone" value={formData.phone || ''} onChange={handlePhoneChange} maxLength="11" required className="w-full bg-[#f4f1ee] rounded-lg px-4 py-3 text-sm font-medium focus:border-[#A63228] outline-none transition-colors border border-transparent" placeholder="09XX XXX XXXX" />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-extrabold text-gray-700 mb-1.5 uppercase tracking-wider">Home Address</label>
-                                <div className="w-full bg-[#f4f1ee] rounded-lg p-4 focus-within:border-[#A63228] border border-transparent transition-colors">
-                                    <div className="mb-3">
-                                        <label className="block text-[10px] font-bold text-gray-600 mb-1 uppercase">House No. / Building / Street / Subdivision</label>
-                                        <input
-                                            type="text"
-                                            name="street"
-                                            value={formData.street || ''}
-                                            onChange={handleInputChange}
-                                            placeholder="e.g. Unit 4B, 123 Rizal Ave, Villa Verde"
-                                            className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-xs font-medium text-gray-900 focus:border-[#A63228] outline-none"
-                                        />
-                                    </div>
-
-                                    <PhilippineAddressSelector 
-                                        value={formData.addressObj || {}} 
-                                        onChange={(newObj) => {
-                                            const locParts = [
-                                                formData.street ? formData.street.trim() : '',
-                                                newObj.barangayName ? `Brgy. ${newObj.barangayName}` : '',
-                                                newObj.cityName,
-                                                newObj.provinceName && newObj.provinceName !== 'NCR' && newObj.provinceName !== newObj.cityName ? newObj.provinceName : '',
-                                                newObj.regionName
-                                            ].filter(Boolean);
-                                            const fullAddress = locParts.join(', ');
-                                            setFormData(prev => ({ ...prev, addressObj: newObj, homeAddress: fullAddress }));
-                                        }} 
-                                    />
-                                    {formData.homeAddress && (
-                                        <div className="mt-3 pt-3 border-t border-gray-200">
-                                            <span className="text-[9px] font-bold text-gray-500 uppercase">Complete Address Preview</span>
-                                            <p className="text-xs font-bold text-gray-900 mt-1 leading-relaxed">{formData.homeAddress}</p>
-                                        </div>
-                                    )}
                                 </div>
-                            </div>
-                            <div className="flex gap-3 mt-4">
-                                <button type="button" onClick={() => setModalState('NONE')} disabled={saving} className="flex-1 py-3 bg-white border border-[#A63228] text-[#A63228] rounded-xl text-xs font-extrabold hover:bg-red-50 transition-colors uppercase tracking-wider">Cancel</button>
-                                <button type="submit" disabled={saving} className="flex-1 py-3 bg-[#8B1A10] text-white rounded-xl text-xs font-extrabold hover:bg-[#72150d] transition-colors shadow-sm uppercase tracking-wider disabled:opacity-50">
-                                    {saving ? 'Saving...' : 'Save Changes'}
-                                </button>
-                            </div>
-                        </form>
+                            </form>
+                        </div>
+
+                        {/* Modal Footer (Sticky) */}
+                        <div className="px-6 py-3.5 border-t border-gray-100 bg-gray-50/70 flex justify-end items-center gap-3 shrink-0">
+                            <button 
+                                type="button" 
+                                onClick={() => setModalState('NONE')} 
+                                disabled={saving} 
+                                className="px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-extrabold hover:bg-gray-100 transition-colors uppercase tracking-wider cursor-pointer"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                type="submit" 
+                                form="edit-profile-form"
+                                disabled={saving} 
+                                className="px-5 py-2 bg-[#8B1A10] text-white rounded-xl text-xs font-extrabold hover:bg-[#72150d] transition-colors shadow-sm uppercase tracking-wider disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+                            >
+                                {saving ? 'Saving...' : 'Save Changes'}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
 
             {/* 2. CHANGE PASSWORD MODAL */}
             {modalState === 'CHANGE_PASS' && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 transition-all">
-                    <div className="bg-white rounded-2xl p-7 w-full max-w-[480px] shadow-2xl relative">
-                        <h3 className="text-lg font-extrabold text-[#1a1a1a] mb-1.5">Change Password</h3>
-                        <p className="text-xs text-gray-500 mb-4 font-medium">Please enter your current password and choose a secure new password.</p>
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 transition-all">
+                    <div className="bg-white rounded-2xl w-full max-w-[440px] shadow-2xl relative flex flex-col max-h-[92vh] overflow-hidden border border-gray-100">
+                        {/* Header */}
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0 bg-gray-50/50">
+                            <div>
+                                <h3 className="text-base sm:text-lg font-extrabold text-[#1a1a1a]">Change Password</h3>
+                                <p className="text-xs text-gray-500 font-medium mt-0.5">Please enter your current and new password.</p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setModalState('NONE')}
+                                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                                title="Close"
+                            >
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                            </button>
+                        </div>
 
-                        {errorMsg && (
-                            <div className="mb-4 p-3 bg-red-50 border border-red-200 text-[#A63228] text-xs font-bold rounded-lg">
-                                {errorMsg}
-                            </div>
-                        )}
+                        {/* Body */}
+                        <div className="p-6 overflow-y-auto">
+                            {errorMsg && (
+                                <div className="mb-4 p-3 bg-red-50 border border-red-200 text-[#A63228] text-xs font-bold rounded-xl flex items-center gap-2">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                                    <span>{errorMsg}</span>
+                                </div>
+                            )}
 
-                        <form onSubmit={handleChangePassword} className="flex flex-col gap-4">
-                            <div>
-                                <label className="block text-xs font-extrabold text-gray-700 mb-1.5 uppercase tracking-wider">Current Password</label>
-                                <input type="password" name="current" value={formData.current || ''} onChange={handleInputChange} required className="w-full bg-[#f4f1ee] rounded-lg px-4 py-3 text-sm font-medium focus:border-[#A63228] outline-none tracking-widest border border-transparent" placeholder="••••••••" />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-extrabold text-gray-700 mb-1.5 uppercase tracking-wider">New Password</label>
-                                <input type="password" name="newPass" value={formData.newPass || ''} onChange={handleInputChange} required className="w-full bg-[#f4f1ee] rounded-lg px-4 py-3 text-sm font-medium focus:border-[#A63228] outline-none tracking-widest border border-transparent" placeholder="••••••••" />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-extrabold text-gray-700 mb-1.5 uppercase tracking-wider">Confirm New Password</label>
-                                <input type="password" name="confirm" value={formData.confirm || ''} onChange={handleInputChange} required className="w-full bg-[#f4f1ee] rounded-lg px-4 py-3 text-sm font-medium focus:border-[#A63228] outline-none tracking-widest border border-transparent" placeholder="••••••••" />
-                            </div>
-                            <div className="flex gap-3 mt-4">
-                                <button type="button" onClick={() => setModalState('NONE')} disabled={saving} className="flex-1 py-3 bg-white border border-[#A63228] text-[#A63228] rounded-xl text-xs font-extrabold hover:bg-red-50 transition-colors uppercase tracking-wider">Cancel</button>
-                                <button type="submit" disabled={saving} className="flex-1 py-3 bg-[#8B1A10] text-white rounded-xl text-xs font-extrabold hover:bg-[#72150d] transition-colors shadow-sm uppercase tracking-wider disabled:opacity-50">
-                                    {saving ? 'Updating...' : 'Update Password'}
-                                </button>
-                            </div>
-                        </form>
+                            <form id="change-pass-form" onSubmit={handleChangePassword} className="flex flex-col gap-3.5">
+                                <div>
+                                    <label className="block text-[11px] font-extrabold text-gray-700 mb-1 tracking-wide uppercase">Current Password</label>
+                                    <input type="password" name="current" value={formData.current || ''} onChange={handleInputChange} required className="w-full bg-white border border-gray-200/90 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-gray-800 focus:border-[#A63228] focus:ring-2 focus:ring-[#A63228]/10 outline-none tracking-widest shadow-2xs" placeholder="••••••••" />
+                                </div>
+                                <div>
+                                    <label className="block text-[11px] font-extrabold text-gray-700 mb-1 tracking-wide uppercase">New Password</label>
+                                    <input type="password" name="newPass" value={formData.newPass || ''} onChange={handleInputChange} required className="w-full bg-white border border-gray-200/90 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-gray-800 focus:border-[#A63228] focus:ring-2 focus:ring-[#A63228]/10 outline-none tracking-widest shadow-2xs" placeholder="••••••••" />
+                                </div>
+                                <div>
+                                    <label className="block text-[11px] font-extrabold text-gray-700 mb-1 tracking-wide uppercase">Confirm New Password</label>
+                                    <input type="password" name="confirm" value={formData.confirm || ''} onChange={handleInputChange} required className="w-full bg-white border border-gray-200/90 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-gray-800 focus:border-[#A63228] focus:ring-2 focus:ring-[#A63228]/10 outline-none tracking-widest shadow-2xs" placeholder="••••••••" />
+                                </div>
+                            </form>
+                        </div>
+
+                        {/* Footer */}
+                        <div className="px-6 py-3.5 border-t border-gray-100 bg-gray-50/70 flex justify-end gap-3 shrink-0">
+                            <button type="button" onClick={() => setModalState('NONE')} disabled={saving} className="px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-extrabold hover:bg-gray-100 transition-colors uppercase tracking-wider cursor-pointer">Cancel</button>
+                            <button type="submit" form="change-pass-form" disabled={saving} className="px-5 py-2 bg-[#8B1A10] text-white rounded-xl text-xs font-extrabold hover:bg-[#72150d] transition-colors shadow-sm uppercase tracking-wider disabled:opacity-50 cursor-pointer">
+                                {saving ? 'Updating...' : 'Update Password'}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
 
             {/* 3. TWO-FACTOR AUTHENTICATION MODAL */}
             {modalState === 'TWO_FACTOR' && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 transition-all">
-                    <div className="bg-white rounded-2xl p-7 w-full max-w-[420px] shadow-2xl relative text-center">
-                        <div className="w-14 h-14 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4 text-gray-600">
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 transition-all">
+                    <div className="bg-white rounded-2xl p-7 w-full max-w-[420px] shadow-2xl relative text-center border border-gray-100">
+                        <button
+                            type="button"
+                            onClick={() => setModalState('NONE')}
+                            className="absolute top-4 right-4 p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                            title="Close"
+                        >
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                        </button>
+                        <div className="w-14 h-14 bg-red-50 text-[#A63228] rounded-full flex items-center justify-center mx-auto mb-4 shadow-2xs">
                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
                         </div>
                         <h3 className="text-lg font-extrabold text-[#1a1a1a] mb-2">{is2FAEnabled ? 'Disable Two-Factor Auth?' : 'Enable Two-Factor Auth'}</h3>
@@ -603,13 +617,13 @@ export default function Profile() {
                         <form onSubmit={handleToggle2FA} className="flex flex-col gap-5">
                             {!is2FAEnabled && (
                                 <div>
-                                    <input type="text" name="code" value={formData.code || ''} onChange={handleInputChange} required maxLength="6" className="w-full bg-[#f4f1ee] rounded-lg px-4 py-3 text-2xl font-bold focus:border-[#A63228] outline-none text-center tracking-[0.5em] border border-transparent" placeholder="000000" />
+                                    <input type="text" name="code" value={formData.code || ''} onChange={handleInputChange} required maxLength="6" className="w-full bg-white border border-gray-200/90 rounded-xl px-4 py-3 text-2xl font-bold focus:border-[#A63228] focus:ring-2 focus:ring-[#A63228]/10 outline-none text-center tracking-[0.5em] shadow-2xs" placeholder="000000" />
                                 </div>
                             )}
 
                             <div className="flex gap-3 mt-2">
-                                <button type="button" onClick={() => setModalState('NONE')} className="flex-1 py-3 bg-white border border-gray-300 text-gray-700 rounded-xl text-xs font-extrabold hover:bg-gray-50 transition-colors uppercase tracking-wider">Cancel</button>
-                                <button type="submit" className={`flex-1 py-3 text-white rounded-xl text-xs font-extrabold transition-colors shadow-sm uppercase tracking-wider ${is2FAEnabled ? 'bg-[#A63228] hover:bg-[#8B1A10]' : 'bg-[#2e7d32] hover:bg-[#1b5e20]'}`}>
+                                <button type="button" onClick={() => setModalState('NONE')} className="flex-1 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-extrabold hover:bg-gray-100 transition-colors uppercase tracking-wider cursor-pointer">Cancel</button>
+                                <button type="submit" className={`flex-1 py-2.5 text-white rounded-xl text-xs font-extrabold transition-colors shadow-sm uppercase tracking-wider cursor-pointer ${is2FAEnabled ? 'bg-[#A63228] hover:bg-[#8B1A10]' : 'bg-[#2e7d32] hover:bg-[#1b5e20]'}`}>
                                     {is2FAEnabled ? 'Disable 2FA' : 'Verify & Enable'}
                                 </button>
                             </div>

@@ -284,7 +284,7 @@ export default function WorkersSalary() {
       {/* ── HEADER ── */}
       <div className="flex flex-col md:flex-row md:items-center justify-between pb-3 mb-3 border-b border-gray-200/60 gap-3 print:hidden">
         <div>
-          <span className="text-[9px] font-bold text-[#A63228] tracking-widest uppercase">SALARY & PAYROLL SYSTEM</span>
+          <span className="text-[11px] font-bold text-[#A63228] tracking-widest uppercase">SALARY & PAYROLL SYSTEM</span>
           <h1 className="text-xl font-extrabold text-gray-900 mt-0.5 tracking-tight flex items-center gap-2">
             Workers Salary & Payroll
             <span className="text-[10px] font-bold bg-[#A63228]/10 text-[#A63228] px-2 py-0.5 rounded-full">
@@ -330,7 +330,7 @@ export default function WorkersSalary() {
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
               {/* Presets & Dates */}
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">CUTOFF PRESET:</span>
+                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">CUTOFF PRESET:</span>
                 <div className="flex flex-wrap gap-1">
                   {[
                     { id: 'CurrentSemiMonthly', label: 'Current Cutoff' },
@@ -438,7 +438,7 @@ export default function WorkersSalary() {
                 <div>
                   <div className="font-extrabold text-[11px] uppercase tracking-wide text-blue-950 flex items-center gap-1.5">
                     {selectedProjectObj?.name} — THIS PROJECT IS COMPLETED
-                    <span className="bg-blue-200/70 text-blue-900 text-[9px] px-2 py-0.5 rounded-full font-bold">Payroll History Only</span>
+                    <span className="bg-blue-200/70 text-blue-900 text-[11px] px-2 py-0.5 rounded-full font-bold">Payroll History Only</span>
                   </div>
                   <p className="text-[10px] text-blue-800 mt-0.5">
                     This project has officially ended. Releasing or drafting new payroll is no longer allowed. You may only view past payroll records in <strong>Payroll History</strong>.
@@ -461,7 +461,7 @@ export default function WorkersSalary() {
               <div>
                 <div className="font-extrabold text-[11px] uppercase tracking-wide text-amber-950 flex items-center gap-1.5">
                   {selectedProjectObj?.name} — THIS PROJECT IS UPCOMING
-                  <span className="bg-amber-200/70 text-amber-900 text-[9px] px-2 py-0.5 rounded-full font-bold">No Payroll Allowed</span>
+                  <span className="bg-amber-200/70 text-amber-900 text-[11px] px-2 py-0.5 rounded-full font-bold">No Payroll Allowed</span>
                 </div>
                 <p className="text-[10px] text-amber-800 mt-0.5">
                   This project has not yet started (Upcoming). Releasing salary, requesting cash advances, and reducing the budget are not allowed until the project is set to <strong>ONGOING</strong>.
@@ -474,57 +474,57 @@ export default function WorkersSalary() {
           <div className="grid grid-cols-2 md:grid-cols-6 gap-2.5 mb-3 print:hidden">
             {/* Total Gross Pay */}
             <div className="bg-white rounded-xl border border-gray-100 p-2.5 shadow-xs">
-              <span className="text-[8px] font-bold text-gray-400 uppercase tracking-wider block mb-0.5">GROSS EARNED WAGES</span>
+              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block mb-0.5">GROSS EARNED WAGES</span>
               <div className="text-base font-extrabold text-gray-900 tracking-tight">
                 ₱{Number(payrollData.summary.totalGrossPay || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
-              <span className="text-[8px] text-gray-500 font-medium">Gross pay before deductions</span>
+              <span className="text-[11px] text-gray-500 font-medium">Gross pay before deductions</span>
             </div>
 
             {/* Total Late Penalties */}
             <div className="bg-white rounded-xl border border-gray-100 p-2.5 shadow-xs">
-              <span className="text-[8px] font-bold text-amber-600 uppercase tracking-wider block mb-0.5">LATE DEDUCTIONS</span>
+              <span className="text-[11px] font-bold text-amber-600 uppercase tracking-wider block mb-0.5">LATE DEDUCTIONS</span>
               <div className="text-base font-extrabold text-amber-700 tracking-tight">
                 -₱{Number(payrollData.summary.totalLateDeductions || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
-              <span className="text-[8px] text-gray-500 font-medium">Late & Double Late deductions</span>
+              <span className="text-[11px] text-gray-500 font-medium">Late & Double Late deductions</span>
             </div>
 
             <div className="bg-white rounded-xl border border-gray-100 p-2.5 shadow-xs">
-              <span className="text-[8px] font-bold text-emerald-700 uppercase tracking-wider block mb-0.5">OVERTIME PAY</span>
+              <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider block mb-0.5">OVERTIME PAY</span>
               <div className="text-base font-extrabold text-emerald-700 tracking-tight">
                 +₱{Number(payrollData.summary.totalOvertimePay || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
-              <span className="text-[8px] text-gray-500 font-medium">Approved complete intervals only</span>
+              <span className="text-[11px] text-gray-500 font-medium">Approved complete intervals only</span>
             </div>
 
             {/* Total Cash Advances */}
             <div className="bg-white rounded-xl border border-gray-100 p-2.5 shadow-xs">
-              <span className="text-[8px] font-bold text-rose-600 uppercase tracking-wider block mb-0.5">CASH ADVANCES</span>
+              <span className="text-[11px] font-bold text-rose-600 uppercase tracking-wider block mb-0.5">CASH ADVANCES</span>
               <div className="text-base font-extrabold text-rose-700 tracking-tight">
                 -₱{Number(payrollData.summary.totalCashAdvances || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
-              <span className="text-[8px] text-gray-500 font-medium">Deducted cash advances</span>
+              <span className="text-[11px] text-gray-500 font-medium">Deducted cash advances</span>
             </div>
 
             {/* Total Net Payout */}
             <div className="bg-white rounded-xl border-2 border-[#A63228]/20 p-2.5 shadow-xs bg-[#A63228]/2">
-              <span className="text-[8px] font-bold text-[#A63228] uppercase tracking-wider block mb-0.5">TOTAL NET PAYOUT</span>
+              <span className="text-[11px] font-bold text-[#A63228] uppercase tracking-wider block mb-0.5">TOTAL NET PAYOUT</span>
               <div className="text-lg font-black text-[#A63228] tracking-tight">
                 ₱{Number(payrollData.summary.totalNetPayout || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
-              <span className="text-[8px] text-[#A63228]/80 font-bold">Total net payout to workers</span>
+              <span className="text-[11px] text-[#A63228]/80 font-bold">Total net payout to workers</span>
             </div>
 
             {/* Total Workforce & Hours */}
             <div className="bg-white rounded-xl border border-gray-100 p-2.5 shadow-xs">
-              <span className="text-[8px] font-bold text-gray-400 uppercase tracking-wider block mb-0.5">MANPOWER & HOURS</span>
+              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block mb-0.5">MANPOWER & HOURS</span>
               <div className="text-base font-extrabold text-gray-800 tracking-tight flex items-center gap-1.5">
                 <span>{payrollData.summary.totalWorkers || 0} Workers</span>
-                <span className="text-[9px] text-gray-400 font-bold">•</span>
+                <span className="text-[11px] text-gray-400 font-bold">•</span>
                 <span className="text-blue-600">{payrollData.summary.totalHours || 0} hrs</span>
               </div>
-              <span className="text-[8px] text-gray-500 font-medium">Total recorded hours</span>
+              <span className="text-[11px] text-gray-500 font-medium">Total recorded hours</span>
             </div>
           </div>
 
@@ -537,27 +537,27 @@ export default function WorkersSalary() {
                   <img src="/logo.png" alt="S-CON Logo" className="h-9 object-contain" />
                   <div>
                     <h1 className="text-sm font-extrabold text-gray-900 tracking-wider">S-CON BUILDTRACK</h1>
-                    <p className="text-[9px] text-gray-500 uppercase tracking-widest font-semibold">Official Workers Payroll Sheet</p>
+                    <p className="text-[11px] text-gray-500 uppercase tracking-widest font-semibold">Official Workers Payroll Sheet</p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <span className="inline-block px-2 py-0.5 rounded bg-gray-100 text-[9px] font-extrabold text-gray-800 uppercase tracking-wider">
+                  <span className="inline-block px-2 py-0.5 rounded bg-gray-100 text-[11px] font-extrabold text-gray-800 uppercase tracking-wider">
                     Payroll Sheet
                   </span>
-                  <p className="text-[8px] text-gray-500 mt-1">Printed: {new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}</p>
+                  <p className="text-[11px] text-gray-500 mt-1">Printed: {new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}</p>
                 </div>
               </div>
               <div className="mt-3 pt-2.5 border-t border-gray-200 grid grid-cols-3 gap-2 text-[10px]">
                 <div>
-                  <span className="text-gray-400 font-bold uppercase text-[8px] block">CUTOFF PERIOD:</span>
+                  <span className="text-gray-400 font-bold uppercase text-[11px] block">CUTOFF PERIOD:</span>
                   <strong className="text-gray-900 font-bold">{startDate} to {endDate}</strong>
                 </div>
                 <div>
-                  <span className="text-gray-400 font-bold uppercase text-[8px] block">PROJECT SITE:</span>
+                  <span className="text-gray-400 font-bold uppercase text-[11px] block">PROJECT SITE:</span>
                   <strong className="text-gray-900 font-bold">{selectedProject === 'ALL' ? 'All Projects' : (projects.find(p => String(p.id) === String(selectedProject))?.name || 'Selected Project')}</strong>
                 </div>
                 <div className="text-right">
-                  <span className="text-gray-400 font-bold uppercase text-[8px] block">TOTAL NET PAYOUT:</span>
+                  <span className="text-gray-400 font-bold uppercase text-[11px] block">TOTAL NET PAYOUT:</span>
                   <strong className="text-[#A63228] font-black text-xs">₱{Number(payrollData.summary.totalNetPayout || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
                 </div>
               </div>
@@ -605,7 +605,7 @@ export default function WorkersSalary() {
                 </button>
 
                 {!canReleaseSalary && (
-                  <span className="text-[9px] text-gray-500 font-medium italic hidden lg:inline">
+                  <span className="text-[11px] text-gray-500 font-medium italic hidden lg:inline">
                     {isProjectCompleted ? '(Completed: History Only)' :
                      isProjectUpcoming ? '(Upcoming: Release Not Allowed)' :
                      '(Select an Ongoing Project to release)'}
@@ -654,7 +654,7 @@ export default function WorkersSalary() {
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-gray-50/80 border-b border-gray-100 text-[8px] font-extrabold text-gray-500 uppercase tracking-wider">
+                  <tr className="bg-gray-50/80 border-b border-gray-100 text-[11px] font-extrabold text-gray-500 uppercase tracking-wider">
                     <th className="py-2.5 px-3">WORKER NAME & ROLE</th>
                     <th className="py-2.5 px-2 text-right">DAILY RATE</th>
                     <th className="py-2.5 px-2 text-center">WORKED DAYS</th>
@@ -693,12 +693,12 @@ export default function WorkersSalary() {
                         {/* Worker Name & Role */}
                         <td className="py-2.5 px-3">
                           <div className="flex items-center gap-2">
-                            <div className="w-6 h-6 rounded-full bg-[#A63228]/10 text-[#A63228] font-black text-[9px] flex items-center justify-center shrink-0">
+                            <div className="w-6 h-6 rounded-full bg-[#A63228]/10 text-[#A63228] font-black text-[11px] flex items-center justify-center shrink-0">
                               {w.worker_name.slice(0, 2).toUpperCase()}
                             </div>
                             <div>
                               <div className="font-extrabold text-gray-900 leading-tight">{w.worker_name}</div>
-                              <div className="text-[8px] font-bold text-gray-400 uppercase tracking-wide">{w.role}</div>
+                              <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wide">{w.role}</div>
                             </div>
                           </div>
                         </td>
@@ -706,7 +706,7 @@ export default function WorkersSalary() {
                         {/* Daily Rate */}
                         <td className="py-2.5 px-2 text-right font-extrabold text-gray-700">
                           ₱{Number(w.daily_rate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          <span className="block text-[7.5px] font-medium text-gray-400">₱{w.hourly_rate}/hr</span>
+                          <span className="block text-[10px] font-medium text-gray-400">₱{w.hourly_rate}/hr</span>
                         </td>
 
                         {/* Worked Days */}
@@ -717,26 +717,26 @@ export default function WorkersSalary() {
                         {/* Attendance Breakdown Pills */}
                         <td className="py-2.5 px-2 text-center">
                           <div className="inline-flex items-center gap-1">
-                            <span className="px-1.5 py-0.5 rounded text-[8px] font-extrabold bg-[#e6f4ea] text-[#2e7d32]" title="Full Day Present (8 hrs)">
+                            <span className="px-1.5 py-0.5 rounded text-[11px] font-extrabold bg-[#e6f4ea] text-[#2e7d32]" title="Full Day Present (8 hrs)">
                               {w.present_days}P
                             </span>
                             {w.late_days > 0 && (
-                              <span className="px-1.5 py-0.5 rounded text-[8px] font-extrabold bg-[#fff8e1] text-[#f57f17]" title={`Late days (-₱100 / -₱200)`}>
+                              <span className="px-1.5 py-0.5 rounded text-[11px] font-extrabold bg-[#fff8e1] text-[#f57f17]" title={`Late days (-₱100 / -₱200)`}>
                                 {w.late_days}L
                               </span>
                             )}
                             {w.halfday_days > 0 && (
-                              <span className="px-1.5 py-0.5 rounded text-[8px] font-extrabold bg-[#ede7f6] text-[#5e35b1]" title="Halfday (4 hrs, 50% rate)">
+                              <span className="px-1.5 py-0.5 rounded text-[11px] font-extrabold bg-[#ede7f6] text-[#5e35b1]" title="Halfday (4 hrs, 50% rate)">
                                 {w.halfday_days}HD
                               </span>
                             )}
                             {w.absent_days > 0 && (
-                              <span className="px-1.5 py-0.5 rounded text-[8px] font-extrabold bg-[#fdecea] text-[#A63228]" title="Absent days (0 wage)">
+                              <span className="px-1.5 py-0.5 rounded text-[11px] font-extrabold bg-[#fdecea] text-[#A63228]" title="Absent days (0 wage)">
                                 {w.absent_days}A
                               </span>
                             )}
                             {w.rest_days > 0 && (
-                              <span className="px-1.5 py-0.5 rounded text-[8px] font-extrabold bg-blue-50 text-blue-700" title="Rest Days / Non-working days">
+                              <span className="px-1.5 py-0.5 rounded text-[11px] font-extrabold bg-blue-50 text-blue-700" title="Rest Days / Non-working days">
                                 {w.rest_days}OFF
                               </span>
                             )}
@@ -766,7 +766,7 @@ export default function WorkersSalary() {
                               <span className="font-extrabold text-rose-700">
                                 -₱{Number(w.late_deductions + w.cash_advance_deductions).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </span>
-                              <div className="text-[7.5px] text-gray-400">
+                              <div className="text-[10px] text-gray-400">
                                 {w.late_deductions > 0 && `Late: ₱${w.late_deductions} `}
                                 {w.cash_advance_deductions > 0 && `CA: ₱${w.cash_advance_deductions}`}
                               </div>
@@ -792,7 +792,7 @@ export default function WorkersSalary() {
                         <td className="py-2.5 px-3 text-center print:hidden">
                           <button
                             onClick={() => setSelectedWorkerModal(w)}
-                            className="px-2 py-1 bg-gray-100 hover:bg-[#A63228] hover:text-white text-gray-700 text-[8.5px] font-bold rounded transition-all"
+                            className="px-2 py-1 bg-gray-100 hover:bg-[#A63228] hover:text-white text-gray-700 text-[11px] font-bold rounded transition-all"
                           >
                             🔍 Inspect Slip
                           </button>
@@ -818,8 +818,8 @@ export default function WorkersSalary() {
                   <p className="text-gray-600 mb-8 text-[10px] font-semibold">Approved by:</p>
                   <div className="w-52 border-b border-gray-800"></div>
                   <p className="font-extrabold text-gray-900 text-[11px] mt-1.5 tracking-wide">Engineer Aldrich Sotalbo</p>
-                  <p className="text-gray-500 text-[8.5px] uppercase tracking-wider font-semibold">Project Engineer / Management</p>
-                  <p className="text-gray-400 text-[8px]">Sotalbo Construction</p>
+                  <p className="text-gray-500 text-[11px] uppercase tracking-wider font-semibold">Project Engineer / Management</p>
+                  <p className="text-gray-400 text-[11px]">Sotalbo Construction</p>
                 </div>
               </div>
             </div>
@@ -843,7 +843,7 @@ export default function WorkersSalary() {
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-gray-50/80 border-b border-gray-100 text-[8px] font-extrabold text-gray-500 uppercase tracking-wider">
+                <tr className="bg-gray-50/80 border-b border-gray-100 text-[11px] font-extrabold text-gray-500 uppercase tracking-wider">
                   <th className="py-2.5 px-3">CUTOFF PERIOD</th>
                   <th className="py-2.5 px-2">PROJECT SITE</th>
                   <th className="py-2.5 px-2 text-center">WORKERS</th>
@@ -877,7 +877,7 @@ export default function WorkersSalary() {
                         ₱{Number(p.summary?.totalNetPayout || 0).toLocaleString()}
                       </td>
                       <td className="py-2.5 px-2 text-center">
-                        <span className={`inline-block px-2 py-0.5 rounded text-[8px] font-extrabold uppercase tracking-wider ${
+                        <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-extrabold uppercase tracking-wider ${
                           p.status === 'Paid' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' :
                           p.status === 'Approved' ? 'bg-blue-50 text-blue-800 border border-blue-200' :
                           'bg-amber-50 text-amber-800 border border-amber-200'
@@ -897,7 +897,7 @@ export default function WorkersSalary() {
                             setSelectedProject(p.project_id || 'ALL');
                             updateTab('worksheet');
                           }}
-                          className="px-2.5 py-1 bg-gray-900 text-white hover:bg-black rounded text-[8.5px] font-bold transition-all"
+                          className="px-2.5 py-1 bg-gray-900 text-white hover:bg-black rounded text-[11px] font-bold transition-all"
                         >
                           View / Open
                         </button>
@@ -932,7 +932,7 @@ export default function WorkersSalary() {
                   <h3 className="text-xs font-extrabold text-white leading-tight">
                     {selectedWorkerModal.worker_name}
                   </h3>
-                  <p className="text-[9px] text-gray-300 font-bold uppercase tracking-wider">
+                  <p className="text-[11px] text-gray-300 font-bold uppercase tracking-wider">
                     {selectedWorkerModal.role} • Daily Rate: ₱{Number(selectedWorkerModal.daily_rate).toLocaleString()} (₱{selectedWorkerModal.hourly_rate}/hr)
                   </p>
                 </div>
@@ -950,19 +950,19 @@ export default function WorkersSalary() {
               {/* Cutoff & Summary Banner */}
               <div className="bg-gray-50 rounded-xl p-3 border border-gray-100 grid grid-cols-4 gap-2 text-center">
                 <div>
-                  <span className="text-[8px] font-bold text-gray-400 uppercase block">CUTOFF PERIOD</span>
+                  <span className="text-[11px] font-bold text-gray-400 uppercase block">CUTOFF PERIOD</span>
                   <strong className="text-gray-800 text-[9.5px]">{startDate} → {endDate}</strong>
                 </div>
                 <div>
-                  <span className="text-[8px] font-bold text-gray-400 uppercase block">WORKED DAYS</span>
+                  <span className="text-[11px] font-bold text-gray-400 uppercase block">WORKED DAYS</span>
                   <strong className="text-gray-800 text-[9.5px]">{selectedWorkerModal.worked_days} Days ({selectedWorkerModal.total_hours} hrs)</strong>
                 </div>
                 <div>
-                  <span className="text-[8px] font-bold text-gray-400 uppercase block">GROSS WAGES</span>
+                  <span className="text-[11px] font-bold text-gray-400 uppercase block">GROSS WAGES</span>
                   <strong className="text-gray-900 text-[9.5px]">₱{Number(selectedWorkerModal.gross_pay).toLocaleString()}</strong>
                 </div>
                 <div className="bg-[#A63228]/5 rounded-lg py-1 border border-[#A63228]/20">
-                  <span className="text-[8px] font-bold text-[#A63228] uppercase block">NET TAKE-HOME</span>
+                  <span className="text-[11px] font-bold text-[#A63228] uppercase block">NET TAKE-HOME</span>
                   <strong className="text-[#A63228] text-[11px] font-black">₱{Number(selectedWorkerModal.net_pay).toLocaleString()}</strong>
                 </div>
               </div>
@@ -971,11 +971,11 @@ export default function WorkersSalary() {
               <div>
                 <h4 className="text-[9.5px] font-extrabold text-gray-800 uppercase tracking-wider mb-1.5 flex items-center justify-between">
                   <span>Attendance & Daily Wage Logs</span>
-                  <span className="text-[8.5px] font-medium text-gray-400">Total: {selectedWorkerModal.daily_logs?.length || 0} days in cutoff</span>
+                  <span className="text-[11px] font-medium text-gray-400">Total: {selectedWorkerModal.daily_logs?.length || 0} days in cutoff</span>
                 </h4>
                 <div className="border border-gray-200 rounded-lg overflow-hidden">
                   <table className="w-full text-left border-collapse">
-                    <thead className="bg-gray-100 text-[8px] font-extrabold text-gray-600 uppercase">
+                    <thead className="bg-gray-100 text-[11px] font-extrabold text-gray-600 uppercase">
                       <tr>
                         <th className="py-1.5 px-2">DATE</th>
                         <th className="py-1.5 px-2 text-center">MORNING SHIFT</th>
@@ -986,7 +986,7 @@ export default function WorkersSalary() {
                         <th className="py-1.5 px-2 text-right">EARNED WAGE</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100 text-[9px]">
+                    <tbody className="divide-y divide-gray-100 text-[11px]">
                       {workerLogPagination.pageItems.map(log => (
                         <tr key={log.date} className="hover:bg-gray-50/50">
                           <td className="py-1.5 px-2 font-bold text-gray-900">{log.date}</td>
@@ -997,7 +997,7 @@ export default function WorkersSalary() {
                             {log.afternoon_in !== '—' ? `${log.afternoon_in} → ${log.afternoon_out}` : '—'}
                           </td>
                           <td className="py-1.5 px-2 text-center">
-                            <span className={`inline-block px-1.5 py-0.5 rounded text-[7.5px] font-extrabold uppercase ${
+                            <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-extrabold uppercase ${
                               log.status === 'Present' ? 'bg-[#e6f4ea] text-[#2e7d32]' :
                               log.status === 'Late' || log.status === 'Double Late' ? 'bg-[#fff8e1] text-[#f57f17]' :
                               log.status.includes('Halfday') ? 'bg-[#ede7f6] text-[#5e35b1]' :
@@ -1016,10 +1016,10 @@ export default function WorkersSalary() {
                           <td className="py-1.5 px-2 text-right font-extrabold text-gray-900">
                             ₱{Number(log.earned).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             {log.deduction > 0 && (
-                              <span className="block text-[7.5px] text-amber-600 font-bold">(-₱{log.deduction} late)</span>
+                              <span className="block text-[10px] text-amber-600 font-bold">(-₱{log.deduction} late)</span>
                             )}
                             {log.overtime_pay > 0 && (
-                              <span className="block text-[7.5px] text-emerald-700 font-bold">(+₱{log.overtime_pay} overtime)</span>
+                              <span className="block text-[10px] text-emerald-700 font-bold">(+₱{log.overtime_pay} overtime)</span>
                             )}
                           </td>
                         </tr>
@@ -1038,7 +1038,7 @@ export default function WorkersSalary() {
                   </h4>
                   <div className="border border-rose-100 bg-rose-50/30 rounded-lg p-2 space-y-1">
                     {workerAdvancePagination.pageItems.map(ca => (
-                      <div key={ca.id} className="flex justify-between items-center text-[9px]">
+                      <div key={ca.id} className="flex justify-between items-center text-[11px]">
                         <span className="font-bold text-gray-800">
                           {ca.date} — {ca.reason}
                         </span>
@@ -1091,7 +1091,7 @@ export default function WorkersSalary() {
 
             {/* Modal Footer */}
             <div className="p-3 border-t border-gray-100 bg-gray-50 flex items-center justify-between print:hidden">
-              <span className="text-[8.5px] text-gray-400 font-medium">BuildTrack Construction ERP • Verified Attendance Payroll</span>
+              <span className="text-[11px] text-gray-400 font-medium">BuildTrack Construction ERP • Verified Attendance Payroll</span>
               <button
                 onClick={() => window.print()}
                 className="px-3 py-1.5 bg-gray-900 hover:bg-black text-white text-[9.5px] font-bold rounded-lg transition-all"

@@ -250,9 +250,9 @@ export default function Dashboard() {
       {/* ── CLEAN DASHBOARD HEADER ── */}
       <div className="mb-4">
         <div className="flex items-center gap-2">
-          <span className="text-[9px] font-bold text-[#A63228] tracking-widest uppercase">DASHBOARD</span>
+          <span className="text-[11px] font-bold text-[#A63228] tracking-widest uppercase">DASHBOARD</span>
           {selectedProjectId !== 'ALL' && (
-            <span className="text-[8px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200/60 px-2 py-0.5 rounded-full inline-flex items-center gap-1.5 shadow-2xs">
+            <span className="text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200/60 px-2 py-0.5 rounded-full inline-flex items-center gap-1.5 shadow-2xs">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
               <span>Filtered: {targetProject?.name || targetProject?.title}</span>
               <button
@@ -285,7 +285,7 @@ export default function Dashboard() {
             <div>
               <div className="flex justify-between items-start mb-1.5">
                 <div>
-                  <p className="text-[9px] font-bold text-gray-400 group-hover:text-[#A63228] transition-colors tracking-wider uppercase">ACTIVE PROJECTS</p>
+                  <p className="text-[11px] font-bold text-gray-400 group-hover:text-[#A63228] transition-colors tracking-wider uppercase">ACTIVE PROJECTS</p>
                   <h2 className="text-xl font-extrabold text-gray-900 group-hover:text-[#A63228] transition-colors mt-0.5">
                     {projects.filter(p => !isUpcomingStatus(p.status)).length}
                   </h2>
@@ -299,7 +299,7 @@ export default function Dashboard() {
                 </div>
               </div>
             </div>
-            <div className="flex justify-between items-center pt-2 border-t border-gray-50 text-[8px]">
+            <div className="flex justify-between items-center pt-2 border-t border-gray-50 text-[11px]">
               <span className="text-gray-400 group-hover:text-gray-600 transition-colors font-medium flex items-center gap-1">
                 <span>Select Project</span>
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
@@ -322,8 +322,8 @@ export default function Dashboard() {
               <div className="flex justify-between items-start mb-1.5">
                 <div className="min-w-0 pr-1">
                   <div className="flex items-center gap-1.5">
-                    <p className="text-[9px] font-bold text-[#8B1A10] tracking-wider uppercase">FOCUSED PROJECT</p>
-                    <span className="text-[7.5px] font-bold text-[#8B1A10] bg-[#FDF2F0] border border-[#8B1A10]/20 px-1.5 py-0.2 rounded">
+                    <p className="text-[11px] font-bold text-[#8B1A10] tracking-wider uppercase">FOCUSED PROJECT</p>
+                    <span className="text-[10px] font-bold text-[#8B1A10] bg-[#FDF2F0] border border-[#8B1A10]/20 px-1.5 py-0.2 rounded">
                       {targetProject?.status || 'ONGOING'}
                     </span>
                   </div>
@@ -338,7 +338,7 @@ export default function Dashboard() {
                 </div>
               </div>
             </div>
-            <div className="flex justify-between items-center pt-2 border-t border-[#8B1A10]/10 text-[8px]">
+            <div className="flex justify-between items-center pt-2 border-t border-[#8B1A10]/10 text-[11px]">
               <span className="text-[#8B1A10] font-bold">
                 ₱{Number(targetProject?.budget || targetProject?.contract || 0).toLocaleString()} Budget
               </span>
@@ -372,7 +372,7 @@ export default function Dashboard() {
           <div>
             <div className="flex justify-between items-start mb-1.5">
               <div>
-                <p className="text-[9px] font-bold text-gray-400 group-hover:text-[#A63228] transition-colors tracking-wider uppercase">
+                <p className="text-[11px] font-bold text-gray-400 group-hover:text-[#A63228] transition-colors tracking-wider uppercase">
                   {selectedProjectId === 'ALL' ? 'TOTAL EXPENSES' : 'PROJECT EXPENSES'}
                 </p>
                 <h2 className="text-xl font-extrabold text-gray-900 group-hover:text-[#A63228] transition-colors mt-0.5">
@@ -388,9 +388,9 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
-          <div className="flex justify-between items-center pt-2 border-t border-gray-50 text-[8px]">
+          <div className="flex justify-between items-center pt-2 border-t border-gray-50 text-[11px]">
             <p className="text-gray-400 font-medium truncate pr-1">
-              Verified Receipts: ₱{scopedFinancials.totalSpent.toLocaleString()}
+              {scopedExpenses.length} receipt{scopedExpenses.length === 1 ? '' : 's'} recorded
             </p>
             <span className="font-bold text-[#A63228] group-hover:underline shrink-0">
               View All →
@@ -406,7 +406,7 @@ export default function Dashboard() {
           <div>
             <div className="flex justify-between items-start mb-1.5">
               <div>
-                <p className="text-[9px] font-bold text-gray-400 group-hover:text-[#A63228] transition-colors tracking-wider uppercase">
+                <p className="text-[11px] font-bold text-gray-400 group-hover:text-[#A63228] transition-colors tracking-wider uppercase">
                   {selectedProjectId === 'ALL' ? 'TOTAL MANPOWER' : 'PROJECT WORKFORCE'}
                 </p>
                 <h2 className="text-xl font-extrabold text-gray-900 group-hover:text-[#A63228] transition-colors mt-0.5">
@@ -423,7 +423,7 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
-          <div className="flex justify-between items-center pt-2 border-t border-gray-50 text-[8px]">
+          <div className="flex justify-between items-center pt-2 border-t border-gray-50 text-[11px]">
             <span className="text-gray-400 group-hover:text-gray-600 transition-colors font-medium">
               {selectedProjectId === 'ALL' ? 'Active team members' : 'Assigned to site'}
             </span>
@@ -433,48 +433,61 @@ export default function Dashboard() {
           </div>
         </Link>
 
-        {/* Card 4: Equipment */}
-        <Link 
-          to="/assets" 
-          className="bg-white p-3.5 rounded-xl shadow-xs border border-gray-100 hover:border-[#A63228]/40 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer flex flex-col justify-between group"
-        >
-          <div>
-            <div className="flex justify-between items-start mb-1">
+        {/* Card 4: Equipment (Harmonized layout matching other 3 KPI cards) */}
+        {(() => {
+          const totalEquipment = Number(equipment.available || 0) + Number(equipment.inUse || 0) + Number(equipment.maintenance || 0);
+          return (
+            <Link 
+              to="/assets" 
+              className="bg-white p-3.5 rounded-xl shadow-xs border border-gray-100 hover:border-[#A63228]/40 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer flex flex-col justify-between group"
+            >
               <div>
-                <p className="text-[9px] font-bold text-gray-400 group-hover:text-[#A63228] transition-colors tracking-wider uppercase">EQUIPMENT</p>
-                <div className="flex items-center gap-3 mt-1">
-                  <div className="flex flex-col">
-                    <span className="text-base font-extrabold text-gray-900 group-hover:text-[#A63228] transition-colors leading-none">{equipment.available}</span>
-                    <span className="text-[7.5px] text-gray-400 font-medium mt-0.5">Available</span>
+                <div className="flex justify-between items-start mb-1.5">
+                  <div>
+                    <p className="text-[11px] font-bold text-gray-400 group-hover:text-[#A63228] transition-colors tracking-wider uppercase">
+                      TOTAL EQUIPMENT
+                    </p>
+                    <div className="flex items-baseline gap-2 mt-0.5">
+                      <h2 className="text-xl font-extrabold text-gray-900 group-hover:text-[#A63228] transition-colors">
+                        {totalEquipment}
+                      </h2>
+                      <span className="text-[10px] text-gray-400 font-medium">units tracked</span>
+                    </div>
                   </div>
-                  <div className="h-6 w-px bg-gray-100"></div>
-                  <div className="flex flex-col">
-                    <span className="text-base font-extrabold text-gray-900 leading-none">{equipment.inUse}</span>
-                    <span className="text-[7.5px] text-gray-400 font-medium mt-0.5">In Use</span>
-                  </div>
-                  <div className="h-6 w-px bg-gray-100"></div>
-                  <div className="flex flex-col">
-                    <span className="text-base font-extrabold text-gray-900 leading-none">{equipment.maintenance}</span>
-                    <span className="text-[7.5px] text-gray-400 font-medium mt-0.5">Repair</span>
+                  <div className="w-9 h-9 rounded-xl bg-[#FDF2F0] text-[#8B1A10] border border-[#8B1A10]/15 flex items-center justify-center shrink-0 group-hover:bg-[#8B1A10] group-hover:text-white transition-all shadow-2xs">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
+                    </svg>
                   </div>
                 </div>
+
+                {/* Sub-status pill row */}
+                <div className="flex items-center gap-1.5 mt-2">
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                    {equipment.available} Ready
+                  </span>
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                    {equipment.inUse} In Use
+                  </span>
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-100">
+                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                    {equipment.maintenance} Repair
+                  </span>
+                </div>
               </div>
-              <div className="w-9 h-9 rounded-xl bg-[#FDF2F0] text-[#8B1A10] border border-[#8B1A10]/15 flex items-center justify-center shrink-0 group-hover:bg-[#8B1A10] group-hover:text-white transition-all shadow-2xs">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
-                </svg>
+              <div className="flex justify-between items-center pt-2 border-t border-gray-50 text-[11px] mt-2">
+                <span className="text-gray-400 group-hover:text-gray-600 transition-colors font-medium">
+                  Inventory & Tools
+                </span>
+                <span className="font-bold text-[#A63228] group-hover:underline">
+                  Assets →
+                </span>
               </div>
-            </div>
-          </div>
-          <div className="flex justify-between items-center pt-2 border-t border-gray-50 text-[8px]">
-            <span className="text-gray-400 group-hover:text-gray-600 transition-colors font-medium">
-              Tools & Inventory
-            </span>
-            <span className="font-bold text-[#A63228] group-hover:underline">
-              Assets →
-            </span>
-          </div>
-        </Link>
+            </Link>
+          );
+        })()}
       </div>
 
       {/* ── HERO BUDGET CARD (Dark Red Gradient) ── */}
@@ -491,15 +504,15 @@ export default function Dashboard() {
 
           <div className="grid grid-cols-3 gap-3 mb-4">
             <div className="flex flex-col">
-              <span className="text-[9px] uppercase tracking-wider text-white/70 mb-0.5">Budget</span>
+              <span className="text-[11px] uppercase tracking-wider text-white/70 mb-0.5">Budget</span>
               <strong className="text-base font-extrabold">₱{Number(scopedFinancials.totalBudget).toLocaleString()}</strong>
             </div>
             <div className="flex flex-col">
-              <span className="text-[9px] uppercase tracking-wider text-white/70 mb-0.5">Actual Spending</span>
+              <span className="text-[11px] uppercase tracking-wider text-white/70 mb-0.5">Actual Spending</span>
               <strong className="text-base font-extrabold">₱{Number(scopedFinancials.totalSpent).toLocaleString()}</strong>
             </div>
             <div className="flex flex-col">
-              <span className="text-[9px] uppercase tracking-wider text-white/70 mb-0.5">Remaining</span>
+              <span className="text-[11px] uppercase tracking-wider text-white/70 mb-0.5">Remaining</span>
               <strong className={`text-base font-extrabold ${scopedFinancials.remaining < 0 ? 'text-red-300' : ''}`}>
                 ₱{Number(scopedFinancials.remaining).toLocaleString()}
               </strong>
@@ -507,11 +520,38 @@ export default function Dashboard() {
           </div>
 
           <div className="mt-1">
-            <div className="w-full bg-white/20 rounded-full h-1.5 mb-1.5 overflow-hidden">
-              <div className="bg-[#E8C547] h-full rounded-full" style={{ width: `${Math.min(scopedFinancials.percent, 100)}%` }}></div>
+            <div className="w-full bg-white/20 rounded-full h-2 mb-1.5 overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${
+                  scopedFinancials.percent >= 100
+                    ? 'bg-red-500 animate-pulse'
+                    : scopedFinancials.percent >= 90
+                    ? 'bg-red-400 animate-pulse'
+                    : scopedFinancials.percent >= 71
+                    ? 'bg-orange-400'
+                    : 'bg-[#E8C547]'
+                }`}
+                style={{ width: `${Math.min(scopedFinancials.percent, 100)}%` }}
+              ></div>
             </div>
-            <div className="flex justify-between text-[10px]">
-              <span className="text-white/90"><strong>{scopedFinancials.percent}%</strong> of budget used</span>
+            <div className="flex justify-between text-[11px]">
+              <span className={`font-semibold flex items-center gap-1.5 ${
+                scopedFinancials.percent >= 90 ? 'text-red-300' :
+                scopedFinancials.percent >= 71 ? 'text-orange-300' :
+                'text-white/90'
+              }`}>
+                <strong>{scopedFinancials.percent}%</strong> of budget used
+                {scopedFinancials.percent >= 90 && (
+                  <span className="text-[11px] font-extrabold bg-red-500/30 border border-red-400/50 text-red-200 px-1.5 py-0.5 rounded-full">
+                    {scopedFinancials.percent >= 100 ? '⚠ OVERRUN' : '⚠ CRITICAL'}
+                  </span>
+                )}
+                {scopedFinancials.percent >= 71 && scopedFinancials.percent < 90 && (
+                  <span className="text-[11px] font-extrabold bg-orange-500/30 border border-orange-400/50 text-orange-200 px-1.5 py-0.5 rounded-full">
+                    CAUTION
+                  </span>
+                )}
+              </span>
               <Link 
                 to={selectedProjectId === 'ALL' ? '/expenses' : `/expenses/${targetProject?.id}`} 
                 className="text-white font-medium hover:underline"
@@ -524,12 +564,21 @@ export default function Dashboard() {
 
         <div className="p-4 lg:w-1/3 flex flex-col justify-center">
           <div className="flex justify-between items-center mb-2.5">
-            <h3 className="text-[9px] font-bold text-white/70 tracking-wider uppercase">EXPENSE BREAKDOWN</h3>
-            <span className="text-[8px] font-bold text-[#E8C547] bg-white/10 px-2 py-0.5 rounded-full">Share per Category</span>
+            <h3 className="text-[11px] font-bold text-white/70 tracking-wider uppercase">EXPENSE BREAKDOWN</h3>
+            <span className="text-[11px] font-bold text-[#E8C547] bg-white/10 px-2 py-0.5 rounded-full">Share per Category</span>
           </div>
 
           {scopedFinancials.categories.length === 0 ? (
-            <p className="text-[10px] text-white/50 text-center py-4">No expenses recorded yet.</p>
+            <div className="flex flex-col items-center justify-center py-4 text-center">
+              <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center mb-1.5 text-white/50">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="9" strokeDasharray="3 3" />
+                  <path d="M12 7v5l3 3" />
+                </svg>
+              </div>
+              <p className="text-[11px] font-bold text-white/80">No Expenses Recorded</p>
+              <p className="text-[10px] text-white/50">Category breakdown appears as receipts are logged.</p>
+            </div>
           ) : (
             <div className="flex items-center gap-3">
               {/* SVG Donut Chart */}
@@ -568,7 +617,7 @@ export default function Dashboard() {
                   <span className="text-[10px] font-extrabold text-[#E8C547] leading-none">
                     {scopedFinancials.percent}%
                   </span>
-                  <span className="text-[6.5px] text-white/60 font-semibold leading-none mt-0.5">Used</span>
+                  <span className="text-[10px] text-white/60 font-semibold leading-none mt-0.5">Used</span>
                 </div>
               </div>
 
@@ -580,7 +629,7 @@ export default function Dashboard() {
                   const pct = scopedFinancials.totalSpent > 0 ? Math.round((Number(cat.total) / scopedFinancials.totalSpent) * 100) : 0;
                   return (
                     <div key={i} className="flex flex-col gap-0.5">
-                      <div className="flex justify-between items-center text-[9px]">
+                      <div className="flex justify-between items-center text-[11px]">
                         <span className="font-medium text-white/90 truncate flex items-center gap-1.5">
                           <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: color }}></span>
                           <span className="truncate">{cat.category}</span>
@@ -689,17 +738,17 @@ export default function Dashboard() {
                   <div className="flex items-center gap-2">
                     <h3 className="text-xs font-extrabold text-gray-900">Expense Trajectory & Forecast</h3>
                     {hasRegression && (
-                      <span className="text-[7.5px] font-bold text-amber-800 bg-amber-50 border border-amber-200/60 px-1.5 py-0.2 rounded" title="Linear trendline equation">
+                      <span className="text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200/60 px-1.5 py-0.2 rounded" title="Linear trendline equation">
                         y = {mSlope >= 0 ? '+' : ''}{Math.round(mSlope)}x {bIntercept >= 0 ? '+' : '-'} {Math.abs(Math.round(bIntercept))}
                       </span>
                     )}
                   </div>
-                  <p className="text-[9px] text-gray-400 font-medium mt-0.5">
+                  <p className="text-[11px] text-gray-400 font-medium mt-0.5">
                     {selectedProjectId === 'ALL' ? 'Historical moving trend with linear forecast line.' : `${targetProject?.name || 'Site'} trend and linear forecast.`}
                   </p>
                 </div>
                 {/* Legend */}
-                <div className="flex items-center gap-2.5 text-[8px] font-bold">
+                <div className="flex items-center gap-2.5 text-[11px] font-bold">
                   <span className="flex items-center gap-1 text-[#8B1A10]">
                     <span className="w-2.5 h-0.5 bg-[#8B1A10] rounded-full inline-block"></span>
                     Actual
@@ -793,7 +842,7 @@ export default function Dashboard() {
                     )}
                   </svg>
                 </div>
-                <div className="flex justify-between px-3 text-[7.5px] font-bold text-gray-400 uppercase mt-2">
+                <div className="flex justify-between px-3 text-[10px] font-bold text-gray-400 uppercase mt-2">
                   {MONTHS.map((m, i) => (
                     <span key={m} className={i === currentMonth ? 'text-[#8B1A10] font-extrabold' : ''}>{m}</span>
                   ))}
@@ -807,7 +856,7 @@ export default function Dashboard() {
               <div className="flex flex-wrap items-center justify-between gap-2 mb-2 pb-2 border-b border-gray-50">
                 <div>
                   <h3 className="text-xs font-extrabold text-gray-900">Project Budget vs. Actual Cost</h3>
-                  <p className="text-[9px] text-gray-400 font-medium mt-0.5">
+                  <p className="text-[11px] text-gray-400 font-medium mt-0.5">
                     {pieChartViewMode === 'UTILIZATION'
                       ? (activePieProject.id === 'ALL'
                           ? 'Total budget utilization across all projects.'
@@ -818,7 +867,7 @@ export default function Dashboard() {
 
                 <div className="flex items-center gap-1.5">
                   {/* View Mode Toggle: Budget vs Cost or By Project */}
-                  <div className="flex items-center bg-gray-100 p-0.5 rounded-lg text-[8px] font-bold">
+                  <div className="flex items-center bg-gray-100 p-0.5 rounded-lg text-[11px] font-bold">
                     <button
                       type="button"
                       onClick={() => setPieChartViewMode('UTILIZATION')}
@@ -848,7 +897,7 @@ export default function Dashboard() {
                     <select
                       value={pieChartProjectId}
                       onChange={(e) => setPieChartProjectId(e.target.value)}
-                      className="text-[8.5px] font-bold bg-gray-50 border border-gray-200 text-gray-700 rounded-md px-1.5 py-0.5 hover:border-gray-300 focus:outline-none focus:border-[#8B1A10] max-w-[125px] truncate cursor-pointer"
+                      className="text-[11px] font-bold bg-gray-50 border border-gray-200 text-gray-700 rounded-md px-1.5 py-0.5 hover:border-gray-300 focus:outline-none focus:border-[#8B1A10] max-w-[125px] truncate cursor-pointer"
                       title="Filter Budget vs Cost for a specific project"
                     >
                       <option value="ALL">All Projects</option>
@@ -947,7 +996,7 @@ export default function Dashboard() {
                       <span className={`text-sm sm:text-base font-black leading-none ${isOverBudget ? 'text-red-600' : 'text-gray-900'}`}>
                         {pieBudget === 0 && pieSpent === 0 ? '0%' : `${spentPct}%`}
                       </span>
-                      <span className={`text-[6.5px] font-extrabold uppercase tracking-wider mt-0.5 ${isOverBudget ? 'text-red-600' : 'text-gray-400'}`}>
+                      <span className={`text-[10px] font-extrabold uppercase tracking-wider mt-0.5 ${isOverBudget ? 'text-red-600' : 'text-gray-400'}`}>
                         {pieBudget === 0 && pieSpent === 0 ? 'NO DATA' : isOverBudget ? 'OVERRUN' : 'SPENT'}
                       </span>
                     </div>
@@ -956,7 +1005,7 @@ export default function Dashboard() {
                   {/* Right: Financial Breakdown & Legend */}
                   <div className="flex-1 min-w-0 flex flex-col justify-center gap-1.5 pl-1">
                     {/* Total Budget */}
-                    <div className="flex items-center justify-between text-[9px]">
+                    <div className="flex items-center justify-between text-[11px]">
                       <span className="text-gray-500 font-medium flex items-center gap-1.5">
                         <span className="w-2 h-2 rounded-2xs bg-slate-300 shrink-0"></span>
                         <span className="truncate">Total Budget</span>
@@ -965,19 +1014,19 @@ export default function Dashboard() {
                     </div>
 
                     {/* Actual Cost */}
-                    <div className="flex items-center justify-between text-[9px]">
+                    <div className="flex items-center justify-between text-[11px]">
                       <span className="text-gray-700 font-medium flex items-center gap-1.5">
                         <span className="w-2 h-2 rounded-2xs bg-[#8B1A10] shrink-0"></span>
                         <span className="truncate">Actual Cost</span>
                       </span>
                       <span className="font-extrabold text-[#8B1A10] shrink-0">
-                        ₱{fmtFull(pieSpent)} <span className="text-[7.5px] font-semibold text-gray-400">({spentPct}%)</span>
+                        ₱{fmtFull(pieSpent)} <span className="text-[10px] font-semibold text-gray-400">({spentPct}%)</span>
                       </span>
                     </div>
 
                     {/* Remaining or Overrun */}
                     {isOverBudget ? (
-                      <div className="flex items-center justify-between text-[9px]">
+                      <div className="flex items-center justify-between text-[11px]">
                         <span className="text-red-600 font-medium flex items-center gap-1.5">
                           <span className="w-2 h-2 rounded-2xs bg-red-600 shrink-0"></span>
                           <span className="truncate">Overrun</span>
@@ -987,19 +1036,19 @@ export default function Dashboard() {
                         </span>
                       </div>
                     ) : (
-                      <div className="flex items-center justify-between text-[9px]">
+                      <div className="flex items-center justify-between text-[11px]">
                         <span className="text-emerald-700 font-medium flex items-center gap-1.5">
                           <span className="w-2 h-2 rounded-2xs bg-emerald-500 shrink-0"></span>
                           <span className="truncate">Remaining</span>
                         </span>
                         <span className="font-extrabold text-emerald-600 shrink-0">
-                          ₱{fmtFull(pieRemaining)} <span className="text-[7.5px] font-semibold text-gray-400">({remPct}%)</span>
+                          ₱{fmtFull(pieRemaining)} <span className="text-[10px] font-semibold text-gray-400">({remPct}%)</span>
                         </span>
                       </div>
                     )}
 
                     {/* Health Status Pill */}
-                    <div className="pt-1 mt-0.5 border-t border-gray-100 flex items-center justify-between text-[8px]">
+                    <div className="pt-1 mt-0.5 border-t border-gray-100 flex items-center justify-between text-[11px]">
                       <span className="text-gray-400 font-medium">Status</span>
                       {pieBudget === 0 && pieSpent === 0 ? (
                         <span className="font-bold text-gray-500 bg-gray-50 border border-gray-200 px-1.5 py-0.2 rounded">
@@ -1056,7 +1105,7 @@ export default function Dashboard() {
                       <span className="text-xs sm:text-sm font-black text-gray-900 leading-none">
                         ₱{fmt(totalAllSpent)}
                       </span>
-                      <span className="text-[6.5px] font-extrabold text-gray-400 uppercase tracking-wider mt-0.5">
+                      <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider mt-0.5">
                         TOTAL COST
                       </span>
                     </div>
@@ -1064,24 +1113,24 @@ export default function Dashboard() {
 
                   {/* Right: Projects List & Share */}
                   <div className="flex-1 min-w-0 flex flex-col justify-center gap-1 pl-1">
-                    <div className="flex items-center justify-between text-[8px] pb-1 border-b border-gray-100">
+                    <div className="flex items-center justify-between text-[11px] pb-1 border-b border-gray-100">
                       <span className="text-gray-400 font-bold uppercase tracking-wider">Top Projects by Cost</span>
                       <span className="text-gray-900 font-extrabold">₱{fmtFull(totalAllSpent)}</span>
                     </div>
                     <div className="flex flex-col gap-1 max-h-20 overflow-y-auto pr-0.5">
                       {projectSlices.slice(0, 3).map((s, idx) => (
-                        <div key={s.id || idx} className="flex items-center justify-between text-[8.5px]">
+                        <div key={s.id || idx} className="flex items-center justify-between text-[11px]">
                           <span className="text-gray-700 truncate font-medium flex items-center gap-1.5 mr-1.5 min-w-0">
                             <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: s.color }}></span>
                             <span className="truncate" title={s.name || s.title}>{s.name || s.title}</span>
                           </span>
                           <span className="font-extrabold text-gray-900 shrink-0">
-                            ₱{fmt(s.pSpent)} <span className="text-[7.5px] font-semibold text-gray-400">({s.pct}%)</span>
+                            ₱{fmt(s.pSpent)} <span className="text-[10px] font-semibold text-gray-400">({s.pct}%)</span>
                           </span>
                         </div>
                       ))}
                       {projectSlices.length === 0 && (
-                        <div className="text-[9px] text-gray-400 py-1">No project expenses logged.</div>
+                        <div className="text-[11px] text-gray-400 py-1">No project expenses logged.</div>
                       )}
                     </div>
                   </div>
@@ -1103,7 +1152,7 @@ export default function Dashboard() {
                 <button
                   type="button"
                   onClick={() => setSelectedProjectId('ALL')}
-                  className="text-[8.5px] font-bold text-[#A63228] hover:underline"
+                  className="text-[11px] font-bold text-[#A63228] hover:underline"
                 >
                   (Reset Filter)
                 </button>
@@ -1114,14 +1163,31 @@ export default function Dashboard() {
           <table className="w-full text-left border-collapse min-w-[400px]">
             <thead>
               <tr>
-                <th className="text-[9px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[50%] uppercase tracking-wider">PROJECT</th>
-                <th className="text-[9px] font-bold text-gray-400 border-b border-gray-100 pb-2 text-right pr-4 w-[25%] uppercase tracking-wider">BUDGET</th>
-                <th className="text-[9px] font-bold text-gray-400 border-b border-gray-100 pb-2 pl-4 w-[25%] uppercase tracking-wider">PROGRESS</th>
+                <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[50%] uppercase tracking-wider">PROJECT</th>
+                <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 text-right pr-4 w-[25%] uppercase tracking-wider">BUDGET</th>
+                <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 pl-4 w-[25%] uppercase tracking-wider">PROGRESS</th>
               </tr>
             </thead>
             <tbody>
               {projects.length === 0 ? (
-                <tr><td colSpan={3} className="py-4 text-center text-[10px] text-gray-400">No active projects.</td></tr>
+                <tr>
+                  <td colSpan={3} className="py-8 text-center">
+                    <div className="flex flex-col items-center justify-center">
+                      <div className="w-10 h-10 rounded-2xl bg-red-50 text-[#A63228] flex items-center justify-center mb-2 shadow-2xs">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M2 20h20"></path>
+                          <path d="M5 20V8l7-5 7 5v12"></path>
+                          <path d="M9 20v-5h6v5"></path>
+                        </svg>
+                      </div>
+                      <p className="text-xs font-bold text-gray-800">No Active Projects</p>
+                      <p className="text-[11px] text-gray-400 mt-0.5">Projects created in the system will appear here with live budget & progress tracking.</p>
+                      <Link to="/projects" className="mt-2 text-[11px] font-bold text-[#A63228] hover:underline">
+                        + Add or Manage Projects
+                      </Link>
+                    </div>
+                  </td>
+                </tr>
               ) : projectListPagination.pageItems.map(p => {
                 const isSelected = String(p.id) === String(selectedProjectId);
                 return (
@@ -1134,7 +1200,7 @@ export default function Dashboard() {
                     <td className="py-2 text-[10px] font-bold text-gray-800 border-b border-gray-50 flex items-center gap-1.5">
                       <span>{p.name || p.title}</span>
                       {isSelected && (
-                        <span className="text-[7px] font-extrabold text-[#A63228] bg-red-100/80 px-1.5 py-0.2 rounded uppercase">
+                        <span className="text-[10px] font-extrabold text-[#A63228] bg-red-100/80 px-1.5 py-0.2 rounded uppercase">
                           Focused
                         </span>
                       )}
@@ -1143,7 +1209,7 @@ export default function Dashboard() {
                     <td className="py-2 border-b border-gray-50 pl-4">
                       <div className="flex items-center gap-2">
                         <div className="w-14 bg-gray-200 rounded-full h-1 overflow-hidden"><div className="bg-[#A63228] h-full rounded-full" style={{ width: `${p.progress || 0}%` }}></div></div>
-                        <span className="text-[9px] font-bold text-gray-700 w-6">{p.progress || 0}%</span>
+                        <span className="text-[11px] font-bold text-gray-700 w-6">{p.progress || 0}%</span>
                       </div>
                     </td>
                   </tr>
@@ -1160,11 +1226,11 @@ export default function Dashboard() {
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-2.5">
               <div>
                 <h3 className="text-sm font-extrabold text-gray-900 leading-tight">Recent Receipts</h3>
-                <p className="text-[8.5px] text-gray-400 font-medium">Logged Project Expenses & Receipts</p>
+                <p className="text-[11px] text-gray-400 font-medium">Logged Project Expenses & Receipts</p>
               </div>
 
               {/* Count Badge */}
-              <span className="text-[8px] font-bold px-2 py-0.5 rounded-md bg-gray-100 text-gray-700">
+              <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-gray-100 text-gray-700">
                 {scopedRecentActivities.length} Recent Receipt{scopedRecentActivities.length !== 1 ? 's' : ''}
               </span>
             </div>
@@ -1172,20 +1238,31 @@ export default function Dashboard() {
             {/* Scrollable Container with max height (prevents card from stretching the dashboard) */}
             <div className="flex flex-col pr-1.5 divide-y divide-gray-50">
               {scopedRecentActivities.length === 0 ? (
-                <p className="text-[10px] text-gray-400 text-center py-6">
-                  No expense receipts recorded yet.
-                </p>
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <div className="w-10 h-10 rounded-2xl bg-gray-50 text-gray-400 flex items-center justify-center mb-2 shadow-2xs">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="2" y="4" width="20" height="16" rx="2"></rect>
+                      <line x1="2" y1="10" x2="22" y2="10"></line>
+                      <path d="M7 15h2M12 15h5"></path>
+                    </svg>
+                  </div>
+                  <p className="text-xs font-bold text-gray-800">No Receipts Logged</p>
+                  <p className="text-[11px] text-gray-400 mt-0.5">Verified receipts and expenses will be recorded and listed here.</p>
+                  <Link to="/expenses" className="mt-2 text-[11px] font-bold text-[#A63228] hover:underline">
+                    + Upload Receipt or Expense
+                  </Link>
+                </div>
               ) : recentReceiptPagination.pageItems.map((item, i) => (
                 <div key={i} className="flex justify-between items-center py-1.5 hover:bg-gray-50/50 px-1 rounded transition-colors">
                   <div className="flex items-center gap-2 min-w-0 pr-2">
-                    <span className="text-[7px] font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0 bg-red-50 text-[#A63228] border border-red-100">
+                    <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0 bg-red-50 text-[#A63228] border border-red-100">
                       Receipt
                     </span>
                     <div className="min-w-0">
                       <h4 className="text-[10px] font-bold text-gray-900 leading-tight truncate">
                         {item.description || item.category}
                       </h4>
-                      <p className="text-[8.5px] text-gray-400 mt-0.5">{item.date}</p>
+                      <p className="text-[11px] text-gray-400 mt-0.5">{item.date}</p>
                     </div>
                   </div>
                   <strong className="text-[11px] font-extrabold text-gray-900 shrink-0">
@@ -1198,7 +1275,7 @@ export default function Dashboard() {
           </div>
 
           {/* Quick Footer Links */}
-          <div className="pt-2 border-t border-gray-100 flex justify-between items-center mt-1 text-[8.5px]">
+          <div className="pt-2 border-t border-gray-100 flex justify-between items-center mt-1 text-[11px]">
             <span className="text-gray-400 font-medium">Use pagination to view more records</span>
             <div className="flex items-center gap-2 font-bold">
               <Link to="/expenses" className="text-[#A63228] hover:underline">View All Expenses & Receipts →</Link>
@@ -1218,15 +1295,15 @@ export default function Dashboard() {
           <div className="flex justify-between gap-2.5 mb-3">
             <div className="flex-1 bg-[#EAD9D8] text-center p-2 rounded-lg">
               <h2 className="text-lg font-extrabold text-gray-900">{equipment.available}</h2>
-              <p className="text-[8px] font-bold text-gray-600 tracking-wider mt-0.5 uppercase">AVAILABLE</p>
+              <p className="text-[11px] font-bold text-gray-600 tracking-wider mt-0.5 uppercase">AVAILABLE</p>
             </div>
             <div className="flex-1 bg-[#EAD9D8] text-center p-2 rounded-lg">
               <h2 className="text-lg font-extrabold text-gray-900">{equipment.inUse}</h2>
-              <p className="text-[8px] font-bold text-gray-600 tracking-wider mt-0.5 uppercase">IN USE</p>
+              <p className="text-[11px] font-bold text-gray-600 tracking-wider mt-0.5 uppercase">IN USE</p>
             </div>
             <div className="flex-1 bg-[#EAD9D8] text-center p-2 rounded-lg">
               <h2 className="text-lg font-extrabold text-gray-900">{equipment.maintenance}</h2>
-              <p className="text-[8px] font-bold text-gray-600 tracking-wider mt-0.5 uppercase">MAINTENANCE</p>
+              <p className="text-[11px] font-bold text-gray-600 tracking-wider mt-0.5 uppercase">MAINTENANCE</p>
             </div>
           </div>
           {equipment.inUse > 0 && (
@@ -1245,11 +1322,11 @@ export default function Dashboard() {
           <div className="flex gap-2.5 mb-3">
             <div className="flex-1 p-2.5 rounded-lg text-center bg-[#E1F0E5] text-[#2c6e3c]">
               <h2 className="text-xl font-extrabold">{workforce.present}</h2>
-              <p className="text-[8px] font-bold tracking-wider mt-0.5 uppercase text-[#478f58]">PRESENT</p>
+              <p className="text-[11px] font-bold tracking-wider mt-0.5 uppercase text-[#478f58]">PRESENT</p>
             </div>
             <div className="flex-1 p-2.5 rounded-lg text-center bg-[#fce8e6] text-[#A63228]">
               <h2 className="text-xl font-extrabold">{workforce.absent}</h2>
-              <p className="text-[8px] font-bold tracking-wider mt-0.5 uppercase text-[#b34940]">ABSENT</p>
+              <p className="text-[11px] font-bold tracking-wider mt-0.5 uppercase text-[#b34940]">ABSENT</p>
             </div>
           </div>
           <div className="flex flex-col gap-1.5">
@@ -1259,7 +1336,18 @@ export default function Dashboard() {
                 <strong className="text-gray-900">{r.count}</strong>
               </div>
             ))}
-            {workforce.roles.length === 0 && <p className="text-[10px] text-gray-400 text-center">No attendance today.</p>}
+            {workforce.roles.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-3 text-center">
+                <div className="w-8 h-8 rounded-full bg-gray-50 text-gray-400 flex items-center justify-center mb-1">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polyline points="12 6 12 12 16 14"></polyline>
+                  </svg>
+                </div>
+                <p className="text-[11px] font-bold text-gray-600">No Attendance Recorded Today</p>
+                <p className="text-[10px] text-gray-400">Worker check-ins will populate this roster.</p>
+              </div>
+            )}
             <div className="flex justify-between text-[11px] mt-0.5 bg-[#EAD9D8] p-1.5 rounded-lg">
               <span className="font-bold text-gray-800">Today's Payroll</span>
               <strong className="text-gray-900 font-extrabold">₱{Number(workforce.todayPayroll).toLocaleString()}</strong>
@@ -1281,7 +1369,7 @@ export default function Dashboard() {
               </svg>
             </div>
             <div>
-              <p className="text-[8.5px] font-bold text-[#A63228] tracking-widest uppercase">Intelligence Center</p>
+              <p className="text-[11px] font-bold text-[#A63228] tracking-widest uppercase">Intelligence Center</p>
               <h2 className="text-sm font-extrabold text-gray-900 leading-tight">Project Analytics Overview</h2>
             </div>
           </div>
@@ -1299,14 +1387,14 @@ export default function Dashboard() {
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8B1A10" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
             </svg>
-            <span className="text-[8.5px] font-bold text-[#8B1A10] tracking-wide uppercase">Filtering analytics for:</span>
-            <span className="text-[8.5px] font-extrabold text-gray-900 truncate">
+            <span className="text-[11px] font-bold text-[#8B1A10] tracking-wide uppercase">Filtering analytics for:</span>
+            <span className="text-[11px] font-extrabold text-gray-900 truncate">
               {targetProject?.name || targetProject?.title || 'Selected Project'}
             </span>
             <button
               type="button"
               onClick={() => setSelectedProjectId('ALL')}
-              className="ml-auto text-[8px] font-bold text-[#A63228] hover:underline shrink-0 cursor-pointer"
+              className="ml-auto text-[11px] font-bold text-[#A63228] hover:underline shrink-0 cursor-pointer"
             >
               ✕ Clear
             </button>
@@ -1334,7 +1422,7 @@ export default function Dashboard() {
                     <rect x="14" y="14" width="7" height="7" rx="1" />
                   </svg>
                 </div>
-                <span className="text-[7.5px] font-extrabold uppercase tracking-wider text-[#A63228] bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#A63228] bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">
                   Descriptive
                 </span>
               </div>
@@ -1343,7 +1431,7 @@ export default function Dashboard() {
               <h3 className="text-sm font-extrabold text-gray-900 mb-1 group-hover:text-[#A63228] transition-colors">
                 Historical Breakdown
               </h3>
-              <p className="text-[9px] text-gray-500 leading-relaxed mb-3">
+              <p className="text-[11px] text-gray-500 leading-relaxed mb-3">
                 Examines past and current transactions — expense share pie chart, monthly volume columns, and budget composition by category.
               </p>
 
@@ -1351,22 +1439,22 @@ export default function Dashboard() {
               <div className="flex flex-col gap-1.5 mb-3">
                 {[{ w: '75%', label: 'Materials' }, { w: '52%', label: 'Labor' }, { w: '33%', label: 'Operations' }].map((b, i) => (
                   <div key={i} className="flex items-center gap-2">
-                    <span className="text-[7.5px] text-gray-400 font-medium w-14 truncate">{b.label}</span>
+                    <span className="text-[10px] text-gray-400 font-medium w-14 truncate">{b.label}</span>
                     <div className="flex-1 bg-gray-100 rounded-full h-1.5">
                       <div
                         className="h-full rounded-full bg-gradient-to-r from-[#8B1A10] to-[#D96B60] transition-all duration-700"
                         style={{ width: b.w }}
                       />
                     </div>
-                    <span className="text-[7.5px] font-bold text-gray-500 w-6 text-right">{b.w}</span>
+                    <span className="text-[10px] font-bold text-gray-500 w-6 text-right">{b.w}</span>
                   </div>
                 ))}
               </div>
 
               {/* CTA */}
               <div className="flex items-center justify-between pt-2.5 border-t border-gray-100">
-                <span className="text-[8.5px] text-gray-400 font-medium">What happened?</span>
-                <span className="text-[8.5px] font-extrabold text-[#A63228] group-hover:underline flex items-center gap-0.5">
+                <span className="text-[11px] text-gray-400 font-medium">What happened?</span>
+                <span className="text-[11px] font-extrabold text-[#A63228] group-hover:underline flex items-center gap-0.5">
                   View Analysis
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>
                 </span>
@@ -1389,7 +1477,7 @@ export default function Dashboard() {
                     <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
                   </svg>
                 </div>
-                <span className="text-[7.5px] font-extrabold uppercase tracking-wider text-indigo-600 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-600 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full">
                   Predictive
                 </span>
               </div>
@@ -1398,7 +1486,7 @@ export default function Dashboard() {
               <h3 className="text-sm font-extrabold text-gray-900 mb-1 group-hover:text-indigo-600 transition-colors">
                 Spend Forecast
               </h3>
-              <p className="text-[9px] text-gray-500 leading-relaxed mb-3">
+              <p className="text-[11px] text-gray-500 leading-relaxed mb-3">
                 Linear regression model projecting 15-month expense trajectory — forecast future spending patterns based on historical data.
               </p>
 
@@ -1428,8 +1516,8 @@ export default function Dashboard() {
 
               {/* CTA */}
               <div className="flex items-center justify-between pt-2.5 border-t border-gray-100">
-                <span className="text-[8.5px] text-gray-400 font-medium">What will happen?</span>
-                <span className="text-[8.5px] font-extrabold text-indigo-600 group-hover:underline flex items-center gap-0.5">
+                <span className="text-[11px] text-gray-400 font-medium">What will happen?</span>
+                <span className="text-[11px] font-extrabold text-indigo-600 group-hover:underline flex items-center gap-0.5">
                   View Forecast
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>
                 </span>
@@ -1454,7 +1542,7 @@ export default function Dashboard() {
                     <path d="M2 12l10 5 10-5" />
                   </svg>
                 </div>
-                <span className="text-[7.5px] font-extrabold uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
                   Prescriptive
                 </span>
               </div>
@@ -1463,7 +1551,7 @@ export default function Dashboard() {
               <h3 className="text-sm font-extrabold text-gray-900 mb-1 group-hover:text-emerald-700 transition-colors">
                 Budget Recommendations
               </h3>
-              <p className="text-[9px] text-gray-500 leading-relaxed mb-3">
+              <p className="text-[11px] text-gray-500 leading-relaxed mb-3">
                 Compares actual vs. target benchmarks per cost center — identifies over-budget categories and prescribes corrective action.
               </p>
 
@@ -1475,7 +1563,7 @@ export default function Dashboard() {
                   { label: 'Operations', actual: 40, target: 45 },
                 ].map((b, i) => (
                   <div key={i} className="flex items-center gap-2">
-                    <span className="text-[7.5px] text-gray-400 font-medium w-14 truncate">{b.label}</span>
+                    <span className="text-[10px] text-gray-400 font-medium w-14 truncate">{b.label}</span>
                     <div className="flex-1 relative bg-gray-100 rounded-full h-1.5">
                       {/* Target marker */}
                       <div
@@ -1488,7 +1576,7 @@ export default function Dashboard() {
                         style={{ width: `${Math.min(b.actual, 100)}%` }}
                       />
                     </div>
-                    <span className={`text-[7.5px] font-bold w-6 text-right ${b.actual > b.target ? 'text-red-500' : 'text-emerald-600'}`}>
+                    <span className={`text-[10px] font-bold w-6 text-right ${b.actual > b.target ? 'text-red-500' : 'text-emerald-600'}`}>
                       {b.actual > b.target ? '↑' : '✓'}
                     </span>
                   </div>
@@ -1497,8 +1585,8 @@ export default function Dashboard() {
 
               {/* CTA */}
               <div className="flex items-center justify-between pt-2.5 border-t border-gray-100">
-                <span className="text-[8.5px] text-gray-400 font-medium">What should we do?</span>
-                <span className="text-[8.5px] font-extrabold text-emerald-700 group-hover:underline flex items-center gap-0.5">
+                <span className="text-[11px] text-gray-400 font-medium">What should we do?</span>
+                <span className="text-[11px] font-extrabold text-emerald-700 group-hover:underline flex items-center gap-0.5">
                   View Insights
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>
                 </span>
@@ -1602,19 +1690,19 @@ export default function Dashboard() {
                       <div className="flex items-center gap-2">
                         <h4 className="text-xs font-extrabold text-gray-900">All Projects (Overview)</h4>
                         {selectedProjectId === 'ALL' && (
-                          <span className="text-[8px] font-bold text-[#A63228] bg-white border border-red-200 px-1.5 py-0.2 rounded-full">
+                          <span className="text-[11px] font-bold text-[#A63228] bg-white border border-red-200 px-1.5 py-0.2 rounded-full">
                             Active Scope
                           </span>
                         )}
                       </div>
-                      <p className="text-[9px] text-gray-500 mt-0.5">
+                      <p className="text-[11px] text-gray-500 mt-0.5">
                         Consolidated totals across all {projects.length} sites & budgets
                       </p>
                     </div>
                   </div>
 
                   <div className="text-right">
-                    <span className="text-[8px] uppercase tracking-wider text-gray-400 font-bold block">Total Budget</span>
+                    <span className="text-[11px] uppercase tracking-wider text-gray-400 font-bold block">Total Budget</span>
                     <strong className="text-xs font-extrabold text-gray-900">
                       ₱{projects.reduce((s, p) => s + Number(p.budget || p.contract || 0), 0).toLocaleString()}
                     </strong>
@@ -1624,8 +1712,8 @@ export default function Dashboard() {
 
               {/* Section Header */}
               <div className="flex items-center justify-between px-1 pt-1">
-                <span className="text-[8.5px] font-extrabold text-gray-400 uppercase tracking-wider">INDIVIDUAL PROJECTS</span>
-                <span className="text-[8.5px] font-bold text-gray-400">
+                <span className="text-[11px] font-extrabold text-gray-400 uppercase tracking-wider">INDIVIDUAL PROJECTS</span>
+                <span className="text-[11px] font-bold text-gray-400">
                   {projectSummaries.filter(p => !projectSearchQuery || (p.name || p.title || '').toLowerCase().includes(projectSearchQuery.toLowerCase())).length} found
                 </span>
               </div>
@@ -1663,7 +1751,7 @@ export default function Dashboard() {
                               <h4 className="text-xs font-extrabold text-gray-900 group-hover:text-[#A63228] transition-colors truncate">
                                 {p.name || p.title}
                               </h4>
-                              <span className={`text-[7.5px] font-bold px-1.5 py-0.2 rounded shrink-0 uppercase ${
+                              <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded shrink-0 uppercase ${
                                 isUpcomingStatus(p.status)
                                   ? 'bg-amber-50 text-amber-800 border border-amber-200'
                                   : (p.status || '').toUpperCase() === 'COMPLETED'
@@ -1673,20 +1761,20 @@ export default function Dashboard() {
                                 {p.status || 'ONGOING'}
                               </span>
                               {isSelected && (
-                                <span className="text-[7.5px] font-extrabold text-emerald-800 bg-emerald-100/90 border border-emerald-300 px-1.5 py-0.2 rounded-full inline-flex items-center gap-1">
+                                <span className="text-[10px] font-extrabold text-emerald-800 bg-emerald-100/90 border border-emerald-300 px-1.5 py-0.2 rounded-full inline-flex items-center gap-1">
                                   <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
                                   <span>Active Filter</span>
                                 </span>
                               )}
                             </div>
-                            <p className="text-[9px] text-gray-500 mt-0.5">
+                            <p className="text-[11px] text-gray-500 mt-0.5">
                               {p.workersCount} assigned worker{p.workersCount === 1 ? '' : 's'} · Progress: {p.progress || 0}%
                             </p>
                           </div>
                         </div>
 
                         <div className="text-right shrink-0">
-                          <span className="text-[8px] uppercase tracking-wider text-gray-400 font-bold block">Budget</span>
+                          <span className="text-[11px] uppercase tracking-wider text-gray-400 font-bold block">Budget</span>
                           <strong className="text-xs font-extrabold text-gray-900">
                             ₱{Number(p.budget || 0).toLocaleString()}
                           </strong>
@@ -1694,12 +1782,12 @@ export default function Dashboard() {
                       </div>
 
                       {/* Mini Metrics & Progress */}
-                      <div className="flex items-center justify-between text-[9px] text-gray-500 pt-1 border-t border-gray-100/80">
+                      <div className="flex items-center justify-between text-[11px] text-gray-500 pt-1 border-t border-gray-100/80">
                         <div className="flex items-center gap-2">
                           <span>Spent: <strong className="text-gray-800">₱{Number(p.spent || 0).toLocaleString()}</strong></span>
                           <span>({p.pct}% of budget)</span>
                         </div>
-                        <span className="text-[8px] font-bold text-[#A63228] group-hover:underline">
+                        <span className="text-[11px] font-bold text-[#A63228] group-hover:underline">
                           {isSelected ? 'Currently Viewing' : 'Select Project →'}
                         </span>
                       </div>
@@ -1715,7 +1803,7 @@ export default function Dashboard() {
             </div>
 
             {/* Footer */}
-            <div className="p-3 border-t border-gray-100 bg-gray-50/70 flex justify-between items-center text-[9px] text-gray-500 shrink-0">
+            <div className="p-3 border-t border-gray-100 bg-gray-50/70 flex justify-between items-center text-[11px] text-gray-500 shrink-0">
               <div className="flex items-center gap-1.5">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400">
                   <circle cx="12" cy="12" r="10"></circle>

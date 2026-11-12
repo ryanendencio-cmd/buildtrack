@@ -132,7 +132,7 @@ function SearchableMaterialDropdown({ value, onChange, placeholder, category }) 
                             >
                                 <span>{item}</span>
                                 {query.length > 0 && item.toLowerCase().startsWith(query) && (
-                                    <span className="text-[8px] bg-red-100 text-[#A63228] px-1.5 py-0.2 rounded font-extrabold uppercase">Top Match</span>
+                                    <span className="text-[11px] bg-red-100 text-[#A63228] px-1.5 py-0.2 rounded font-extrabold uppercase">Top Match</span>
                                 )}
                             </button>
                         ))
@@ -835,14 +835,14 @@ export default function Expenses() {
             {!viewAllModal ? (
                 <>
                     <div className="mb-1.5">
-                        <span className="text-[9px] font-bold text-[#A63228] tracking-widest uppercase">EXPENSES MANAGEMENT</span>
+                        <span className="text-[11px] font-bold text-[#A63228] tracking-widest uppercase">EXPENSES MANAGEMENT</span>
                         <h1 className="text-lg font-extrabold text-gray-900 mt-0.5 tracking-tight">Expenses Management</h1>
                         <p className="text-[10px] text-gray-500 mt-0.5">Track and manage daily project expenses.</p>
                     </div>
 
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-3 gap-3">
                         <div className="w-full md:max-w-sm">
-                            <label className="block text-[8px] font-bold text-gray-400 tracking-wider uppercase mb-1">PROJECT</label>
+                            <label className="block text-[11px] font-bold text-gray-400 tracking-wider uppercase mb-1">PROJECT</label>
                             <select value={currentProjectId} onChange={handleProjectChange} className="w-full bg-white border border-gray-100 shadow-sm rounded-lg pl-2.5 pr-6 py-1.5 text-[10px] font-extrabold text-gray-800 outline-none appearance-none" style={selectStyles}>
                                 {mockProjects.map(p => (
                                     <option key={p.id} value={p.id}>
@@ -877,7 +877,7 @@ export default function Expenses() {
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                             </svg>
                             <div className="flex-1">
-                                <span className="font-extrabold uppercase text-[9px] tracking-wider text-[#b45309] mr-1.5">{(currentProjectData?.status || 'NOT ONGOING').toUpperCase()} PROJECT:</span>
+                                <span className="font-extrabold uppercase text-[11px] tracking-wider text-[#b45309] mr-1.5">{(currentProjectData?.status || 'NOT ONGOING').toUpperCase()} PROJECT:</span>
                                 <span className="text-[10px] font-medium text-amber-900">
                                     This project has a status of <strong>{(currentProjectData?.status || 'Not Ongoing').toUpperCase()}</strong>. Adding expenses is not allowed until the project is set to <strong>ONGOING</strong>.
                                 </span>
@@ -887,25 +887,25 @@ export default function Expenses() {
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
                         <div className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-center">
-                            <span className="text-[9px] font-bold text-gray-400 tracking-wider uppercase mb-0.5">ACTUAL EXPENSES</span>
+                            <span className="text-[11px] font-bold text-gray-400 tracking-wider uppercase mb-0.5">ACTUAL EXPENSES</span>
                             <h2 className="text-xl font-extrabold text-[#A63228]">₱{totalActualExpense.toLocaleString()}</h2>
                         </div>
                         <div className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-center">
-                            <span className="text-[9px] font-bold text-gray-400 tracking-wider uppercase mb-0.5">REMAINING BUDGET</span>
+                            <span className="text-[11px] font-bold text-gray-400 tracking-wider uppercase mb-0.5">REMAINING BUDGET</span>
                             <h2 className={`text-xl font-extrabold ${remainingBudget < 0 ? 'text-[#A63228]' : 'text-[#2e7d32]'}`}>
                                 {remainingBudget < 0 ? `-₱${Math.abs(remainingBudget).toLocaleString()}` : `₱${remainingBudget.toLocaleString()}`}
                             </h2>
                         </div>
                         <div className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-center">
-                            <span className="text-[9px] font-bold text-gray-400 tracking-wider uppercase mb-0.5">ALLOCATED BUDGET</span>
+                            <span className="text-[11px] font-bold text-gray-400 tracking-wider uppercase mb-0.5">ALLOCATED BUDGET</span>
                             <h2 className="text-xl font-extrabold text-gray-900">₱{allocatedBudget.toLocaleString()}</h2>
                         </div>
                     </div>
 
                     <div className="bg-gradient-to-r from-[#5a0f0a] via-[#7B1F16] to-[#4a0c08] rounded-xl shadow-sm p-4 text-white mb-3">
                         <div className="flex justify-between items-center mb-3">
-                            <h3 className="text-[9px] font-extrabold tracking-widest uppercase text-white/70">EXPENSES VS BUDGET</h3>
-                            <span className="text-[9px] text-white/70 font-bold uppercase tracking-wider">{overallProgress.toFixed(0)}% USED</span>
+                            <h3 className="text-[11px] font-extrabold tracking-widest uppercase text-white/70">EXPENSES VS BUDGET</h3>
+                            <span className="text-[11px] text-white/70 font-bold uppercase tracking-wider">{overallProgress.toFixed(0)}% USED</span>
                         </div>
 
                         <div className="flex flex-col gap-2.5 mb-3">
@@ -937,7 +937,7 @@ export default function Expenses() {
                         <div className="mb-2 flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
                             <div className="flex items-center gap-2">
                                 <h3 className="text-[10px] font-extrabold text-gray-900 tracking-wide uppercase">Daily Expenses</h3>
-                                <span className="bg-gray-100 text-gray-600 text-[8px] font-bold px-1.5 py-0.5 rounded">
+                                <span className="bg-gray-100 text-gray-600 text-[11px] font-bold px-1.5 py-0.5 rounded">
                                     {filterDate ? `${displayedExpenses.length} filtered` : `${expensesList.length} total`}
                                 </span>
                             </div>
@@ -946,18 +946,18 @@ export default function Expenses() {
                                     <button
                                         type="button"
                                         onClick={() => { setFilterDate(''); setFilterCategory('All'); }}
-                                        className="text-[9px] text-[#A63228] font-bold hover:underline cursor-pointer flex items-center gap-1 bg-red-50 hover:bg-red-100 px-2 py-1 rounded transition-colors"
+                                        className="text-[11px] text-[#A63228] font-bold hover:underline cursor-pointer flex items-center gap-1 bg-red-50 hover:bg-red-100 px-2 py-1 rounded transition-colors"
                                         title="Clear filters to view all saved expenses"
                                     >
                                         <span>✕</span> Clear Filters
                                     </button>
                                 )}
                                 <div className="flex items-center gap-1">
-                                    <label className="text-[8px] font-bold text-gray-400 uppercase">Category:</label>
+                                    <label className="text-[11px] font-bold text-gray-400 uppercase">Category:</label>
                                     <select
                                         value={filterCategory}
                                         onChange={(e) => setFilterCategory(e.target.value)}
-                                        className={`bg-[#f4f1ee] px-2 py-1 rounded-md text-[9px] font-bold outline-none border transition-colors cursor-pointer ${filterCategory !== 'All' ? 'border-[#A63228] text-[#A63228] font-extrabold shadow-sm' : 'border-transparent text-gray-700'}`}
+                                        className={`bg-[#f4f1ee] px-2 py-1 rounded-md text-[11px] font-bold outline-none border transition-colors cursor-pointer ${filterCategory !== 'All' ? 'border-[#A63228] text-[#A63228] font-extrabold shadow-sm' : 'border-transparent text-gray-700'}`}
                                     >
                                         <option value="All">All Categories</option>
                                         <option value="Materials">Materials</option>
@@ -969,12 +969,12 @@ export default function Expenses() {
                                     </select>
                                 </div>
                                 <div className="flex items-center gap-1">
-                                    <label className="text-[8px] font-bold text-gray-400 uppercase">Date:</label>
+                                    <label className="text-[11px] font-bold text-gray-400 uppercase">Date:</label>
                                     <input
                                         type="date"
                                         value={filterDate}
                                         onChange={(e) => setFilterDate(e.target.value)}
-                                        className={`bg-[#f4f1ee] px-2.5 py-1 rounded-md text-[9px] font-bold outline-none border transition-colors cursor-pointer ${filterDate ? 'border-[#A63228] text-[#A63228] font-extrabold shadow-sm' : 'border-transparent text-gray-700'}`}
+                                        className={`bg-[#f4f1ee] px-2.5 py-1 rounded-md text-[11px] font-bold outline-none border transition-colors cursor-pointer ${filterDate ? 'border-[#A63228] text-[#A63228] font-extrabold shadow-sm' : 'border-transparent text-gray-700'}`}
                                     />
                                 </div>
                             </div>
@@ -984,10 +984,10 @@ export default function Expenses() {
                             <table className="w-full text-left border-collapse min-w-[500px]">
                                 <thead>
                                     <tr>
-                                        <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[15%] uppercase tracking-wider">DATE</th>
-                                        <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[20%] uppercase tracking-wider">CATEGORY</th>
-                                        <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[45%] uppercase tracking-wider">DESCRIPTION</th>
-                                        <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 text-right pr-2 w-[20%] uppercase tracking-wider">AMOUNT</th>
+                                        <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[15%] uppercase tracking-wider">DATE</th>
+                                        <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[20%] uppercase tracking-wider">CATEGORY</th>
+                                        <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[45%] uppercase tracking-wider">DESCRIPTION</th>
+                                        <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 text-right pr-2 w-[20%] uppercase tracking-wider">AMOUNT</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -1000,7 +1000,7 @@ export default function Expenses() {
                                                         <button
                                                             type="button"
                                                             onClick={() => setFilterDate('')}
-                                                            className="text-[9px] text-[#A63228] font-bold underline hover:text-[#8B1A10] cursor-pointer"
+                                                            className="text-[11px] text-[#A63228] font-bold underline hover:text-[#8B1A10] cursor-pointer"
                                                         >
                                                             Clear filter to view all saved expenses ({expensesList.length})
                                                         </button>
@@ -1014,7 +1014,7 @@ export default function Expenses() {
                                         displayedExpensePagination.pageItems.map((exp) => (
                                             <tr key={exp.id} className="hover:bg-gray-50/60 transition-colors">
                                                 <td className="py-2.5 text-[10px] font-bold text-gray-800 border-b border-gray-50">{formatDisplayDate(exp.date)}</td>
-                                                <td className="py-2.5 border-b border-gray-50"><span className="text-[9px] font-bold text-gray-900 uppercase tracking-wider">{exp.category}</span></td>
+                                                <td className="py-2.5 border-b border-gray-50"><span className="text-[11px] font-bold text-gray-900 uppercase tracking-wider">{exp.category}</span></td>
                                                 <td className="py-2.5 text-[10px] font-medium text-gray-600 border-b border-gray-50">{getExpenseDescription(exp)}</td>
                                                 <td className="py-2.5 text-[10px] font-extrabold text-[#A63228] border-b border-gray-50 text-right pr-2">₱{Number(exp.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                             </tr>
@@ -1037,7 +1037,7 @@ export default function Expenses() {
                     <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4">
                         <div className="flex justify-between items-center mb-3">
                             <h3 className="text-[11px] font-extrabold text-gray-900 uppercase">Receipts</h3>
-                            <button onClick={() => setViewAllModal(true)} className="text-[9px] text-[#A63228] font-bold hover:underline">View All →</button>
+                            <button onClick={() => setViewAllModal(true)} className="text-[11px] text-[#A63228] font-bold hover:underline">View All →</button>
                         </div>
 
                         {displayedExpenses.length === 0 ? (
@@ -1057,11 +1057,11 @@ export default function Expenses() {
                                                         loading="lazy"
                                                     />
                                                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-between p-2">
-                                                        <span className="text-[8px] font-bold text-white bg-black/60 px-2 py-0.5 rounded backdrop-blur-xs flex items-center gap-1">
+                                                        <span className="text-[11px] font-bold text-white bg-black/60 px-2 py-0.5 rounded backdrop-blur-xs flex items-center gap-1">
                                                             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
                                                             View Receipt
                                                         </span>
-                                                        <span className="text-[8px] font-extrabold text-white/90 uppercase tracking-wider">
+                                                        <span className="text-[11px] font-extrabold text-white/90 uppercase tracking-wider">
                                                             {exp.category}
                                                         </span>
                                                     </div>
@@ -1069,12 +1069,12 @@ export default function Expenses() {
                                             ) : (
                                                 <div className="h-24 w-full bg-white rounded-lg flex flex-col items-center justify-center text-gray-300 border border-dashed border-gray-200 shadow-xs mb-2 group-hover:bg-red-50/50 group-hover:border-red-200 transition-colors">
                                                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
-                                                    <span className="text-[8px] font-semibold text-gray-400 mt-1">No Receipt Image</span>
+                                                    <span className="text-[11px] font-semibold text-gray-400 mt-1">No Receipt Image</span>
                                                 </div>
                                             )}
                                             <div className="flex-1">
                                                 <p className="text-[10px] font-extrabold text-gray-900 mb-0.5">Receipt {getReceiptNumber(exp)}</p>
-                                                <p className="text-[9px] text-gray-500 font-medium">{exp.category} · {formatDisplayDate(exp.date)}</p>
+                                                <p className="text-[11px] text-gray-500 font-medium">{exp.category} · {formatDisplayDate(exp.date)}</p>
                                             </div>
                                             <p className="text-xs font-extrabold text-[#A63228] mt-1.5">₱{Number(exp.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                         </div>
@@ -1149,7 +1149,7 @@ export default function Expenses() {
                                                                 loading="lazy"
                                                             />
                                                             <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-between p-2">
-                                                                <span className="text-[8px] font-bold text-white bg-black/60 px-2 py-0.5 rounded backdrop-blur-xs flex items-center gap-1">
+                                                                <span className="text-[11px] font-bold text-white bg-black/60 px-2 py-0.5 rounded backdrop-blur-xs flex items-center gap-1">
                                                                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
                                                                     View Receipt
                                                                 </span>
@@ -1158,13 +1158,13 @@ export default function Expenses() {
                                                     ) : (
                                                         <div className="h-28 w-full bg-white rounded-lg flex flex-col items-center justify-center text-gray-300 border border-dashed border-gray-200 shadow-xs mb-3 group-hover:bg-red-50/50 group-hover:border-red-200 transition-colors">
                                                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
-                                                            <span className="text-[8px] font-semibold text-gray-400 mt-1">No Receipt Image</span>
+                                                            <span className="text-[11px] font-semibold text-gray-400 mt-1">No Receipt Image</span>
                                                         </div>
                                                     )}
                                                     <div className="flex-1">
                                                         <div className="flex justify-between items-center mb-1">
                                                             <p className="text-xs font-extrabold text-gray-900">Receipt {getReceiptNumber(exp)}</p>
-                                                            <span className="bg-[#fce8e6] text-[#A63228] text-[8px] font-extrabold px-1.5 py-0.5 rounded tracking-wider">{formatDisplayDate(exp.date)}</span>
+                                                            <span className="bg-[#fce8e6] text-[#A63228] text-[11px] font-extrabold px-1.5 py-0.5 rounded tracking-wider">{formatDisplayDate(exp.date)}</span>
                                                         </div>
                                                         <p className="text-[10px] text-gray-500 font-medium uppercase">{exp.category}</p>
                                                     </div>
@@ -1189,7 +1189,7 @@ export default function Expenses() {
                                             const receiptImg = getReceiptImage(exp);
                                             return (
                                                 <div key={exp.id} className="bg-gray-50 p-3 rounded-xl border border-gray-200 flex flex-col relative overflow-hidden group">
-                                                    <div className="absolute top-2 right-2 bg-red-100 text-red-600 text-[8px] font-extrabold px-1.5 py-0.5 rounded uppercase z-10">Deleted</div>
+                                                    <div className="absolute top-2 right-2 bg-red-100 text-red-600 text-[11px] font-extrabold px-1.5 py-0.5 rounded uppercase z-10">Deleted</div>
                                                     {receiptImg ? (
                                                         <div className="h-28 w-full bg-gray-100 rounded-lg overflow-hidden border border-gray-200 shadow-xs mb-2 relative flex items-center justify-center opacity-60 grayscale group-hover:grayscale-0 group-hover:opacity-90 transition-all">
                                                             <img
@@ -1207,17 +1207,17 @@ export default function Expenses() {
                                                     <div className="flex-1 opacity-70">
                                                         <div className="flex justify-between items-center mb-1">
                                                             <p className="text-xs font-extrabold text-gray-600">Receipt {getReceiptNumber(exp)}</p>
-                                                            <span className="bg-gray-200 text-gray-500 text-[8px] font-extrabold px-1.5 py-0.5 rounded tracking-wider">{formatDisplayDate(exp.date)}</span>
+                                                            <span className="bg-gray-200 text-gray-500 text-[11px] font-extrabold px-1.5 py-0.5 rounded tracking-wider">{formatDisplayDate(exp.date)}</span>
                                                         </div>
                                                         <p className="text-[10px] text-gray-500 font-medium uppercase">{exp.category}</p>
                                                     </div>
                                                     <p className="text-sm font-extrabold text-gray-500 mt-1.5 mb-3 line-through">₱{Number(exp.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
 
                                                     <div className="flex gap-1.5 mt-auto pt-2 border-t border-gray-200">
-                                                        <button onClick={(e) => { e.stopPropagation(); setSelectedReceipt(exp); setReceiptModalState('CONFIRM_RESTORE'); }} className="flex-1 py-1.5 bg-[#e6f4ea] text-[#2e7d32] rounded border border-[#c8e6c9] text-[9px] font-bold hover:bg-[#c8e6c9] transition-colors">
+                                                        <button onClick={(e) => { e.stopPropagation(); setSelectedReceipt(exp); setReceiptModalState('CONFIRM_RESTORE'); }} className="flex-1 py-1.5 bg-[#e6f4ea] text-[#2e7d32] rounded border border-[#c8e6c9] text-[11px] font-bold hover:bg-[#c8e6c9] transition-colors">
                                                             Restore
                                                         </button>
-                                                        <button onClick={(e) => { e.stopPropagation(); setSelectedReceipt(exp); setReceiptModalState('CONFIRM_PERM_DELETE'); }} className="flex-1 py-1.5 bg-[#fce8e6] text-[#A63228] rounded border border-[#fce8e6] text-[9px] font-bold hover:bg-red-100 transition-colors">
+                                                        <button onClick={(e) => { e.stopPropagation(); setSelectedReceipt(exp); setReceiptModalState('CONFIRM_PERM_DELETE'); }} className="flex-1 py-1.5 bg-[#fce8e6] text-[#A63228] rounded border border-[#fce8e6] text-[11px] font-bold hover:bg-red-100 transition-colors">
                                                             Perm. Delete
                                                         </button>
                                                     </div>
@@ -1244,7 +1244,7 @@ export default function Expenses() {
                             <div className="flex justify-between items-center p-3 border-b border-gray-100 bg-gray-50">
                                 <div>
                                     <h3 className="text-[11px] font-extrabold text-[#1a1a1a]">Receipt Details</h3>
-                                    <p className="text-[9px] text-gray-500 font-medium">Receipt {getReceiptNumber(selectedReceipt)}</p>
+                                    <p className="text-[11px] text-gray-500 font-medium">Receipt {getReceiptNumber(selectedReceipt)}</p>
                                 </div>
                                 <button onClick={() => setReceiptModalState('NONE')} className="text-gray-400 hover:text-[#A63228] transition-colors p-1 bg-white rounded-full shadow-sm">
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
@@ -1261,51 +1261,51 @@ export default function Expenses() {
                                             onClick={() => window.open(selectedReceipt.image || selectedReceipt.photoData, '_blank')}
                                             title="Click to view full image in new tab"
                                         />
-                                        <span className="absolute bottom-1 right-2 bg-black/60 text-white text-[7px] px-1.5 py-0.5 rounded font-semibold">Click to expand 🔍</span>
+                                        <span className="absolute bottom-1 right-2 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded font-semibold">Click to expand 🔍</span>
                                     </div>
                                 ) : (
                                     <div className="w-full h-28 bg-[#f4f1ee] rounded-lg border border-dashed border-gray-300 flex flex-col items-center justify-center text-gray-400">
                                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="mb-1"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
-                                        <span className="text-[9px] font-medium">No receipt image attached</span>
+                                        <span className="text-[11px] font-medium">No receipt image attached</span>
                                     </div>
                                 )}
 
                                 <div className="bg-[#f9fafb] p-3 rounded-lg border border-gray-100 flex flex-col gap-2">
                                     <div className="flex justify-between items-center border-b border-gray-100 pb-1.5">
-                                        <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Amount</span>
+                                        <span className="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Amount</span>
                                         <span className="text-base font-extrabold text-[#A63228]">₱{Number(selectedReceipt.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                     </div>
                                     <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 pt-1">
-                                        <div className="flex flex-col col-span-2"><span className="text-[8px] font-bold text-gray-400 uppercase">Project</span><span className="text-[10px] font-bold text-gray-900">{selectedReceipt.project || '-'}</span></div>
-                                        <div className="flex flex-col"><span className="text-[8px] font-bold text-gray-400 uppercase">Receipt No.</span><span className="text-[10px] font-bold text-gray-900">{getReceiptNumber(selectedReceipt)}</span></div>
-                                        <div className="flex flex-col"><span className="text-[8px] font-bold text-gray-400 uppercase">Category</span><span className="text-[10px] font-bold text-gray-900 uppercase">{selectedReceipt.category}</span></div>
-                                        <div className="flex flex-col"><span className="text-[8px] font-bold text-gray-400 uppercase">Date Logged</span><span className="text-[10px] font-bold text-gray-900">{formatDisplayDate(selectedReceipt.date)}</span></div>
-                                        <div className="flex flex-col"><span className="text-[8px] font-bold text-gray-400 uppercase">Time</span><span className="text-[10px] font-bold text-gray-900">{formatTime(selectedReceipt.time)}</span></div>
+                                        <div className="flex flex-col col-span-2"><span className="text-[11px] font-bold text-gray-400 uppercase">Project</span><span className="text-[10px] font-bold text-gray-900">{selectedReceipt.project || '-'}</span></div>
+                                        <div className="flex flex-col"><span className="text-[11px] font-bold text-gray-400 uppercase">Receipt No.</span><span className="text-[10px] font-bold text-gray-900">{getReceiptNumber(selectedReceipt)}</span></div>
+                                        <div className="flex flex-col"><span className="text-[11px] font-bold text-gray-400 uppercase">Category</span><span className="text-[10px] font-bold text-gray-900 uppercase">{selectedReceipt.category}</span></div>
+                                        <div className="flex flex-col"><span className="text-[11px] font-bold text-gray-400 uppercase">Date Logged</span><span className="text-[10px] font-bold text-gray-900">{formatDisplayDate(selectedReceipt.date)}</span></div>
+                                        <div className="flex flex-col"><span className="text-[11px] font-bold text-gray-400 uppercase">Time</span><span className="text-[10px] font-bold text-gray-900">{formatTime(selectedReceipt.time)}</span></div>
                                     </div>
                                     <div className="border-t border-gray-100 pt-2 mt-1">
-                                        <span className="text-[8px] font-bold text-gray-400 uppercase">Items / Labor</span>
+                                        <span className="text-[11px] font-bold text-gray-400 uppercase">Items / Labor</span>
                                         {getExpenseItems(selectedReceipt).length > 0 ? (
                                             <div className="mt-1 divide-y divide-gray-100">
                                                 {getExpenseItems(selectedReceipt).map((item, index) => {
                                                     const qty = Number(item.qty) || 0;
                                                     const price = Number(item.price) || 0;
-                                                    return <div key={index} className="grid grid-cols-[auto_1fr_auto] gap-2 py-1.5 text-[9px] items-start">
+                                                    return <div key={index} className="grid grid-cols-[auto_1fr_auto] gap-2 py-1.5 text-[11px] items-start">
                                                         <span className="font-bold text-gray-600 shrink-0">{item.qty || '-'} {item.unit || ''}</span>
                                                         <div>
                                                             <span className="font-medium text-gray-900 block">{item.description || item.desc || '-'}</span>
-                                                            {item.remarks && <span className="text-[8px] text-gray-400 italic block">Purpose: {item.remarks}</span>}
-                                                            {price > 0 && <span className="text-[8px] text-gray-400 block">₱{price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} each</span>}
+                                                            {item.remarks && <span className="text-[11px] text-gray-400 italic block">Purpose: {item.remarks}</span>}
+                                                            {price > 0 && <span className="text-[11px] text-gray-400 block">₱{price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} each</span>}
                                                         </div>
                                                         <span className="font-bold text-[#2e7d32] whitespace-nowrap">₱{(qty * price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                                     </div>;
                                                 })}
                                             </div>
-                                        ) : <p className="text-[9px] text-gray-500 mt-1">{getExpenseDescription(selectedReceipt)}</p>}
+                                        ) : <p className="text-[11px] text-gray-500 mt-1">{getExpenseDescription(selectedReceipt)}</p>}
                                     </div>
                                     {selectedReceipt.cashPaid !== undefined && (
                                         <div className="flex justify-between bg-white p-2 rounded border border-gray-50 mt-1">
-                                            <div className="flex flex-col"><span className="text-[8px] font-bold text-gray-400 uppercase">Cash Paid</span><span className="text-[10px] font-bold text-[#2e7d32]">₱{Number(selectedReceipt.cashPaid || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
-                                            <div className="flex flex-col text-right"><span className="text-[8px] font-bold text-gray-400 uppercase">Cash Change</span><span className="text-[10px] font-bold text-gray-900">₱{Number(selectedReceipt.cashChange || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+                                            <div className="flex flex-col"><span className="text-[11px] font-bold text-gray-400 uppercase">Cash Paid</span><span className="text-[10px] font-bold text-[#2e7d32]">₱{Number(selectedReceipt.cashPaid || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+                                            <div className="flex flex-col text-right"><span className="text-[11px] font-bold text-gray-400 uppercase">Cash Change</span><span className="text-[10px] font-bold text-gray-900">₱{Number(selectedReceipt.cashChange || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
                                         </div>
                                     )}
                                 </div>
@@ -1322,25 +1322,25 @@ export default function Expenses() {
                     {receiptModalState === 'EDIT' && editFormData && (
                         <div className="bg-white rounded-xl w-full max-w-sm shadow-2xl relative flex flex-col overflow-hidden">
                             <div className="flex justify-between items-center p-3 border-b border-gray-100 bg-gray-50">
-                                <div><h3 className="text-[11px] font-extrabold text-[#1a1a1a]">Edit Receipt</h3><p className="text-[9px] text-gray-500 font-medium">Receipt {getReceiptNumber(editFormData)}</p></div>
+                                <div><h3 className="text-[11px] font-extrabold text-[#1a1a1a]">Edit Receipt</h3><p className="text-[11px] text-gray-500 font-medium">Receipt {getReceiptNumber(editFormData)}</p></div>
                                 <button onClick={() => setReceiptModalState('VIEW')} className="text-gray-400 hover:text-gray-700"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
                             </div>
                             <div className="p-4 max-h-[70vh] overflow-y-auto">
                                 <div className="grid grid-cols-2 gap-3 mb-3">
-                                    <div><label className="block text-[8px] font-bold text-gray-700 mb-1 uppercase">DATE</label><input type="date" name="date" value={editFormData.date} onChange={(e) => handleInputChange(e, true)} className="w-full bg-[#f4f1ee] rounded-md px-2 py-1.5 text-[9px] font-medium focus:border-[#A63228] outline-none" /></div>
-                                    <div><label className="block text-[8px] font-bold text-gray-700 mb-1 uppercase">TIME</label><input type="time" name="time" value={editFormData.time} onChange={(e) => handleInputChange(e, true)} className="w-full bg-[#f4f1ee] rounded-md px-2 py-1.5 text-[9px] font-medium focus:border-[#A63228] outline-none" /></div>
+                                    <div><label className="block text-[11px] font-bold text-gray-700 mb-1 uppercase">DATE</label><input type="date" name="date" value={editFormData.date} onChange={(e) => handleInputChange(e, true)} className="w-full bg-[#f4f1ee] rounded-md px-2 py-1.5 text-[11px] font-medium focus:border-[#A63228] outline-none" /></div>
+                                    <div><label className="block text-[11px] font-bold text-gray-700 mb-1 uppercase">TIME</label><input type="time" name="time" value={editFormData.time} onChange={(e) => handleInputChange(e, true)} className="w-full bg-[#f4f1ee] rounded-md px-2 py-1.5 text-[11px] font-medium focus:border-[#A63228] outline-none" /></div>
                                     <div className="col-span-2">
-                                        <label className="block text-[8px] font-bold text-gray-700 mb-1 uppercase">CATEGORY</label>
-                                        <select name="category" value={editFormData.category} onChange={(e) => handleInputChange(e, true)} className="w-full bg-[#f4f1ee] rounded-md px-2 py-1.5 text-[9px] font-medium focus:border-[#A63228] outline-none appearance-none" style={selectStyles}>
+                                        <label className="block text-[11px] font-bold text-gray-700 mb-1 uppercase">CATEGORY</label>
+                                        <select name="category" value={editFormData.category} onChange={(e) => handleInputChange(e, true)} className="w-full bg-[#f4f1ee] rounded-md px-2 py-1.5 text-[11px] font-medium focus:border-[#A63228] outline-none appearance-none" style={selectStyles}>
                                             <option value="Materials">Materials</option><option value="Manpower">Manpower</option><option value="Equipment">Equipment</option>
                                         </select>
                                     </div>
-                                    <div className="col-span-2"><label className="block text-[8px] font-bold text-gray-700 mb-1 uppercase">ITEM DESCRIPTION</label><input type="text" name="desc" value={editFormData.desc} onChange={(e) => handleInputChange(e, true)} className="w-full bg-[#f4f1ee] rounded-md px-2 py-1.5 text-[9px] font-medium focus:border-[#A63228] outline-none" /></div>
-                                    <div><label className="block text-[8px] font-bold text-gray-700 mb-1 uppercase">QUANTITY</label><input type="number" name="qty" value={editFormData.qty} onChange={(e) => handleInputChange(e, true)} className="w-full bg-[#f4f1ee] rounded-md px-2 py-1.5 text-[9px] font-medium focus:border-[#A63228] outline-none" /></div>
+                                    <div className="col-span-2"><label className="block text-[11px] font-bold text-gray-700 mb-1 uppercase">ITEM DESCRIPTION</label><input type="text" name="desc" value={editFormData.desc} onChange={(e) => handleInputChange(e, true)} className="w-full bg-[#f4f1ee] rounded-md px-2 py-1.5 text-[11px] font-medium focus:border-[#A63228] outline-none" /></div>
+                                    <div><label className="block text-[11px] font-bold text-gray-700 mb-1 uppercase">QUANTITY</label><input type="number" name="qty" value={editFormData.qty} onChange={(e) => handleInputChange(e, true)} className="w-full bg-[#f4f1ee] rounded-md px-2 py-1.5 text-[11px] font-medium focus:border-[#A63228] outline-none" /></div>
                                     <div>
                                         <div className="flex justify-between items-center mb-1">
-                                            <label className="block text-[8px] font-bold text-gray-700 uppercase">AMOUNT (₱)</label>
-                                            <span className="text-[7px] text-gray-400 font-semibold">Max: ₱999,999,999,999</span>
+                                            <label className="block text-[11px] font-bold text-gray-700 uppercase">AMOUNT (₱)</label>
+                                            <span className="text-[10px] text-gray-400 font-semibold">Max: ₱999,999,999,999</span>
                                         </div>
                                         <input
                                             type="number"
@@ -1350,10 +1350,10 @@ export default function Expenses() {
                                             name="amount"
                                             value={editFormData.amount}
                                             onChange={(e) => handleInputChange(e, true)}
-                                            className={`w-full bg-[#f4f1ee] rounded-md px-2 py-1.5 text-[9px] font-medium focus:border-[#A63228] outline-none border transition-colors ${amountError ? 'border-red-500 text-red-600' : 'border-transparent'}`}
+                                            className={`w-full bg-[#f4f1ee] rounded-md px-2 py-1.5 text-[11px] font-medium focus:border-[#A63228] outline-none border transition-colors ${amountError ? 'border-red-500 text-red-600' : 'border-transparent'}`}
                                         />
                                         {amountError && (
-                                            <p className="text-[8px] text-red-600 font-bold mt-1 flex items-center gap-1">
+                                            <p className="text-[11px] text-red-600 font-bold mt-1 flex items-center gap-1">
                                                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
                                                 {amountError}
                                             </p>
@@ -1456,7 +1456,7 @@ export default function Expenses() {
                             <div className="p-3 sm:p-3.5 border-b border-gray-100 bg-gray-50/60 shrink-0">
                                 <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
                                     <div className="sm:col-span-6">
-                                        <label className="block text-[8px] font-extrabold text-gray-500 tracking-wider uppercase mb-1">PROJECT</label>
+                                        <label className="block text-[11px] font-extrabold text-gray-500 tracking-wider uppercase mb-1">PROJECT</label>
                                         <select
                                             name="project"
                                             value={formData.project}
@@ -1472,7 +1472,7 @@ export default function Expenses() {
                                         </select>
                                     </div>
                                     <div className="sm:col-span-3">
-                                        <label className="block text-[8px] font-extrabold text-gray-500 tracking-wider uppercase mb-1">DATE LOGGED</label>
+                                        <label className="block text-[11px] font-extrabold text-gray-500 tracking-wider uppercase mb-1">DATE LOGGED</label>
                                         <input
                                             type="date"
                                             name="date"
@@ -1483,7 +1483,7 @@ export default function Expenses() {
                                         />
                                     </div>
                                     <div className="sm:col-span-3">
-                                        <label className="block text-[8px] font-extrabold text-gray-500 tracking-wider uppercase mb-1">TIME</label>
+                                        <label className="block text-[11px] font-extrabold text-gray-500 tracking-wider uppercase mb-1">TIME</label>
                                         <input
                                             type="time"
                                             name="time"
@@ -1508,7 +1508,7 @@ export default function Expenses() {
                                                     ? 'EQUIPMENT & ITEMS LIST'
                                                     : 'MATERIALS / CONSUMABLES LIST')}
                                     </span>
-                                    <span className="text-[9px] font-bold text-gray-400">
+                                    <span className="text-[11px] font-bold text-gray-400">
                                         {formData.items.length} item(s) in list
                                     </span>
                                 </div>
@@ -1553,7 +1553,7 @@ export default function Expenses() {
                                             {/* Row 1: Item Description */}
                                             <div>
                                                 <div className="mb-0.5">
-                                                    <label className="block text-[8.5px] font-extrabold text-gray-700 uppercase tracking-wider">
+                                                    <label className="block text-[11px] font-extrabold text-gray-700 uppercase tracking-wider">
                                                         {itemCat === 'Manpower' ? 'WORKER / ROLE' : itemCat === 'Equipment' ? 'EQUIPMENT / ITEM' : 'MATERIAL / ITEM'} <span className="text-[#A63228]">*</span>
                                                     </label>
                                                 </div>
@@ -1575,7 +1575,7 @@ export default function Expenses() {
                                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 items-end pt-0.5">
                                                 {/* Quantity */}
                                                 <div>
-                                                    <label className="block text-[8.5px] font-extrabold text-gray-700 uppercase tracking-wider mb-1">
+                                                    <label className="block text-[11px] font-extrabold text-gray-700 uppercase tracking-wider mb-1">
                                                         {itemCat === 'Manpower' ? 'DAYS / QTY' : 'QUANTITY'} <span className="text-[#A63228]">*</span>
                                                     </label>
                                                     <input
@@ -1592,7 +1592,7 @@ export default function Expenses() {
 
                                                 {/* Unit */}
                                                 <div>
-                                                    <label className="block text-[8.5px] font-extrabold text-gray-700 uppercase tracking-wider mb-1">
+                                                    <label className="block text-[11px] font-extrabold text-gray-700 uppercase tracking-wider mb-1">
                                                         UNIT <span className="text-[#A63228]">*</span>
                                                     </label>
                                                     <select
@@ -1611,11 +1611,11 @@ export default function Expenses() {
                                                 {/* Unit Price */}
                                                 <div>
                                                     <div className="flex justify-between items-center mb-1">
-                                                        <label className="block text-[8.5px] font-extrabold text-gray-700 uppercase tracking-wider">
+                                                        <label className="block text-[11px] font-extrabold text-gray-700 uppercase tracking-wider">
                                                             {itemCat === 'Manpower' ? 'DAILY RATE' : 'UNIT PRICE'} <span className="text-[#A63228]">*</span>
                                                         </label>
                                                         {item.unit && (
-                                                            <span className="text-[7.5px] font-semibold text-gray-400">/{item.unit}</span>
+                                                            <span className="text-[10px] font-semibold text-gray-400">/{item.unit}</span>
                                                         )}
                                                     </div>
                                                     <div className="relative flex items-center">
@@ -1635,7 +1635,7 @@ export default function Expenses() {
 
                                                 {/* Subtotal - Single clean line, NO formula/computation text */}
                                                 <div>
-                                                    <label className="block text-[8.5px] font-extrabold text-gray-700 uppercase tracking-wider mb-1">
+                                                    <label className="block text-[11px] font-extrabold text-gray-700 uppercase tracking-wider mb-1">
                                                         SUBTOTAL
                                                     </label>
                                                     <div className="flex items-center justify-end h-[31px] bg-red-50/70 border border-red-200/70 rounded-lg px-2.5 text-right">
@@ -1660,14 +1660,14 @@ export default function Expenses() {
                                 {/* Receipt Upload (REQUIRED) */}
                                 <div className={`p-2.5 rounded-xl border transition-colors ${!photoData ? 'bg-amber-50/50 border-amber-300 ring-1 ring-amber-200' : 'bg-gray-50/70 border-gray-200'}`}>
                                     <div className="flex justify-between items-center mb-1">
-                                        <label className="block text-[8.5px] font-bold text-gray-700 uppercase flex items-center gap-1">
+                                        <label className="block text-[11px] font-bold text-gray-700 uppercase flex items-center gap-1">
                                             <span>Receipt / Proof Image</span>
-                                            <span className="text-red-700 font-extrabold text-[7.5px] bg-red-100 border border-red-300 px-1.5 py-0.2 rounded uppercase">* Required</span>
+                                            <span className="text-red-700 font-extrabold text-[10px] bg-red-100 border border-red-300 px-1.5 py-0.2 rounded uppercase">* Required</span>
                                         </label>
                                         {photoData ? (
-                                            <span className="text-[8.5px] font-bold text-[#2e7d32]">✓ Receipt Attached</span>
+                                            <span className="text-[11px] font-bold text-[#2e7d32]">✓ Receipt Attached</span>
                                         ) : (
-                                            <span className="text-[8.5px] font-bold text-amber-700">⚠ Attach Receipt</span>
+                                            <span className="text-[11px] font-bold text-amber-700">⚠ Attach Receipt</span>
                                         )}
                                     </div>
                                     {photoData ? (
@@ -1688,7 +1688,7 @@ export default function Expenses() {
                                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-[#A63228]"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
                                                 <span className="text-[9.5px] font-bold text-gray-700">Attach Receipt, Signed Payroll, or Voucher Photo</span>
                                             </div>
-                                            <span className="text-[8px] text-gray-400">Official Receipt (OR), Cash Voucher, Signed Payroll Sheet, or Rental Agreement (JPG, PNG)</span>
+                                            <span className="text-[11px] text-gray-400">Official Receipt (OR), Cash Voucher, Signed Payroll Sheet, or Rental Agreement (JPG, PNG)</span>
                                             <input type="file" accept="image/*" onChange={handleManualFileUpload} className="hidden" />
                                         </label>
                                     )}
@@ -1698,12 +1698,12 @@ export default function Expenses() {
                             {/* Bottom Summary Bar */}
                             <div className="p-3 sm:p-3.5 border-t border-gray-100 bg-gray-50 flex flex-col sm:flex-row justify-between items-center gap-2.5 shrink-0">
                                 <div className="text-left w-full sm:w-auto">
-                                    <span className="block text-[8.5px] font-extrabold text-gray-400 uppercase tracking-wider">TOTAL EXPENSE COST</span>
+                                    <span className="block text-[11px] font-extrabold text-gray-400 uppercase tracking-wider">TOTAL EXPENSE COST</span>
                                     <span className="text-base font-extrabold text-[#A63228]">
                                         ₱{computedTotal.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                     </span>
                                     {amountError && (
-                                        <p className="text-[8.5px] text-red-600 font-bold mt-0.5">{amountError}</p>
+                                        <p className="text-[11px] text-red-600 font-bold mt-0.5">{amountError}</p>
                                     )}
                                 </div>
                                 <div className="flex gap-2 w-full sm:w-auto">
@@ -1734,7 +1734,7 @@ export default function Expenses() {
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 transition-all">
                     <div className="bg-white rounded-xl w-full max-w-[300px] shadow-2xl relative overflow-hidden flex flex-col">
                         <div className="flex justify-between items-center p-4 border-b border-gray-100 shrink-0">
-                            <div><h3 className="text-[13px] font-extrabold text-[#1a1a1a]">Scan Receipt</h3><p className="text-[9px] text-gray-500 font-medium mt-0.5">Take a photo or upload file.</p></div>
+                            <div><h3 className="text-[13px] font-extrabold text-[#1a1a1a]">Scan Receipt</h3><p className="text-[11px] text-gray-500 font-medium mt-0.5">Take a photo or upload file.</p></div>
                             <button onClick={resetAndClose} className="text-gray-400 hover:text-gray-700"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
                         </div>
                         <div className="p-4 flex flex-col shrink-0">
@@ -1745,7 +1745,7 @@ export default function Expenses() {
                                 </div>
                             </div>
                             <label className="w-full py-2 bg-[#E8C547] text-gray-900 rounded-lg text-[10px] font-bold hover:bg-[#d4b33d] transition-colors mb-2 cursor-pointer text-center block">Take a Photo<input type="file" accept="image/*" capture="environment" onChange={handleFileUpload} className="hidden" /></label>
-                            <div className="text-center mb-2"><span className="text-[9px] text-gray-400">or</span></div>
+                            <div className="text-center mb-2"><span className="text-[11px] text-gray-400">or</span></div>
                             <label className="w-full py-2 bg-[#fce8e6] text-[#A63228] rounded-lg text-[10px] font-bold hover:bg-red-100 transition-colors cursor-pointer text-center block">Upload Receipt<input type="file" accept="image/*" onChange={handleFileUpload} className="hidden" /></label>
                         </div>
                     </div>
@@ -1757,16 +1757,16 @@ export default function Expenses() {
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 transition-all">
                     <div className="bg-white rounded-xl w-full max-w-[300px] shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
                         <div className="flex justify-between items-center p-4 border-b border-gray-100 shrink-0">
-                            <div><h3 className="text-[13px] font-extrabold text-[#1a1a1a]">Review Receipt</h3><p className="text-[9px] text-gray-500 font-medium mt-0.5">Make sure the receipt is clear.</p></div>
+                            <div><h3 className="text-[13px] font-extrabold text-[#1a1a1a]">Review Receipt</h3><p className="text-[11px] text-gray-500 font-medium mt-0.5">Make sure the receipt is clear.</p></div>
                             <button onClick={resetAndClose} className="text-gray-400 hover:text-gray-700"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
                         </div>
                         <div className="p-4 flex flex-col shrink-0">
                             <div className="bg-gray-100 h-48 rounded-lg flex items-center justify-center border border-[#e5dfd8] mb-3 overflow-hidden">
-                                {photoData ? <img src={photoData} alt="Captured receipt" className="w-full h-full object-contain" /> : <span className="text-[9px] text-gray-400">No image captured</span>}
+                                {photoData ? <img src={photoData} alt="Captured receipt" className="w-full h-full object-contain" /> : <span className="text-[11px] text-gray-400">No image captured</span>}
                             </div>
                             <div className="flex items-center justify-center gap-1.5 mb-4">
                                 <svg className="w-3.5 h-3.5 text-[#2e7d32]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                                <span className="text-[9px] text-[#2e7d32] font-bold">Image loaded successfully.</span>
+                                <span className="text-[11px] text-[#2e7d32] font-bold">Image loaded successfully.</span>
                             </div>
                             <div className="flex gap-2">
                                 <button onClick={retakePhoto} className="flex-1 py-2 bg-white border border-[#A63228] text-[#A63228] rounded-lg text-[10px] font-bold hover:bg-red-50 transition-colors">Retake</button>
@@ -1783,7 +1783,7 @@ export default function Expenses() {
                     <div className="bg-white rounded-xl p-6 w-full max-w-[280px] shadow-2xl flex flex-col items-center text-center">
                         <div className="w-12 h-12 border-4 border-gray-100 border-t-[#A63228] rounded-full animate-spin mb-4"></div>
                         <h3 className="text-[13px] font-extrabold text-gray-900 mb-1">Scanning Receipt...</h3>
-                        <p className="text-[9px] text-[#A63228] font-bold">{scanProgress}</p>
+                        <p className="text-[11px] text-[#A63228] font-bold">{scanProgress}</p>
                     </div>
                 </div>
             )}
@@ -1806,7 +1806,7 @@ export default function Expenses() {
                             <form onSubmit={handleScanDetailsSubmit} className="flex flex-col gap-4">
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                     <div>
-                                        <label className="block text-[9px] font-bold text-gray-700 mb-1.5 uppercase">PROJECT</label>
+                                        <label className="block text-[11px] font-bold text-gray-700 mb-1.5 uppercase">PROJECT</label>
                                         <select name="project" value={formData.project} onChange={handleInputChange} className="w-full bg-[#f4f1ee] border border-transparent rounded-lg pl-3 pr-8 py-2.5 text-xs font-medium focus:border-[#A63228] outline-none appearance-none" style={selectStyles}>
                                             {mockProjects.map(p => (
                                                 <option key={p.id} value={p.name} disabled={!isOngoingStatus(p.status)}>
@@ -1815,13 +1815,13 @@ export default function Expenses() {
                                             ))}
                                         </select>
                                     </div>
-                                    <div><label className="block text-[9px] font-bold text-gray-700 mb-1.5 uppercase">EXPENSE CATEGORY</label><select name="category" value={formData.category} onChange={handleInputChange} className="w-full bg-[#f4f1ee] border border-transparent rounded-lg pl-3 pr-8 py-2.5 text-xs font-medium focus:border-[#A63228] outline-none appearance-none" style={selectStyles}><option value="Materials">Materials</option><option value="Manpower">Manpower</option><option value="Equipment">Equipment / Fuel</option></select></div>
+                                    <div><label className="block text-[11px] font-bold text-gray-700 mb-1.5 uppercase">EXPENSE CATEGORY</label><select name="category" value={formData.category} onChange={handleInputChange} className="w-full bg-[#f4f1ee] border border-transparent rounded-lg pl-3 pr-8 py-2.5 text-xs font-medium focus:border-[#A63228] outline-none appearance-none" style={selectStyles}><option value="Materials">Materials</option><option value="Manpower">Manpower</option><option value="Equipment">Equipment / Fuel</option></select></div>
                                 </div>
 
                                 <div className="grid grid-cols-12 gap-3">
-                                    <div className="col-span-12 sm:col-span-4"><label className="block text-[9px] font-bold text-gray-700 mb-1.5 uppercase">RECEIPT NO.</label><input type="text" name="receiptNo" value={formData.receiptNo} onChange={handleInputChange} className="w-full bg-[#f4f1ee] border border-transparent rounded-lg px-3 py-2.5 text-xs font-medium focus:border-[#A63228] outline-none" placeholder="e.g. 0042" /></div>
-                                    <div className="col-span-6 sm:col-span-4"><label className="block text-[9px] font-bold text-gray-700 mb-1.5 uppercase">DATE</label><input type="date" name="date" value={formData.date} onChange={handleInputChange} required className="w-full bg-[#f4f1ee] border border-[#2e7d32] rounded-lg px-3 py-2.5 text-xs font-medium outline-none text-[#2e7d32]" /></div>
-                                    <div className="col-span-6 sm:col-span-4"><label className="block text-[9px] font-bold text-gray-700 mb-1.5 uppercase">TIME</label><input type="time" name="time" value={formData.time} onChange={handleInputChange} className="w-full bg-[#f4f1ee] border border-transparent rounded-lg px-3 py-2.5 text-xs font-medium focus:border-[#A63228] outline-none" /></div>
+                                    <div className="col-span-12 sm:col-span-4"><label className="block text-[11px] font-bold text-gray-700 mb-1.5 uppercase">RECEIPT NO.</label><input type="text" name="receiptNo" value={formData.receiptNo} onChange={handleInputChange} className="w-full bg-[#f4f1ee] border border-transparent rounded-lg px-3 py-2.5 text-xs font-medium focus:border-[#A63228] outline-none" placeholder="e.g. 0042" /></div>
+                                    <div className="col-span-6 sm:col-span-4"><label className="block text-[11px] font-bold text-gray-700 mb-1.5 uppercase">DATE</label><input type="date" name="date" value={formData.date} onChange={handleInputChange} required className="w-full bg-[#f4f1ee] border border-[#2e7d32] rounded-lg px-3 py-2.5 text-xs font-medium outline-none text-[#2e7d32]" /></div>
+                                    <div className="col-span-6 sm:col-span-4"><label className="block text-[11px] font-bold text-gray-700 mb-1.5 uppercase">TIME</label><input type="time" name="time" value={formData.time} onChange={handleInputChange} className="w-full bg-[#f4f1ee] border border-transparent rounded-lg px-3 py-2.5 text-xs font-medium focus:border-[#A63228] outline-none" /></div>
                                 </div>
 
                                 <div className="border border-gray-200 rounded-xl p-4 bg-gray-50/50 mt-1">
@@ -1846,25 +1846,25 @@ export default function Expenses() {
                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-2">
                                     <div>
                                         <div className="flex justify-between items-center mb-1.5">
-                                            <label className="block text-[9px] font-extrabold text-[#2e7d32] uppercase">TOTAL AMOUNT</label>
-                                            <span className="text-[7px] text-gray-400 font-semibold">Max: ₱999B</span>
+                                            <label className="block text-[11px] font-extrabold text-[#2e7d32] uppercase">TOTAL AMOUNT</label>
+                                            <span className="text-[10px] text-gray-400 font-semibold">Max: ₱999B</span>
                                         </div>
                                         <input type="number" step="0.01" min="0.01" max="999999999999" name="amount" value={formData.amount} onChange={handleInputChange} required className={`w-full bg-[#e6f4ea] border rounded-lg px-3 py-2.5 text-sm font-extrabold text-[#2e7d32] outline-none transition-colors ${amountError ? 'border-red-500 !text-red-600' : 'border-[#2e7d32]'}`} placeholder="₱ 0.00" />
                                     </div>
                                     <div>
                                         <div className="flex justify-between items-center mb-1.5">
-                                            <label className="block text-[9px] font-bold text-gray-700 uppercase">CASH PAID</label>
-                                            <span className="text-[7px] text-gray-400 font-semibold">Max: ₱999B</span>
+                                            <label className="block text-[11px] font-bold text-gray-700 uppercase">CASH PAID</label>
+                                            <span className="text-[10px] text-gray-400 font-semibold">Max: ₱999B</span>
                                         </div>
                                         <input type="number" step="0.01" min="0" max="999999999999" name="cashTendered" value={formData.cashTendered} onChange={handleInputChange} className={`w-full bg-[#f4f1ee] border rounded-lg px-3 py-2.5 text-xs font-medium focus:border-[#A63228] outline-none transition-colors ${amountError ? 'border-red-400' : 'border-transparent'}`} placeholder="₱ 0.00" />
                                     </div>
                                     <div>
-                                        <label className="block text-[8px] font-bold text-gray-700 mb-1.5 uppercase">CHANGE</label>
+                                        <label className="block text-[11px] font-bold text-gray-700 mb-1.5 uppercase">CHANGE</label>
                                         <input type="number" step="0.01" min="0" max="999999999999" name="change" value={formData.change} onChange={handleInputChange} className="w-full bg-[#f4f1ee] border border-transparent rounded-lg px-3 py-2.5 text-xs font-medium focus:border-[#A63228] outline-none" placeholder="₱ 0.00" />
                                     </div>
                                 </div>
                                 {amountError && (
-                                    <p className="text-[9px] text-red-600 font-bold flex items-center gap-1 -mt-1">
+                                    <p className="text-[11px] text-red-600 font-bold flex items-center gap-1 -mt-1">
                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
                                         {amountError}
                                     </p>
@@ -1891,10 +1891,10 @@ export default function Expenses() {
                         {/* Header */}
                         <div className="p-4 bg-gray-900 text-white flex justify-between items-center shrink-0">
                             <div>
-                                <span className="text-[9px] font-bold text-[#E8C547] uppercase tracking-wider block">FINAL VERIFICATION</span>
+                                <span className="text-[11px] font-bold text-[#E8C547] uppercase tracking-wider block">FINAL VERIFICATION</span>
                                 <h3 className="text-sm font-extrabold text-white mt-0.5">Confirm Expense & Materials</h3>
                             </div>
-                            <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-white/10 text-white uppercase tracking-wider">
+                            <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-white/10 text-white uppercase tracking-wider">
                                 {formData.category}
                             </span>
                         </div>
@@ -1904,19 +1904,19 @@ export default function Expenses() {
                             {/* Meta info card */}
                             <div className="bg-gray-50 rounded-xl p-3 border border-gray-100 grid grid-cols-2 sm:grid-cols-3 gap-2 text-[10px]">
                                 <div>
-                                    <span className="text-[8px] font-bold text-gray-400 uppercase block">PROJECT SITE</span>
+                                    <span className="text-[11px] font-bold text-gray-400 uppercase block">PROJECT SITE</span>
                                     <strong className="text-gray-900 font-extrabold truncate block">
                                         {formData.project || currentProjectName || 'Project Site'}
                                     </strong>
                                 </div>
                                 <div>
-                                    <span className="text-[8px] font-bold text-gray-400 uppercase block">DATE & TIME</span>
+                                    <span className="text-[11px] font-bold text-gray-400 uppercase block">DATE & TIME</span>
                                     <strong className="text-gray-800 font-bold block">
                                         {formData.date || todayISO} {formData.time ? `• ${formData.time}` : ''}
                                     </strong>
                                 </div>
                                 <div className="col-span-2 sm:col-span-1">
-                                    <span className="text-[8px] font-bold text-gray-400 uppercase block">RECEIPT NO.</span>
+                                    <span className="text-[11px] font-bold text-gray-400 uppercase block">RECEIPT NO.</span>
                                     <strong className="text-gray-800 font-bold block">
                                         {formData.receiptNo ? `#${formData.receiptNo}` : '— (No Receipt)'}
                                     </strong>
@@ -1931,16 +1931,16 @@ export default function Expenses() {
                                         <span>
                                             {formData.category === 'Materials' ? 'Materials Information' : 'Expense Items Breakdown'}
                                         </span>
-                                        <span className="text-[9px] font-bold text-[#A63228] bg-red-50 px-1.5 py-0.2 rounded-full">
+                                        <span className="text-[11px] font-bold text-[#A63228] bg-red-50 px-1.5 py-0.2 rounded-full">
                                             {formData.items?.filter(it => it.description || it.qty).length || 1} item(s)
                                         </span>
                                     </h4>
-                                    <span className="text-[8px] text-gray-400 font-medium">Verify units & quantity</span>
+                                    <span className="text-[11px] text-gray-400 font-medium">Verify units & quantity</span>
                                 </div>
 
                                 <div className="border border-gray-200 rounded-xl overflow-hidden bg-white">
                                     <table className="w-full text-left border-collapse text-[10px]">
-                                        <thead className="bg-gray-100/80 text-[8px] font-extrabold text-gray-500 uppercase tracking-wider border-b border-gray-200">
+                                        <thead className="bg-gray-100/80 text-[11px] font-extrabold text-gray-500 uppercase tracking-wider border-b border-gray-200">
                                             <tr>
                                                 <th className="py-2 px-3">MATERIAL / ITEM NAME</th>
                                                 <th className="py-2 px-2 text-center">QUANTITY & UNIT</th>
@@ -1958,24 +1958,24 @@ export default function Expenses() {
                                                         <td className="py-2.5 px-3">
                                                             <div className="font-extrabold text-gray-900 leading-tight flex items-center gap-1.5 flex-wrap">
                                                                 <span>{item.description || 'Unspecified Item'}</span>
-                                                                <span className="text-[7.5px] font-bold px-1.5 py-0.2 rounded bg-gray-100 text-gray-600">
+                                                                <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-gray-100 text-gray-600">
                                                                     {item.category === 'Manpower' ? '👷 Manpower' : item.category === 'Equipment' ? '🚜 Equipment' : '📦 Materials'}
                                                                 </span>
                                                             </div>
                                                             {item.baseMaterial && item.baseMaterial !== item.description && (
-                                                                <span className="text-[7.5px] font-bold text-gray-400 block mt-0.5">
+                                                                <span className="text-[10px] font-bold text-gray-400 block mt-0.5">
                                                                     Base: {item.baseMaterial}
                                                                 </span>
                                                             )}
                                                         </td>
                                                         <td className="py-2.5 px-2 text-center">
-                                                            <span className="inline-block px-2 py-0.5 bg-blue-50 text-blue-700 rounded-md font-extrabold text-[9px]">
+                                                            <span className="inline-block px-2 py-0.5 bg-blue-50 text-blue-700 rounded-md font-extrabold text-[11px]">
                                                                 {item.qty || '0'} {item.unit || ''}
                                                             </span>
                                                         </td>
                                                         <td className="py-2.5 px-2 text-right font-extrabold text-gray-700">
                                                             ₱{p.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                            <span className="text-[7.5px] font-normal text-gray-400 block">/{item.unit || 'unit'}</span>
+                                                            <span className="text-[10px] font-normal text-gray-400 block">/{item.unit || 'unit'}</span>
                                                         </td>
                                                         <td className="py-2.5 px-3 text-right font-black text-[#A63228]">
                                                             ₱{sub.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -1991,7 +1991,7 @@ export default function Expenses() {
                             {/* Total Amount Box */}
                             <div className="bg-[#fce8e6]/40 rounded-xl p-3.5 border border-[#fce8e6] flex items-center justify-between">
                                 <div>
-                                    <span className="text-[8.5px] font-extrabold text-gray-500 uppercase tracking-wider block">TOTAL EXPENSE COST</span>
+                                    <span className="text-[11px] font-extrabold text-gray-500 uppercase tracking-wider block">TOTAL EXPENSE COST</span>
                                     <span className="text-xl font-black text-[#A63228] tracking-tight">
                                         ₱{parseFloat(formData.amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                     </span>
@@ -1999,7 +1999,7 @@ export default function Expenses() {
                                 {photoData && (
                                     <div className="flex items-center gap-2 bg-white px-2.5 py-1.5 rounded-lg border border-gray-200">
                                         <img src={photoData} alt="Proof thumbnail" className="w-8 h-8 rounded object-cover" />
-                                        <span className="text-[8px] font-bold text-[#2e7d32]">Receipt Attached</span>
+                                        <span className="text-[11px] font-bold text-[#2e7d32]">Receipt Attached</span>
                                     </div>
                                 )}
                             </div>
@@ -2033,10 +2033,10 @@ export default function Expenses() {
                         {/* Header */}
                         <div className="p-4 bg-gray-900 text-white flex justify-between items-center shrink-0">
                             <div>
-                                <span className="text-[9px] font-bold text-[#E8C547] uppercase tracking-wider block">SCANNED RECEIPT VERIFICATION</span>
+                                <span className="text-[11px] font-bold text-[#E8C547] uppercase tracking-wider block">SCANNED RECEIPT VERIFICATION</span>
                                 <h3 className="text-sm font-extrabold text-white mt-0.5">Confirm Scanned Expense</h3>
                             </div>
-                            <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-white/10 text-white uppercase tracking-wider">
+                            <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-white/10 text-white uppercase tracking-wider">
                                 {formData.category}
                             </span>
                         </div>
@@ -2046,19 +2046,19 @@ export default function Expenses() {
                             {/* Meta info card */}
                             <div className="bg-gray-50 rounded-xl p-3 border border-gray-100 grid grid-cols-2 sm:grid-cols-3 gap-2 text-[10px]">
                                 <div>
-                                    <span className="text-[8px] font-bold text-gray-400 uppercase block">PROJECT SITE</span>
+                                    <span className="text-[11px] font-bold text-gray-400 uppercase block">PROJECT SITE</span>
                                     <strong className="text-gray-900 font-extrabold truncate block">
                                         {formData.project || currentProjectName || 'Project Site'}
                                     </strong>
                                 </div>
                                 <div>
-                                    <span className="text-[8px] font-bold text-gray-400 uppercase block">DATE & TIME</span>
+                                    <span className="text-[11px] font-bold text-gray-400 uppercase block">DATE & TIME</span>
                                     <strong className="text-gray-800 font-bold block">
                                         {formData.date || todayISO} {formData.time ? `• ${formData.time}` : ''}
                                     </strong>
                                 </div>
                                 <div className="col-span-2 sm:col-span-1">
-                                    <span className="text-[8px] font-bold text-gray-400 uppercase block">RECEIPT NO.</span>
+                                    <span className="text-[11px] font-bold text-gray-400 uppercase block">RECEIPT NO.</span>
                                     <strong className="text-gray-800 font-bold block">
                                         {formData.receiptNo ? `#${formData.receiptNo}` : '— (No Receipt)'}
                                     </strong>
@@ -2071,16 +2071,16 @@ export default function Expenses() {
                                     <h4 className="text-[10px] font-extrabold text-gray-800 uppercase tracking-wider flex items-center gap-1.5">
                                         <span>📦</span>
                                         <span>Scanned Materials & Items</span>
-                                        <span className="text-[9px] font-bold text-[#A63228] bg-red-50 px-1.5 py-0.2 rounded-full">
+                                        <span className="text-[11px] font-bold text-[#A63228] bg-red-50 px-1.5 py-0.2 rounded-full">
                                             {formData.items?.filter(it => it.description || it.qty).length || 1} item(s)
                                         </span>
                                     </h4>
-                                    <span className="text-[8px] text-gray-400 font-medium">Extracted from receipt</span>
+                                    <span className="text-[11px] text-gray-400 font-medium">Extracted from receipt</span>
                                 </div>
 
                                 <div className="border border-gray-200 rounded-xl overflow-hidden bg-white">
                                     <table className="w-full text-left border-collapse text-[10px]">
-                                        <thead className="bg-gray-100/80 text-[8px] font-extrabold text-gray-500 uppercase tracking-wider border-b border-gray-200">
+                                        <thead className="bg-gray-100/80 text-[11px] font-extrabold text-gray-500 uppercase tracking-wider border-b border-gray-200">
                                             <tr>
                                                 <th className="py-2 px-3">MATERIAL / ITEM NAME</th>
                                                 <th className="py-2 px-2 text-center">QUANTITY</th>
@@ -2096,7 +2096,7 @@ export default function Expenses() {
                                                         </div>
                                                     </td>
                                                     <td className="py-2.5 px-2 text-center">
-                                                        <span className="inline-block px-2 py-0.5 bg-blue-50 text-blue-700 rounded-md font-extrabold text-[9px]">
+                                                        <span className="inline-block px-2 py-0.5 bg-blue-50 text-blue-700 rounded-md font-extrabold text-[11px]">
                                                             {item.qty || '1'}
                                                         </span>
                                                     </td>
@@ -2113,12 +2113,12 @@ export default function Expenses() {
                             {/* Total Amount Box */}
                             <div className="bg-[#fce8e6]/40 rounded-xl p-3.5 border border-[#fce8e6] flex items-center justify-between">
                                 <div>
-                                    <span className="text-[8.5px] font-extrabold text-gray-500 uppercase tracking-wider block">TOTAL EXTRACTED AMOUNT</span>
+                                    <span className="text-[11px] font-extrabold text-gray-500 uppercase tracking-wider block">TOTAL EXTRACTED AMOUNT</span>
                                     <span className="text-xl font-black text-[#A63228] tracking-tight">
                                         ₱{parseFloat(formData.amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                     </span>
                                     {formData.cashTendered && (
-                                        <div className="text-[8px] text-gray-500 font-bold mt-0.5">
+                                        <div className="text-[11px] text-gray-500 font-bold mt-0.5">
                                             Cash Paid: ₱{parseFloat(formData.cashTendered || 0).toLocaleString()} • Change: ₱{parseFloat(formData.change || 0).toLocaleString()}
                                         </div>
                                     )}
@@ -2126,7 +2126,7 @@ export default function Expenses() {
                                 {photoData && (
                                     <div className="flex items-center gap-2 bg-white px-2.5 py-1.5 rounded-lg border border-gray-200">
                                         <img src={photoData} alt="Receipt thumbnail" className="w-8 h-8 rounded object-cover" />
-                                        <span className="text-[8px] font-bold text-[#2e7d32]">Scanned Proof</span>
+                                        <span className="text-[11px] font-bold text-[#2e7d32]">Scanned Proof</span>
                                     </div>
                                 )}
                             </div>

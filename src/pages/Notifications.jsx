@@ -236,11 +236,11 @@ export default function Notifications() {
         <AdminLayout>
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-4 gap-2">
                 <div>
-                    <span className="text-[9px] font-bold text-[#A63228] tracking-widest uppercase">UPDATES & LOGS</span>
+                    <span className="text-[11px] font-bold text-[#A63228] tracking-widest uppercase">UPDATES & LOGS</span>
                     <div className="flex items-center gap-2 mt-0.5">
                         <h1 className="text-xl font-extrabold text-[#1a1a1a] tracking-tight">System Alerts & Notifications</h1>
                         {unreadCount > 0 && (
-                            <span className="bg-[#A63228] text-white text-[9px] font-extrabold px-2 py-0.5 rounded-full shadow-xs">
+                            <span className="bg-[#A63228] text-white text-[11px] font-extrabold px-2 py-0.5 rounded-full shadow-xs">
                                 {unreadCount} New
                             </span>
                         )}
@@ -289,7 +289,7 @@ export default function Notifications() {
                     <div className="flex items-start justify-between gap-2 mb-3">
                         <div>
                             <h2 className="text-xs font-extrabold text-gray-900">New Worker Announcement</h2>
-                            <p className="text-[9px] text-gray-500 mt-0.5">This message will appear on worker dashboards.</p>
+                            <p className="text-[11px] text-gray-500 mt-0.5">This message will appear on worker dashboards.</p>
                         </div>
                         <button
                             type="button"
@@ -358,7 +358,7 @@ export default function Notifications() {
                 <select
                     value={sortOrder}
                     onChange={(e) => setSortOrder(e.target.value)}
-                    className="bg-[#f4f1ee] border border-transparent text-gray-700 pl-3 pr-8 py-1.5 rounded-md text-[9px] font-bold outline-none appearance-none w-full sm:w-auto cursor-pointer"
+                    className="bg-[#f4f1ee] border border-transparent text-gray-700 pl-3 pr-8 py-1.5 rounded-md text-[11px] font-bold outline-none appearance-none w-full sm:w-auto cursor-pointer"
                     style={selectStyles}
                 >
                     <option value="Newest First">Newest First</option>
@@ -397,7 +397,7 @@ export default function Notifications() {
                                                 {notif.title}
                                             </h4>
 
-                                            <span className={`text-[7.5px] font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded-sm ${
+                                            <span className={`text-[10px] font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded-sm ${
                                                 notif.type === 'Schedule' ? 'bg-amber-100 text-amber-900 border border-amber-300' :
                                                 isCashAdvance ? 'bg-emerald-100 text-emerald-900 border border-emerald-300' :
                                                 notif.type === 'Staff & Workers' ? 'bg-blue-100 text-blue-900 border border-blue-300' :
@@ -410,12 +410,12 @@ export default function Notifications() {
                                             </span>
 
                                             {/* Location Tag */}
-                                            <span className="text-[7.5px] font-bold text-gray-600 bg-white/80 border border-gray-200 px-1.5 py-0.5 rounded flex items-center gap-1">
+                                            <span className="text-[10px] font-bold text-gray-600 bg-white/80 border border-gray-200 px-1.5 py-0.5 rounded flex items-center gap-1">
                                                 <span>→</span> {dest.module}
                                             </span>
 
                                             {notif.severity === 'High' && (
-                                                <span className="text-[7px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-red-600 text-white">HIGH ALERT</span>
+                                                <span className="text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-red-600 text-white">HIGH ALERT</span>
                                             )}
 
                                             {!notif.read && (
@@ -427,7 +427,7 @@ export default function Notifications() {
                                             {notif.message}
                                         </p>
 
-                                        <div className="flex flex-wrap items-center gap-2 text-[8px] font-bold text-gray-400">
+                                        <div className="flex flex-wrap items-center gap-2 text-[11px] font-bold text-gray-400">
                                             <span className="uppercase tracking-widest">{notif.date}</span>
                                             {notif.time && <span>• {notif.time}</span>}
                                             {notif.actor_name && (

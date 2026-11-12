@@ -422,7 +422,7 @@ export default function CashAdvance() {
         <AdminLayout>
             {/* PAGE TITLE */}
             <div className="mb-2">
-                <span className="text-[9px] font-bold text-[#A63228] tracking-widest uppercase">FINANCIAL CONTROLS & PAYROLL</span>
+                <span className="text-[11px] font-bold text-[#A63228] tracking-widest uppercase">FINANCIAL CONTROLS & PAYROLL</span>
                 <h1 className="text-lg font-extrabold text-gray-900 mt-0.5 tracking-tight">Cash Advance Management</h1>
                 <p className="text-[10px] text-gray-500 mt-0.5">
                     Select project, worker, and reason with strict limit checks. Approved advances automatically deduct from project budget.
@@ -432,7 +432,7 @@ export default function CashAdvance() {
             {/* TOP BAR: PROJECT FILTER & ACTIONS */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-3 gap-3">
                 <div className="w-full md:max-w-sm">
-                    <label className="block text-[8px] font-bold text-gray-400 tracking-wider uppercase mb-1">PROJECT SCOPE</label>
+                    <label className="block text-[11px] font-bold text-gray-400 tracking-wider uppercase mb-1">PROJECT SCOPE</label>
                     <select
                         value={currentProjectId}
                         onChange={handleProjectFilterChange}
@@ -519,36 +519,36 @@ export default function CashAdvance() {
                             Project Budget & Advance Overview — {activeProjectInfo.name}
                         </h3>
                     </div>
-                    <span className="text-[8px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                    <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
                         Auto-Deducts from Manpower Budget
                     </span>
                 </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                     <div className="bg-gray-50/70 p-2 rounded-lg border border-gray-100">
-                        <p className="text-[7.5px] font-bold text-gray-400 uppercase tracking-wider">Project Budget</p>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Project Budget</p>
                         <p className="text-xs font-extrabold text-gray-900 mt-0.5">
                             ₱{activeProjectInfo.budget.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </p>
                     </div>
                     <div className="bg-gray-50/70 p-2 rounded-lg border border-gray-100">
-                        <p className="text-[7.5px] font-bold text-gray-400 uppercase tracking-wider">Total Expenses Spent</p>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Expenses Spent</p>
                         <p className="text-xs font-extrabold text-gray-800 mt-0.5">
                             ₱{activeProjectInfo.spent.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </p>
                     </div>
                     <div className="bg-emerald-50/50 p-2 rounded-lg border border-emerald-100">
-                        <p className="text-[7.5px] font-bold text-emerald-800 uppercase tracking-wider">Remaining Project Budget</p>
+                        <p className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider">Remaining Project Budget</p>
                         <p className="text-xs font-extrabold text-emerald-700 mt-0.5">
                             ₱{activeProjectInfo.remaining.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </p>
                     </div>
                     <div className="bg-red-50/50 p-2 rounded-lg border border-red-100">
-                        <p className="text-[7.5px] font-bold text-[#A63228] uppercase tracking-wider">Approved Cash Advances</p>
+                        <p className="text-[10px] font-bold text-[#A63228] uppercase tracking-wider">Approved Cash Advances</p>
                         <p className="text-xs font-extrabold text-[#A63228] mt-0.5">
                             ₱{activeProjectInfo.advancesTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </p>
-                        <span className="text-[7px] text-gray-400 font-medium">({activeProjectInfo.advancesCount} approved)</span>
+                        <span className="text-[10px] text-gray-400 font-medium">({activeProjectInfo.advancesCount} approved)</span>
                     </div>
                 </div>
             </div>
@@ -558,7 +558,7 @@ export default function CashAdvance() {
                 <div className="mb-2 flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
                     <div className="flex items-center gap-2">
                         <h3 className="text-[10px] font-extrabold text-gray-900 tracking-wide uppercase">Advance Records</h3>
-                        <span className="bg-gray-100 text-gray-600 text-[8px] font-bold px-1.5 py-0.5 rounded">
+                        <span className="bg-gray-100 text-gray-600 text-[11px] font-bold px-1.5 py-0.5 rounded">
                             {filterDate ? `${displayedAdvances.length} filtered` : `${cashAdvances.length} total`}
                         </span>
                     </div>
@@ -567,19 +567,19 @@ export default function CashAdvance() {
                             <button
                                 type="button"
                                 onClick={() => setFilterDate('')}
-                                className="text-[9px] text-[#A63228] font-bold hover:underline cursor-pointer flex items-center gap-1 bg-red-50 hover:bg-red-100 px-2 py-1 rounded transition-colors"
+                                className="text-[11px] text-[#A63228] font-bold hover:underline cursor-pointer flex items-center gap-1 bg-red-50 hover:bg-red-100 px-2 py-1 rounded transition-colors"
                                 title="Clear date filter"
                             >
                                 <span>✕</span> Clear Filter
                             </button>
                         )}
                         <div className="flex items-center gap-1">
-                            <label className="text-[8px] font-bold text-gray-400 uppercase">Date:</label>
+                            <label className="text-[11px] font-bold text-gray-400 uppercase">Date:</label>
                             <input
                                 type="date"
                                 value={filterDate}
                                 onChange={(e) => setFilterDate(e.target.value)}
-                                className={`bg-[#f4f1ee] px-2.5 py-1 rounded-md text-[9px] font-bold outline-none border transition-colors cursor-pointer ${filterDate ? 'border-[#A63228] text-[#A63228] font-extrabold shadow-xs' : 'border-transparent text-gray-700'}`}
+                                className={`bg-[#f4f1ee] px-2.5 py-1 rounded-md text-[11px] font-bold outline-none border transition-colors cursor-pointer ${filterDate ? 'border-[#A63228] text-[#A63228] font-extrabold shadow-xs' : 'border-transparent text-gray-700'}`}
                             />
                         </div>
                     </div>
@@ -589,13 +589,13 @@ export default function CashAdvance() {
                     <table className="w-full text-left border-collapse min-w-[620px]">
                         <thead>
                             <tr>
-                                <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[12%] uppercase tracking-wider">DATE</th>
-                                <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[18%] uppercase tracking-wider">WORKER NAME</th>
-                                <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[22%] uppercase tracking-wider">REASON</th>
-                                <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[16%] uppercase tracking-wider">BUDGET IMPACT</th>
-                                <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[12%] uppercase tracking-wider">STATUS</th>
-                                <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 text-right pr-2 w-[12%] uppercase tracking-wider">AMOUNT</th>
-                                <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 text-center w-[8%] uppercase tracking-wider">ACTION</th>
+                                <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[12%] uppercase tracking-wider">DATE</th>
+                                <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[18%] uppercase tracking-wider">WORKER NAME</th>
+                                <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[22%] uppercase tracking-wider">REASON</th>
+                                <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[16%] uppercase tracking-wider">BUDGET IMPACT</th>
+                                <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[12%] uppercase tracking-wider">STATUS</th>
+                                <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 text-right pr-2 w-[12%] uppercase tracking-wider">AMOUNT</th>
+                                <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 text-center w-[8%] uppercase tracking-wider">ACTION</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -620,26 +620,26 @@ export default function CashAdvance() {
                                             <td className="py-2.5 text-[10px] font-bold text-gray-800 border-b border-gray-50">{formatDisplayDate(adv.date)}</td>
                                             <td className="py-2.5 text-[10px] font-bold text-gray-900 border-b border-gray-50">
                                                 <div>{adv.workerName}</div>
-                                                {adv.role && <span className="text-[8px] font-medium text-gray-400">{adv.role}</span>}
+                                                {adv.role && <span className="text-[11px] font-medium text-gray-400">{adv.role}</span>}
                                             </td>
                                             <td className="py-2.5 text-[10px] font-medium text-gray-600 border-b border-gray-50">{adv.reason || '-'}</td>
                                             <td className="py-2.5 border-b border-gray-50">
                                                 {isApproved ? (
-                                                    <span className="inline-flex items-center gap-1 text-[8px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
+                                                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
                                                         <span>✓</span> Deducted from Budget
                                                     </span>
                                                 ) : isRejected ? (
-                                                    <span className="inline-flex items-center text-[8px] font-bold text-gray-400 bg-gray-50 px-1.5 py-0.5 rounded">
+                                                    <span className="inline-flex items-center text-[11px] font-bold text-gray-400 bg-gray-50 px-1.5 py-0.5 rounded">
                                                         Not Deducted
                                                     </span>
                                                 ) : (
-                                                    <span className="inline-flex items-center text-[8px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                                                    <span className="inline-flex items-center text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
                                                         Pending Approval
                                                     </span>
                                                 )}
                                             </td>
                                             <td className="py-2.5 border-b border-gray-50">
-                                                <span className={`text-[8.5px] font-bold px-2 py-0.5 rounded-full ${isApproved ? 'bg-[#e6f4ea] text-[#2e7d32]' : isRejected ? 'bg-red-100 text-red-700' : 'bg-[#fff8e1] text-[#f57f17]'}`}>
+                                                <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${isApproved ? 'bg-[#e6f4ea] text-[#2e7d32]' : isRejected ? 'bg-red-100 text-red-700' : 'bg-[#fff8e1] text-[#f57f17]'}`}>
                                                     {adv.status || 'Pending'}
                                                 </span>
                                             </td>
@@ -653,7 +653,7 @@ export default function CashAdvance() {
                                                             <button
                                                                 type="button"
                                                                 onClick={() => handleApproveStatus(adv.id, 'Approved')}
-                                                                className="bg-[#e6f4ea] border border-[#2e7d32] text-[#2e7d32] px-1.5 py-0.5 rounded text-[8px] font-bold hover:bg-green-100 cursor-pointer"
+                                                                className="bg-[#e6f4ea] border border-[#2e7d32] text-[#2e7d32] px-1.5 py-0.5 rounded text-[11px] font-bold hover:bg-green-100 cursor-pointer"
                                                                 title="Approve and deduct from project budget"
                                                             >
                                                                 Approve
@@ -661,7 +661,7 @@ export default function CashAdvance() {
                                                             <button
                                                                 type="button"
                                                                 onClick={() => handleApproveStatus(adv.id, 'Rejected')}
-                                                                className="bg-white border border-[#A63228] text-[#A63228] px-1.5 py-0.5 rounded text-[8px] font-bold hover:bg-red-50 cursor-pointer"
+                                                                className="bg-white border border-[#A63228] text-[#A63228] px-1.5 py-0.5 rounded text-[11px] font-bold hover:bg-red-50 cursor-pointer"
                                                             >
                                                                 Reject
                                                             </button>
@@ -730,12 +730,12 @@ export default function CashAdvance() {
                             <div>
                                 <div className="flex items-center justify-between mb-1">
                                     <label className="text-[10px] font-extrabold text-gray-900 flex items-center gap-1">
-                                        <span className="w-4 h-4 rounded-full bg-gray-900 text-white text-[9px] flex items-center justify-center font-bold">1</span>
+                                        <span className="w-4 h-4 rounded-full bg-gray-900 text-white text-[11px] flex items-center justify-center font-bold">1</span>
                                         <span>Select Project</span>
                                         <span className="text-[#A63228]">*</span>
                                     </label>
                                     {formSelectedProject && (
-                                        <span className="text-[8.5px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
+                                        <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
                                             Remaining: ₱{formSelectedProject.remaining.toLocaleString()}
                                         </span>
                                     )}
@@ -762,7 +762,7 @@ export default function CashAdvance() {
 
                                 {/* Project Budget Card */}
                                 {formSelectedProject && (
-                                    <div className="mt-1.5 p-2 bg-gray-50 rounded-lg border border-gray-100 flex items-center justify-between text-[9px]">
+                                    <div className="mt-1.5 p-2 bg-gray-50 rounded-lg border border-gray-100 flex items-center justify-between text-[11px]">
                                         <div>
                                             <span className="text-gray-400 font-bold uppercase">Total Budget: </span>
                                             <span className="font-extrabold text-gray-900">₱{formSelectedProject.budget.toLocaleString()}</span>
@@ -785,7 +785,7 @@ export default function CashAdvance() {
                             <div>
                                 <div className="flex items-center justify-between mb-1">
                                     <label className="text-[10px] font-extrabold text-gray-900 flex items-center gap-1">
-                                        <span className="w-4 h-4 rounded-full bg-gray-900 text-white text-[9px] flex items-center justify-center font-bold">2</span>
+                                        <span className="w-4 h-4 rounded-full bg-gray-900 text-white text-[11px] flex items-center justify-center font-bold">2</span>
                                         <span>Select Worker</span>
                                         <span className="text-[#A63228]">*</span>
                                     </label>
@@ -796,7 +796,7 @@ export default function CashAdvance() {
                                             setFormData(prev => ({ ...prev, workerId: '', workerName: '' }));
                                             setFormError('');
                                         }}
-                                        className="text-[8.5px] text-[#A63228] font-bold hover:underline cursor-pointer"
+                                        className="text-[11px] text-[#A63228] font-bold hover:underline cursor-pointer"
                                     >
                                         {isCustomWorker ? '← Select from list' : '+ Enter custom worker'}
                                     </button>
@@ -855,7 +855,7 @@ export default function CashAdvance() {
 
                                 {/* Worker Limit & Rate Card */}
                                 {formSelectedWorker && (
-                                    <div className="mt-1.5 p-2 bg-blue-50/60 rounded-lg border border-blue-100 text-[9px] space-y-1">
+                                    <div className="mt-1.5 p-2 bg-blue-50/60 rounded-lg border border-blue-100 text-[11px] space-y-1">
                                         <div className="flex items-center justify-between">
                                             <span className="text-gray-500 font-bold">Daily Wage Rate:</span>
                                             <span className="font-extrabold text-gray-900">₱{formSelectedWorker.dailyRate.toLocaleString()}/day</span>
@@ -883,7 +883,7 @@ export default function CashAdvance() {
                             {/* STEP 3: REASON DROPDOWN (WITH "OTHER") */}
                             <div>
                                 <label className="block text-[10px] font-extrabold text-gray-900 mb-1 flex items-center gap-1">
-                                    <span className="w-4 h-4 rounded-full bg-gray-900 text-white text-[9px] flex items-center justify-center font-bold">3</span>
+                                    <span className="w-4 h-4 rounded-full bg-gray-900 text-white text-[11px] flex items-center justify-center font-bold">3</span>
                                     <span>Reason</span>
                                     <span className="text-[#A63228]">*</span>
                                 </label>
@@ -906,7 +906,7 @@ export default function CashAdvance() {
                                 {/* Custom reason input if 'Other' selected */}
                                 {formData.reasonCategory === 'Other' && (
                                     <div className="mt-2">
-                                        <label className="block text-[8.5px] font-bold text-gray-600 mb-1">
+                                        <label className="block text-[11px] font-bold text-gray-600 mb-1">
                                             Specify Custom Reason <span className="text-[#A63228]">*</span>
                                         </label>
                                         <input
@@ -926,11 +926,11 @@ export default function CashAdvance() {
                             <div className="bg-[#f9fafb] p-3 rounded-lg border border-gray-200">
                                 <div className="flex justify-between items-center mb-1">
                                     <label className="text-[10px] font-extrabold text-gray-900 flex items-center gap-1">
-                                        <span className="w-4 h-4 rounded-full bg-gray-900 text-white text-[9px] flex items-center justify-center font-bold">4</span>
+                                        <span className="w-4 h-4 rounded-full bg-gray-900 text-white text-[11px] flex items-center justify-center font-bold">4</span>
                                         <span>Advance Amount (₱)</span>
                                         <span className="text-[#A63228]">*</span>
                                     </label>
-                                    <span className="text-[8.5px] font-bold text-gray-500">
+                                    <span className="text-[11px] font-bold text-gray-500">
                                         Max Allowed: <strong>₱{Number.isFinite(maxAllowedAmount) ? maxAllowedAmount.toLocaleString() : '5,000'}</strong>
                                     </span>
                                 </div>
@@ -951,7 +951,7 @@ export default function CashAdvance() {
 
                                 {/* Quick Amount Chips */}
                                 <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-                                    <span className="text-[8px] font-bold text-gray-400 uppercase">Quick Fill:</span>
+                                    <span className="text-[11px] font-bold text-gray-400 uppercase">Quick Fill:</span>
                                     {[500, 1000, 2000].map(amt => (
                                         <button
                                             key={amt}
@@ -961,7 +961,7 @@ export default function CashAdvance() {
                                                 setFormData(prev => ({ ...prev, amount: String(amt) }));
                                                 setFormError('');
                                             }}
-                                            className="px-2 py-0.5 text-[8.5px] font-bold rounded bg-white border border-gray-200 hover:border-gray-400 text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                                            className="px-2 py-0.5 text-[11px] font-bold rounded bg-white border border-gray-200 hover:border-gray-400 text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                                         >
                                             ₱{amt.toLocaleString()}
                                         </button>
@@ -973,7 +973,7 @@ export default function CashAdvance() {
                                                 setFormData(prev => ({ ...prev, amount: String(maxAllowedAmount) }));
                                                 setFormError('');
                                             }}
-                                            className="px-2 py-0.5 text-[8.5px] font-bold rounded bg-[#E8C547] text-gray-900 hover:bg-[#d4b33d] cursor-pointer"
+                                            className="px-2 py-0.5 text-[11px] font-bold rounded bg-[#E8C547] text-gray-900 hover:bg-[#d4b33d] cursor-pointer"
                                         >
                                             Max (₱{maxAllowedAmount.toLocaleString()})
                                         </button>
@@ -982,7 +982,7 @@ export default function CashAdvance() {
 
                                 {/* Live Budget Deduction Impact Preview */}
                                 {formSelectedProject && formData.amount && parseFloat(formData.amount) > 0 && (
-                                    <div className="mt-2 pt-2 border-t border-gray-200 flex items-center justify-between text-[8.5px]">
+                                    <div className="mt-2 pt-2 border-t border-gray-200 flex items-center justify-between text-[11px]">
                                         <span className="font-bold text-gray-500">Project Budget Impact:</span>
                                         <span className="font-extrabold text-gray-900">
                                             ₱{formSelectedProject.remaining.toLocaleString()} → <span className="text-emerald-700">₱{Math.max(0, formSelectedProject.remaining - parseFloat(formData.amount)).toLocaleString()}</span>
@@ -994,7 +994,7 @@ export default function CashAdvance() {
                             {/* STEP 5: DATE */}
                             <div className="grid grid-cols-2 gap-2">
                                 <div>
-                                    <label className="block text-[9px] font-bold text-gray-500 mb-1">DATE RECORDED</label>
+                                    <label className="block text-[11px] font-bold text-gray-500 mb-1">DATE RECORDED</label>
                                     <input
                                         type="date"
                                         name="date"
@@ -1005,7 +1005,7 @@ export default function CashAdvance() {
                                     />
                                 </div>
                                 <div className="flex flex-col justify-end">
-                                    <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-2 py-1 text-[8px] text-emerald-800 font-bold flex items-center gap-1">
+                                    <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-2 py-1 text-[11px] text-emerald-800 font-bold flex items-center gap-1">
                                         <span>✓</span>
                                         <span>Auto-deducts from Manpower Budget</span>
                                     </div>
@@ -1014,7 +1014,7 @@ export default function CashAdvance() {
 
                             {/* Error Alert */}
                             {formError && (
-                                <div className="p-2 bg-red-50 border border-red-200 text-[#A63228] rounded-lg text-[9px] font-bold">
+                                <div className="p-2 bg-red-50 border border-red-200 text-[#A63228] rounded-lg text-[11px] font-bold">
                                     {formError}
                                 </div>
                             )}
@@ -1059,27 +1059,27 @@ export default function CashAdvance() {
 
                         <div className="w-full bg-gray-50 rounded-lg p-3 text-left text-xs mb-4 border border-gray-100 space-y-1.5">
                             <div className="flex justify-between">
-                                <span className="text-gray-400 font-bold text-[9px] uppercase">Project:</span>
+                                <span className="text-gray-400 font-bold text-[11px] uppercase">Project:</span>
                                 <span className="font-extrabold text-gray-900">{formSelectedProject?.name || 'Site'}</span>
                             </div>
                             <div className="flex justify-between">
-                                <span className="text-gray-400 font-bold text-[9px] uppercase">Worker:</span>
+                                <span className="text-gray-400 font-bold text-[11px] uppercase">Worker:</span>
                                 <span className="font-extrabold text-gray-900">{formData.workerName}</span>
                             </div>
                             <div className="flex justify-between">
-                                <span className="text-gray-400 font-bold text-[9px] uppercase">Reason:</span>
+                                <span className="text-gray-400 font-bold text-[11px] uppercase">Reason:</span>
                                 <span className="font-medium text-gray-700">
                                     {formData.reasonCategory === 'Other' ? formData.customReason : formData.reasonCategory}
                                 </span>
                             </div>
                             <div className="flex justify-between border-t border-gray-200 pt-1.5">
-                                <span className="text-gray-500 font-bold text-[9px] uppercase">Advance Amount:</span>
+                                <span className="text-gray-500 font-bold text-[11px] uppercase">Advance Amount:</span>
                                 <span className="font-extrabold text-[#A63228] text-sm">
                                     ₱{parseFloat(formData.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </span>
                             </div>
                             {formSelectedProject && (
-                                <div className="flex justify-between border-t border-gray-200 pt-1.5 text-[9px] text-emerald-800">
+                                <div className="flex justify-between border-t border-gray-200 pt-1.5 text-[11px] text-emerald-800">
                                     <span className="font-bold">Project Budget Impact:</span>
                                     <span className="font-extrabold">
                                         -₱{parseFloat(formData.amount || 0).toLocaleString()} (Deducted)

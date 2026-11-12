@@ -188,7 +188,7 @@ export default function AuditLogs() {
       {/* ── HEADER TITLE ── */}
       <div className="flex flex-col md:flex-row md:items-center justify-between pb-3 mb-3 border-b border-gray-200/60 gap-3">
         <div>
-          <span className="text-[9px] font-bold text-[#A63228] tracking-widest uppercase">SECURITY & COMPLIANCE</span>
+          <span className="text-[11px] font-bold text-[#A63228] tracking-widest uppercase">SECURITY & COMPLIANCE</span>
           <h1 className="text-xl font-extrabold text-gray-900 mt-0.5 tracking-tight flex items-center gap-2">
             Audit Logs & Activity Trail
             <span className="text-[10px] font-bold bg-[#A63228]/10 text-[#A63228] px-2 py-0.5 rounded-full">
@@ -243,9 +243,9 @@ export default function AuditLogs() {
         {/* Total Logs */}
         <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between">
           <div>
-            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">TOTAL ACTIVITIES</span>
+            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">TOTAL ACTIVITIES</span>
             <h3 className="text-xl font-extrabold text-gray-900 mt-0.5">{stats.total || logs.length}</h3>
-            <span className="text-[8px] text-gray-500 font-medium">Recorded history</span>
+            <span className="text-[11px] text-gray-500 font-medium">Recorded history</span>
           </div>
           <div className="w-9 h-9 rounded-xl bg-gray-100 text-gray-700 flex items-center justify-center shrink-0">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
@@ -257,9 +257,9 @@ export default function AuditLogs() {
         {/* Today's Activities */}
         <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between">
           <div>
-            <span className="text-[9px] font-bold text-[#A63228] uppercase tracking-wider block">TODAY'S ACTIONS</span>
+            <span className="text-[11px] font-bold text-[#A63228] uppercase tracking-wider block">TODAY'S ACTIONS</span>
             <h3 className="text-xl font-extrabold text-[#A63228] mt-0.5">{stats.todayCount}</h3>
-            <span className="text-[8px] text-gray-500 font-medium">Logged today</span>
+            <span className="text-[11px] text-gray-500 font-medium">Logged today</span>
           </div>
           <div className="w-9 h-9 rounded-xl bg-red-50 text-[#A63228] flex items-center justify-center shrink-0">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
@@ -271,9 +271,9 @@ export default function AuditLogs() {
         {/* Security & Access */}
         <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between">
           <div>
-            <span className="text-[9px] font-bold text-amber-700 uppercase tracking-wider block">AUTH & ACCESS</span>
+            <span className="text-[11px] font-bold text-amber-700 uppercase tracking-wider block">AUTH & ACCESS</span>
             <h3 className="text-xl font-extrabold text-amber-700 mt-0.5">{stats.authCount}</h3>
-            <span className="text-[8px] text-gray-500 font-medium">Login & Auth events</span>
+            <span className="text-[11px] text-gray-500 font-medium">Login & Auth events</span>
           </div>
           <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center shrink-0">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
@@ -285,9 +285,9 @@ export default function AuditLogs() {
         {/* Financial Transactions */}
         <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between">
           <div>
-            <span className="text-[9px] font-bold text-emerald-700 uppercase tracking-wider block">FINANCIAL & PROJECTS</span>
+            <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider block">FINANCIAL & PROJECTS</span>
             <h3 className="text-xl font-extrabold text-emerald-700 mt-0.5">{stats.financialCount}</h3>
-            <span className="text-[8px] text-gray-500 font-medium">Expenses, Advances, Budgets</span>
+            <span className="text-[11px] text-gray-500 font-medium">Expenses, Advances, Budgets</span>
           </div>
           <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
@@ -376,7 +376,7 @@ export default function AuditLogs() {
         {dateFilter === 'Custom' && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2.5 pt-2.5 border-t border-gray-100">
             <div>
-              <label className="block text-[8px] font-bold text-gray-500 uppercase mb-0.5">Start Date</label>
+              <label className="block text-[11px] font-bold text-gray-500 uppercase mb-0.5">Start Date</label>
               <input
                 type="date"
                 value={customStartDate}
@@ -385,7 +385,7 @@ export default function AuditLogs() {
               />
             </div>
             <div>
-              <label className="block text-[8px] font-bold text-gray-500 uppercase mb-0.5">End Date</label>
+              <label className="block text-[11px] font-bold text-gray-500 uppercase mb-0.5">End Date</label>
               <input
                 type="date"
                 value={customEndDate}
@@ -402,11 +402,11 @@ export default function AuditLogs() {
         <div className="flex justify-between items-center mb-3">
           <div className="flex items-center gap-2">
             <h3 className="text-[10px] font-extrabold text-gray-900 tracking-wider uppercase">ACTIVITY AUDIT TRAIL</h3>
-            <span className="text-[9px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+            <span className="text-[11px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
               {totalLogs} Records
             </span>
           </div>
-          <span className="text-[8px] text-gray-400 font-bold uppercase tracking-widest hidden sm:inline">
+          <span className="text-[11px] text-gray-400 font-bold uppercase tracking-widest hidden sm:inline">
             Immutable Audit Trail • Real-Time Capture
           </span>
         </div>
@@ -415,12 +415,12 @@ export default function AuditLogs() {
           <table className="w-full text-left border-collapse min-w-[850px]">
             <thead>
               <tr className="border-b border-gray-100">
-                <th className="text-[8px] font-bold text-gray-400 pb-2 w-[16%] uppercase tracking-wider">TIMESTAMP</th>
-                <th className="text-[8px] font-bold text-gray-400 pb-2 w-[18%] uppercase tracking-wider">ACTOR / USER</th>
-                <th className="text-[8px] font-bold text-gray-400 pb-2 w-[14%] uppercase tracking-wider">MODULE & ACTION</th>
-                <th className="text-[8px] font-bold text-gray-400 pb-2 w-[30%] uppercase tracking-wider">EVENT DESCRIPTION</th>
-                <th className="text-[8px] font-bold text-gray-400 pb-2 w-[12%] uppercase tracking-wider text-center">IP & SOURCE</th>
-                <th className="text-[8px] font-bold text-gray-400 pb-2 w-[10%] uppercase tracking-wider text-center pr-2">STATUS</th>
+                <th className="text-[11px] font-bold text-gray-400 pb-2 w-[16%] uppercase tracking-wider">TIMESTAMP</th>
+                <th className="text-[11px] font-bold text-gray-400 pb-2 w-[18%] uppercase tracking-wider">ACTOR / USER</th>
+                <th className="text-[11px] font-bold text-gray-400 pb-2 w-[14%] uppercase tracking-wider">MODULE & ACTION</th>
+                <th className="text-[11px] font-bold text-gray-400 pb-2 w-[30%] uppercase tracking-wider">EVENT DESCRIPTION</th>
+                <th className="text-[11px] font-bold text-gray-400 pb-2 w-[12%] uppercase tracking-wider text-center">IP & SOURCE</th>
+                <th className="text-[11px] font-bold text-gray-400 pb-2 w-[10%] uppercase tracking-wider text-center pr-2">STATUS</th>
               </tr>
             </thead>
             <tbody>
@@ -446,9 +446,9 @@ export default function AuditLogs() {
                       title="I-click upang makita ang buong detalye"
                     >
                       {/* Timestamp */}
-                      <td className="py-2.5 text-[9px] font-medium text-gray-600">
+                      <td className="py-2.5 text-[11px] font-medium text-gray-600">
                         <div className="font-bold text-gray-900">{log.date || '—'}</div>
-                        <div className="text-[8px] text-gray-400 flex items-center gap-1 mt-0.5">
+                        <div className="text-[11px] text-gray-400 flex items-center gap-1 mt-0.5">
                           <span>{log.time || '—'}</span>
                           <span>•</span>
                           <span className="text-[#A63228] font-bold">{formatRelativeTime(log.timestamp)}</span>
@@ -465,7 +465,7 @@ export default function AuditLogs() {
                             <span className="text-[10px] font-extrabold text-gray-900 block truncate">
                               {log.actor_name || 'System'}
                             </span>
-                            <span className="text-[8px] font-bold text-gray-400 uppercase tracking-wider block truncate">
+                            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block truncate">
                               {log.actor_role || 'Staff / Officer'}
                             </span>
                           </div>
@@ -474,10 +474,10 @@ export default function AuditLogs() {
 
                       {/* Module & Action */}
                       <td className="py-2.5">
-                        <span className={`inline-block px-1.5 py-0.5 rounded text-[8px] font-bold border uppercase tracking-wider ${getModuleBadge(log.module)}`}>
+                        <span className={`inline-block px-1.5 py-0.5 rounded text-[11px] font-bold border uppercase tracking-wider ${getModuleBadge(log.module)}`}>
                           {log.module || 'System'}
                         </span>
-                        <span className="block text-[8px] font-extrabold text-gray-600 mt-0.5 truncate tracking-tight">
+                        <span className="block text-[11px] font-extrabold text-gray-600 mt-0.5 truncate tracking-tight">
                           {log.action}
                         </span>
                       </td>
@@ -488,7 +488,7 @@ export default function AuditLogs() {
                           {log.description}
                         </p>
                         {log.target_name && (
-                          <span className="text-[8px] text-gray-400 font-bold mt-0.5 block truncate">
+                          <span className="text-[11px] text-gray-400 font-bold mt-0.5 block truncate">
                             Target: {log.target_name}
                           </span>
                         )}
@@ -496,17 +496,17 @@ export default function AuditLogs() {
 
                       {/* IP & Source */}
                       <td className="py-2.5 text-center">
-                        <span className="text-[9px] font-mono font-bold text-gray-600 block">
+                        <span className="text-[11px] font-mono font-bold text-gray-600 block">
                           {log.ip_address || '127.0.0.1'}
                         </span>
-                        <span className="text-[8px] text-gray-400 font-medium block truncate max-w-[120px] mx-auto">
+                        <span className="text-[11px] text-gray-400 font-medium block truncate max-w-[120px] mx-auto">
                           {log.user_agent ? (log.user_agent.includes('Mobile') ? 'Mobile App' : 'Web App') : 'Web App'}
                         </span>
                       </td>
 
                       {/* Status */}
                       <td className="py-2.5 text-center pr-2">
-                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase tracking-wider ${
+                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-extrabold uppercase tracking-wider ${
                           isSuccess
                             ? 'bg-[#e6f4ea] text-[#2e7d32]'
                             : 'bg-[#fdecea] text-[#A63228]'
@@ -539,10 +539,10 @@ export default function AuditLogs() {
             <div className="flex justify-between items-start p-5 border-b border-gray-100 shrink-0">
               <div>
                 <div className="flex items-center gap-2">
-                  <span className={`px-2 py-0.5 rounded text-[8px] font-bold border uppercase tracking-wider ${getModuleBadge(selectedLog.module)}`}>
+                  <span className={`px-2 py-0.5 rounded text-[11px] font-bold border uppercase tracking-wider ${getModuleBadge(selectedLog.module)}`}>
                     {selectedLog.module}
                   </span>
-                  <span className={`px-2 py-0.5 rounded text-[8px] font-extrabold uppercase tracking-wider ${
+                  <span className={`px-2 py-0.5 rounded text-[11px] font-extrabold uppercase tracking-wider ${
                     (selectedLog.status || 'SUCCESS') === 'SUCCESS' ? 'bg-[#e6f4ea] text-[#2e7d32]' : 'bg-[#fdecea] text-[#A63228]'
                   }`}>
                     {selectedLog.status || 'SUCCESS'}
@@ -563,7 +563,7 @@ export default function AuditLogs() {
             <div className="overflow-y-auto p-5 space-y-4">
               {/* Description Callout */}
               <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-100">
-                <span className="block text-[8px] font-bold text-gray-400 uppercase tracking-wider mb-1">EVENT SUMMARY</span>
+                <span className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">EVENT SUMMARY</span>
                 <p className="text-xs font-bold text-gray-900 leading-relaxed">
                   {selectedLog.description}
                 </p>
@@ -572,31 +572,31 @@ export default function AuditLogs() {
               {/* Actor & Action Grid */}
               <div className="grid grid-cols-2 gap-3 text-[10px]">
                 <div className="bg-white p-3 rounded-lg border border-gray-100">
-                  <span className="block text-[8px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">PERFORMED BY</span>
+                  <span className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">PERFORMED BY</span>
                   <strong className="text-gray-900 font-extrabold text-xs block">{selectedLog.actor_name || 'System'}</strong>
-                  <span className="text-gray-500 font-bold uppercase text-[9px]">{selectedLog.actor_role || 'Staff / Officer'}</span>
-                  {selectedLog.actor_id && <span className="block text-[8px] font-mono text-gray-400 mt-0.5">ID: {selectedLog.actor_id}</span>}
+                  <span className="text-gray-500 font-bold uppercase text-[11px]">{selectedLog.actor_role || 'Staff / Officer'}</span>
+                  {selectedLog.actor_id && <span className="block text-[11px] font-mono text-gray-400 mt-0.5">ID: {selectedLog.actor_id}</span>}
                 </div>
 
                 <div className="bg-white p-3 rounded-lg border border-gray-100">
-                  <span className="block text-[8px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">ACTION EVENT</span>
+                  <span className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">ACTION EVENT</span>
                   <strong className="text-[#A63228] font-extrabold text-xs block">{selectedLog.action}</strong>
-                  <span className="text-gray-500 font-medium text-[9px]">{selectedLog.date} • {selectedLog.time}</span>
+                  <span className="text-gray-500 font-medium text-[11px]">{selectedLog.date} • {selectedLog.time}</span>
                 </div>
               </div>
 
               {/* Target & Network Details */}
               <div className="grid grid-cols-2 gap-3 text-[10px]">
                 <div className="bg-white p-3 rounded-lg border border-gray-100">
-                  <span className="block text-[8px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">TARGET RECORD</span>
+                  <span className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">TARGET RECORD</span>
                   <strong className="text-gray-900 font-bold block">{selectedLog.target_name || 'N/A'}</strong>
-                  <span className="text-[8px] font-mono text-gray-400">Target ID: {selectedLog.target_id || 'N/A'}</span>
+                  <span className="text-[11px] font-mono text-gray-400">Target ID: {selectedLog.target_id || 'N/A'}</span>
                 </div>
 
                 <div className="bg-white p-3 rounded-lg border border-gray-100">
-                  <span className="block text-[8px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">IP & ENVIRONMENT</span>
+                  <span className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">IP & ENVIRONMENT</span>
                   <strong className="text-gray-900 font-mono block">{selectedLog.ip_address || '127.0.0.1'}</strong>
-                  <span className="text-[8px] text-gray-500 truncate block mt-0.5" title={selectedLog.user_agent}>
+                  <span className="text-[11px] text-gray-500 truncate block mt-0.5" title={selectedLog.user_agent}>
                     {selectedLog.user_agent || 'Web Client'}
                   </span>
                 </div>
@@ -605,8 +605,8 @@ export default function AuditLogs() {
               {/* Raw JSON Payload (if details exist) */}
               {selectedLog.details && (
                 <div>
-                  <span className="block text-[8px] font-bold text-gray-400 uppercase tracking-wider mb-1">RAW TRANSACTION METADATA (PAYLOAD)</span>
-                  <pre className="bg-gray-900 text-emerald-400 p-3 rounded-xl text-[9px] font-mono overflow-x-auto max-h-48 leading-relaxed">
+                  <span className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">RAW TRANSACTION METADATA (PAYLOAD)</span>
+                  <pre className="bg-gray-900 text-emerald-400 p-3 rounded-xl text-[11px] font-mono overflow-x-auto max-h-48 leading-relaxed">
                     {JSON.stringify(selectedLog.details, null, 2)}
                   </pre>
                 </div>

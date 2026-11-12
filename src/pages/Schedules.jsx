@@ -160,7 +160,7 @@ export default function Schedules() {
     <AdminLayout>
       {/* Top Header */}
       <div className="mb-3">
-        <span className="text-[9px] font-bold text-[#A63228] tracking-widest uppercase">MONITORING &amp; PLANNING</span>
+        <span className="text-[11px] font-bold text-[#A63228] tracking-widest uppercase">MONITORING &amp; PLANNING</span>
         <h1 className="text-lg font-extrabold text-gray-900">Schedule Management</h1>
         <p className="text-[10px] text-gray-500">Click any date on the calendar to log material deliveries, supplier check due dates, or project milestones.</p>
       </div>
@@ -176,7 +176,7 @@ export default function Schedules() {
             Schedules can automatically trigger Google Calendar events and mobile push alarms prior to due dates.
           </p>
         </div>
-        <span className="text-[8px] font-bold text-[#2e7d32] bg-green-50 border border-green-200 px-2 py-0.5 rounded-full shrink-0 flex items-center gap-1">
+        <span className="text-[11px] font-bold text-[#2e7d32] bg-green-50 border border-green-200 px-2 py-0.5 rounded-full shrink-0 flex items-center gap-1">
           <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
           Mobile Push Ready
         </span>
@@ -243,7 +243,7 @@ export default function Schedules() {
                           <>
                             <div className="flex justify-between items-center mb-1">
                               {dayItems.some(it => it.category === 'Supplier Check / Payment Due') ? (
-                                <span className="text-[9px] font-extrabold text-amber-800 bg-amber-100 border border-amber-200 px-1 py-0.2 rounded uppercase tracking-wider">
+                                <span className="text-[11px] font-extrabold text-amber-800 bg-amber-100 border border-amber-200 px-1 py-0.2 rounded uppercase tracking-wider">
                                   Check Due
                                 </span>
                               ) : <span className="text-[10px] font-bold text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity">+ Add</span>}
@@ -261,7 +261,7 @@ export default function Schedules() {
                                 >
                                   <div className="truncate font-semibold">{it.title}</div>
                                   {it.supplier_name && (
-                                    <span className="font-medium opacity-80 truncate text-[9px]">
+                                    <span className="font-medium opacity-80 truncate text-[11px]">
                                       {it.supplier_name} {it.amount ? `· ₱${Number(it.amount).toLocaleString()}` : ''}
                                     </span>
                                   )}
@@ -295,7 +295,7 @@ export default function Schedules() {
             <div className="flex justify-between items-center mb-3 pb-2 border-b border-gray-100">
               <div>
                 <h3 className="text-sm font-extrabold text-gray-900">{dayModal}</h3>
-                <p className="text-[9px] text-gray-500">Scheduled events for this date</p>
+                <p className="text-[11px] text-gray-500">Scheduled events for this date</p>
               </div>
               <button onClick={() => setDayModal(null)} className="text-gray-400 hover:text-gray-700 text-sm font-bold">✕</button>
             </div>
@@ -307,15 +307,15 @@ export default function Schedules() {
                 >
                   <div className="flex-1 cursor-pointer" onClick={() => { setDayModal(null); show(it) }}>
                     <p className="text-[10px] font-extrabold text-gray-900">{it.title}</p>
-                    {it.supplier_name && <p className="text-[8.5px] font-bold text-[#A63228] mt-0.5">Supplier: {it.supplier_name} {it.amount ? `(₱${Number(it.amount).toLocaleString()})` : ''}</p>}
-                    {it.check_no && <p className="text-[8px] text-gray-500">Check #: {it.check_no}</p>}
-                    <span className={`inline-block mt-1 px-1.5 py-0.5 rounded-full text-[7px] font-bold border ${color(it.status)}`}>{it.status}</span>
+                    {it.supplier_name && <p className="text-[11px] font-bold text-[#A63228] mt-0.5">Supplier: {it.supplier_name} {it.amount ? `(₱${Number(it.amount).toLocaleString()})` : ''}</p>}
+                    {it.check_no && <p className="text-[11px] text-gray-500">Check #: {it.check_no}</p>}
+                    <span className={`inline-block mt-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold border ${color(it.status)}`}>{it.status}</span>
                   </div>
                   <a
                     href={makeGoogleCalendarUrl(it)}
                     target="_blank"
                     rel="noreferrer"
-                    className="shrink-0 bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 text-[8px] font-extrabold px-2 py-1 rounded flex items-center gap-1 transition-colors"
+                    className="shrink-0 bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 text-[11px] font-extrabold px-2 py-1 rounded flex items-center gap-1 transition-colors"
                     title="Add to Google Calendar"
                   >
                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
@@ -342,7 +342,7 @@ export default function Schedules() {
             <div className="flex justify-between items-start mb-3 pb-2 border-b border-gray-100">
               <div>
                 <h2 className="text-sm font-extrabold text-gray-900">{editId ? 'Edit Schedule' : 'Schedule Details'}</h2>
-                <p className="text-[9px] text-gray-500">Configure delivery or check payment monitoring.</p>
+                <p className="text-[11px] text-gray-500">Configure delivery or check payment monitoring.</p>
               </div>
               <button type="button" onClick={() => setOpen(false)} className="text-gray-400 hover:text-gray-700 font-bold">✕</button>
             </div>
@@ -350,7 +350,7 @@ export default function Schedules() {
             <div className="flex flex-col gap-2.5">
               {/* Category */}
               <div>
-                <label className="text-[9px] font-bold text-gray-700 block mb-1">
+                <label className="text-[11px] font-bold text-gray-700 block mb-1">
                   SCHEDULE TYPE
                 </label>
                 <select
@@ -376,7 +376,7 @@ export default function Schedules() {
 
               {/* Title */}
               <div>
-                <label className="text-[9px] font-bold text-gray-700 block mb-1">
+                <label className="text-[11px] font-bold text-gray-700 block mb-1">
                   TITLE / DESCRIPTION
                 </label>
                 <input
@@ -391,7 +391,7 @@ export default function Schedules() {
 
               {/* Project */}
               <div>
-                <label className="text-[9px] font-bold text-gray-700 block mb-1">
+                <label className="text-[11px] font-bold text-gray-700 block mb-1">
                   PROJECT (OPTIONAL)
                 </label>
                 <select
@@ -409,7 +409,7 @@ export default function Schedules() {
               {form.category === 'Supplier Check / Payment Due' && (
                 <div className="bg-amber-50/70 border border-amber-200 rounded-xl p-2.5 grid grid-cols-2 gap-2">
                   <div className="col-span-2">
-                    <label className="text-[8px] font-bold text-amber-900 block mb-0.5">SUPPLIER NAME</label>
+                    <label className="text-[11px] font-bold text-amber-900 block mb-0.5">SUPPLIER NAME</label>
                     <input
                       name="supplier_name"
                       placeholder="e.g. ABC Hardware Supply"
@@ -419,7 +419,7 @@ export default function Schedules() {
                     />
                   </div>
                   <div>
-                    <label className="text-[8px] font-bold text-amber-900 block mb-0.5">CHECK / REF NO.</label>
+                    <label className="text-[11px] font-bold text-amber-900 block mb-0.5">CHECK / REF NO.</label>
                     <input
                       name="check_no"
                       placeholder="CHK-12345"
@@ -429,7 +429,7 @@ export default function Schedules() {
                     />
                   </div>
                   <div>
-                    <label className="text-[8px] font-bold text-amber-900 block mb-0.5">AMOUNT (PHP)</label>
+                    <label className="text-[11px] font-bold text-amber-900 block mb-0.5">AMOUNT (PHP)</label>
                     <input
                       type="number"
                       name="amount"
@@ -446,7 +446,7 @@ export default function Schedules() {
               {form.category === 'Material Delivery from Supplier' && (
                 <div className="bg-blue-50/70 border border-blue-200 rounded-xl p-2.5 grid grid-cols-2 gap-2">
                   <div>
-                    <label className="text-[8px] font-bold text-blue-900 block mb-0.5">SUPPLIER</label>
+                    <label className="text-[11px] font-bold text-blue-900 block mb-0.5">SUPPLIER</label>
                     <input
                       name="supplier_name"
                       placeholder="e.g. Solid Cement Supply"
@@ -456,7 +456,7 @@ export default function Schedules() {
                     />
                   </div>
                   <div>
-                    <label className="text-[8px] font-bold text-blue-900 block mb-0.5">DRIVER / CONTACT</label>
+                    <label className="text-[11px] font-bold text-blue-900 block mb-0.5">DRIVER / CONTACT</label>
                     <input
                       name="check_no"
                       placeholder="0917-123-4567"
@@ -471,7 +471,7 @@ export default function Schedules() {
               {/* Date & Time */}
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-[9px] font-bold text-gray-700 block mb-1">DUE DATE</label>
+                  <label className="text-[11px] font-bold text-gray-700 block mb-1">DUE DATE</label>
                   <input
                     required
                     type="date"
@@ -482,7 +482,7 @@ export default function Schedules() {
                   />
                 </div>
                 <div>
-                  <label className="text-[9px] font-bold text-gray-700 block mb-1">TIME</label>
+                  <label className="text-[11px] font-bold text-gray-700 block mb-1">TIME</label>
                   <input
                     type="time"
                     name="schedule_time"
@@ -495,7 +495,7 @@ export default function Schedules() {
 
               {/* Status */}
               <div>
-                <label className="text-[9px] font-bold text-gray-700 block mb-1">STATUS</label>
+                <label className="text-[11px] font-bold text-gray-700 block mb-1">STATUS</label>
                 <select
                   name="status"
                   value={form.status}
@@ -508,7 +508,7 @@ export default function Schedules() {
 
               {/* Notes */}
               <div>
-                <label className="text-[9px] font-bold text-gray-700 block mb-1">NOTES (OPTIONAL)</label>
+                <label className="text-[11px] font-bold text-gray-700 block mb-1">NOTES (OPTIONAL)</label>
                 <textarea
                   name="notes"
                   placeholder="Additional instructions or notes..."
@@ -529,16 +529,16 @@ export default function Schedules() {
                   onChange={e => setForm(p => ({ ...p, syncGoogleCalendar: e.target.checked }))}
                   className="mt-0.5 accent-[#A63228] w-4 h-4 cursor-pointer rounded"
                 />
-                <label htmlFor="syncGoogleCalendar" className="text-[9px] text-gray-800 cursor-pointer flex-1">
+                <label htmlFor="syncGoogleCalendar" className="text-[11px] text-gray-800 cursor-pointer flex-1">
                   <div className="flex items-center gap-1.5">
                     <strong className="text-gray-900 font-extrabold text-[9.5px]">
                       Sync with Google Calendar on Save
                     </strong>
-                    <span className="bg-[#2e7d32] text-white text-[7px] font-extrabold px-1.5 py-0.2 rounded-full uppercase tracking-wider">
+                    <span className="bg-[#2e7d32] text-white text-[10px] font-extrabold px-1.5 py-0.2 rounded-full uppercase tracking-wider">
                       Push Alarm
                     </span>
                   </div>
-                  <p className="text-gray-600 text-[8.5px] leading-tight mt-0.5">
+                  <p className="text-gray-600 text-[11px] leading-tight mt-0.5">
                     Automatically opens in Google Calendar to enable mobile notifications and alarms prior to the scheduled date.
                   </p>
                 </label>

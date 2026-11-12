@@ -629,7 +629,7 @@ export default function Assets() {
 
             {/* ── HEADER ── */}
             <div className="mb-4">
-                <span className="text-[9px] font-bold text-[#A63228] tracking-widest uppercase">TOOLS MANAGEMENT</span>
+                <span className="text-[11px] font-bold text-[#A63228] tracking-widest uppercase">TOOLS MANAGEMENT</span>
                 <h1 className="text-xl font-extrabold text-gray-900 mt-0.5 tracking-tight">Tools Management</h1>
                 <p className="text-[10px] text-gray-500 mt-0.5">Track, lend, and monitor construction tools and equipment.</p>
             </div>
@@ -637,7 +637,7 @@ export default function Assets() {
             {/* ── ALIGNED PROJECT SELECTOR & BUTTONS ── */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-4 gap-3">
                 <div className="w-full md:w-auto">
-                    <label className="block text-[8px] font-bold text-gray-400 tracking-wider uppercase mb-1">PROJECT</label>
+                    <label className="block text-[11px] font-bold text-gray-400 tracking-wider uppercase mb-1">PROJECT</label>
                     <select value={currentProjectId} onChange={handleProjectChange} className="bg-white border border-gray-100 shadow-sm rounded-lg pl-2.5 pr-6 py-1.5 text-[10px] font-extrabold text-gray-800 outline-none appearance-none w-full md:w-auto min-w-[260px]" style={selectStyles}>
                         {dropdownProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </select>
@@ -669,7 +669,7 @@ export default function Assets() {
                             <p className="text-[11px] font-extrabold text-gray-900">
                                 Active Notice: <span className="text-[#A63228]">{unreturnedTools.length} tool(s)</span> currently borrowed by workers.
                             </p>
-                            <p className="text-[9px] text-gray-500">
+                            <p className="text-[11px] text-gray-500">
                                 Live updates are enabled. Acknowledging directs to unreturned list and history log.
                             </p>
                         </div>
@@ -681,7 +681,7 @@ export default function Assets() {
                                 const el = document.getElementById('unreturned-tools-section');
                                 if (el) el.scrollIntoView({ behavior: 'smooth' });
                             }}
-                            className="text-[9px] font-extrabold text-white bg-[#A63228] hover:bg-[#8B1A10] px-3 py-1.5 rounded-lg shadow-xs transition-colors cursor-pointer"
+                            className="text-[11px] font-extrabold text-white bg-[#A63228] hover:bg-[#8B1A10] px-3 py-1.5 rounded-lg shadow-xs transition-colors cursor-pointer"
                         >
                             Acknowledge & View Borrowed
                         </button>
@@ -693,15 +693,15 @@ export default function Assets() {
             <div className="flex gap-2 mb-3">
                 <div className="flex-1 bg-white rounded-lg p-2.5 text-center border border-gray-100 shadow-sm">
                     <h2 className="text-xl font-extrabold text-gray-900">{card1Count}</h2>
-                    <p className="text-[8px] font-bold text-gray-500 tracking-wider mt-0.5 uppercase">{card1Label}</p>
+                    <p className="text-[11px] font-bold text-gray-500 tracking-wider mt-0.5 uppercase">{card1Label}</p>
                 </div>
                 <div className="flex-1 bg-white rounded-lg p-2.5 text-center border border-gray-100 shadow-sm">
                     <h2 className="text-xl font-extrabold text-gray-900">{inUseCount}</h2>
-                    <p className="text-[8px] font-bold text-gray-500 tracking-wider mt-0.5 uppercase">IN USE</p>
+                    <p className="text-[11px] font-bold text-gray-500 tracking-wider mt-0.5 uppercase">IN USE</p>
                 </div>
                 <div className="flex-1 bg-white rounded-lg p-2.5 text-center border border-gray-100 shadow-sm">
                     <h2 className="text-xl font-extrabold text-[#A63228]">{maintenanceCount}</h2>
-                    <p className="text-[8px] font-bold text-gray-500 tracking-wider mt-0.5 uppercase">MAINTENANCE</p>
+                    <p className="text-[11px] font-bold text-gray-500 tracking-wider mt-0.5 uppercase">MAINTENANCE</p>
                 </div>
             </div>
 
@@ -807,7 +807,7 @@ export default function Assets() {
                                     value={filterDateFrom}
                                     onChange={(e) => setFilterDateFrom(e.target.value)}
                                     title="From Date"
-                                    className="bg-[#f9fafb] border border-gray-200 rounded-lg px-2 py-1 text-[9px] font-bold text-gray-700 outline-none focus:border-[#A63228]"
+                                    className="bg-[#f9fafb] border border-gray-200 rounded-lg px-2 py-1 text-[11px] font-bold text-gray-700 outline-none focus:border-[#A63228]"
                                 />
                                 <span className="text-[10px] text-gray-400 font-bold">to</span>
                                 <input
@@ -815,7 +815,7 @@ export default function Assets() {
                                     value={filterDateTo}
                                     onChange={(e) => setFilterDateTo(e.target.value)}
                                     title="To Date"
-                                    className="bg-[#f9fafb] border border-gray-200 rounded-lg px-2 py-1 text-[9px] font-bold text-gray-700 outline-none focus:border-[#A63228]"
+                                    className="bg-[#f9fafb] border border-gray-200 rounded-lg px-2 py-1 text-[11px] font-bold text-gray-700 outline-none focus:border-[#A63228]"
                                 />
                             </div>
                         )}
@@ -825,9 +825,9 @@ export default function Assets() {
             {/* ── EQUIPMENT INVENTORY ── */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-3 mb-3 overflow-x-auto">
                 <div className="flex justify-between items-center mb-2 pl-2 pr-2">
-                    <h3 className="text-[9px] font-extrabold text-gray-900 tracking-wider uppercase">EQUIPMENT INVENTORY</h3>
+                    <h3 className="text-[11px] font-extrabold text-gray-900 tracking-wider uppercase">EQUIPMENT INVENTORY</h3>
                     {filterBorrower !== 'All' && (
-                        <span className="text-[8px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+                        <span className="text-[11px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
                             Filtered Borrower: <strong className="text-gray-900">{filterBorrower}</strong>
                         </span>
                     )}
@@ -835,12 +835,12 @@ export default function Assets() {
                 <table className="w-full text-left border-collapse min-w-[750px]">
                     <thead>
                         <tr>
-                            <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[22%] uppercase tracking-wider pl-2">EQUIPMENT</th>
-                            <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[8%] uppercase tracking-wider text-center">QTY</th>
-                            <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[16%] uppercase tracking-wider">STATUS</th>
-                            <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[18%] uppercase tracking-wider">BORROWER</th>
-                            <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[16%] uppercase tracking-wider">CONDITION</th>
-                            <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[20%] uppercase tracking-wider text-center pr-2">ACTION</th>
+                            <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[22%] uppercase tracking-wider pl-2">EQUIPMENT</th>
+                            <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[8%] uppercase tracking-wider text-center">QTY</th>
+                            <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[16%] uppercase tracking-wider">STATUS</th>
+                            <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[18%] uppercase tracking-wider">BORROWER</th>
+                            <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[16%] uppercase tracking-wider">CONDITION</th>
+                            <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[20%] uppercase tracking-wider text-center pr-2">ACTION</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -858,15 +858,15 @@ export default function Assets() {
                                 </td>
                                 <td className="py-2.5 border-b border-gray-50">
                                     {item.status === 'In Use' ? (
-                                        <span className="text-[9px] font-semibold text-gray-900 bg-red-50/70 border border-red-100 rounded px-1.5 py-0.5 inline-block max-w-[140px] truncate" title={item.borrower}>
+                                        <span className="text-[11px] font-semibold text-gray-900 bg-red-50/70 border border-red-100 rounded px-1.5 py-0.5 inline-block max-w-[140px] truncate" title={item.borrower}>
                                             {item.borrower}
                                         </span>
                                     ) : (
-                                        <span className="text-[9px] text-gray-400 italic">—</span>
+                                        <span className="text-[11px] text-gray-400 italic">—</span>
                                     )}
                                 </td>
                                 <td className="py-2.5 border-b border-gray-50">
-                                    <span className={`text-[8px] font-bold rounded-full px-2 py-0.5 ${item.condition === 'Good' ? 'bg-green-50 text-green-700' :
+                                    <span className={`text-[11px] font-bold rounded-full px-2 py-0.5 ${item.condition === 'Good' ? 'bg-green-50 text-green-700' :
                                         item.condition === 'Needs Repair' ? 'bg-yellow-50 text-yellow-700' :
                                             'bg-red-50 text-red-700'
                                         }`}>{item.condition || 'Good'}</span>
@@ -876,14 +876,14 @@ export default function Assets() {
                                         {item.status === 'Available' ? (
                                             <button
                                                 onClick={() => handleBorrowClick(item)}
-                                                className="text-[8px] font-extrabold w-[75px] py-1.5 rounded border border-[#A63228] text-[#A63228] hover:bg-[#A63228] hover:text-white uppercase tracking-wider inline-block transition-colors"
+                                                className="text-[11px] font-extrabold w-[75px] py-1.5 rounded border border-[#A63228] text-[#A63228] hover:bg-[#A63228] hover:text-white uppercase tracking-wider inline-block transition-colors"
                                             >
                                                 Borrow
                                             </button>
                                         ) : (
                                             <button
                                                 onClick={() => handleActionClick(item)}
-                                                className={`text-[8px] font-extrabold w-[75px] py-1.5 rounded border border-gray-800 text-gray-900 text-center uppercase tracking-wider inline-block transition-colors 
+                                                className={`text-[11px] font-extrabold w-[75px] py-1.5 rounded border border-gray-800 text-gray-900 text-center uppercase tracking-wider inline-block transition-colors 
                                             ${item.status === 'In Use' ? 'hover:bg-[#A63228] hover:border-[#A63228] hover:text-white' :
                                                         item.status === 'Returned' ? 'hover:bg-gray-600 hover:border-gray-600 hover:text-white' :
                                                             'hover:bg-[#ca8a04] hover:border-[#ca8a04] hover:text-white'
@@ -892,8 +892,8 @@ export default function Assets() {
                                                 {item.status === 'In Use' ? 'Return' : item.status === 'Returned' ? 'View Log' : 'Repair Log'}
                                             </button>
                                         )}
-                                        <button onClick={() => handleEditClick(item)} title="Edit" className="text-[8px] font-bold text-blue-400 hover:text-blue-600 transition-colors px-1">✎</button>
-                                        <button onClick={() => item.ids.forEach(id => handleDeleteAsset(id))} title="Delete" className="text-[8px] font-bold text-gray-400 hover:text-red-600 transition-colors px-1">✕</button>
+                                        <button onClick={() => handleEditClick(item)} title="Edit" className="text-[11px] font-bold text-blue-400 hover:text-blue-600 transition-colors px-1">✎</button>
+                                        <button onClick={() => item.ids.forEach(id => handleDeleteAsset(id))} title="Delete" className="text-[11px] font-bold text-gray-400 hover:text-red-600 transition-colors px-1">✕</button>
                                     </div>
                                 </td>
                             </tr>
@@ -907,18 +907,18 @@ export default function Assets() {
 
             <div id="unreturned-tools-section" className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 mb-4 overflow-x-auto">
                 <div className="flex justify-between items-center mb-0.5">
-                    <h3 className="text-[9px] font-extrabold text-[#A63228] tracking-wider uppercase">UNRETURNED TOOLS</h3>
+                    <h3 className="text-[11px] font-extrabold text-[#A63228] tracking-wider uppercase">UNRETURNED TOOLS</h3>
                     {filterBorrower !== 'All' && (
-                        <span className="text-[8px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+                        <span className="text-[11px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
                             Borrower: <strong className="text-[#A63228]">{filterBorrower}</strong>
                         </span>
                     )}
                 </div>
-                <p className="text-[8px] text-gray-500 mb-2.5">
+                <p className="text-[11px] text-gray-500 mb-2.5">
                     {filterBorrower !== 'All' ? `Tools currently borrowed by ${filterBorrower}.` : 'Tools currently in use and not returned.'}
                 </p>
                 {filteredUnreturnedTools.length === 0 ? (
-                    <p className="text-[9px] text-gray-400 italic py-2">
+                    <p className="text-[11px] text-gray-400 italic py-2">
                         {isFilterActive ? 'No unreturned tools match the active filters.' : 'All tools returned.'}
                     </p>
                 ) : (
@@ -926,12 +926,12 @@ export default function Assets() {
                     <table className="w-full text-left border-collapse min-w-[600px]">
                         <thead>
                             <tr>
-                                <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[22%] uppercase tracking-wider">TOOL NAME</th>
-                                <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[22%] uppercase tracking-wider">BORROWER</th>
-                                <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[8%] uppercase tracking-wider text-center">QTY</th>
-                                <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[15%] uppercase tracking-wider">CONDITION</th>
-                                <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[18%] uppercase tracking-wider">DATE BORROWED</th>
-                                <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[15%] uppercase tracking-wider">TIME</th>
+                                <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[22%] uppercase tracking-wider">TOOL NAME</th>
+                                <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[22%] uppercase tracking-wider">BORROWER</th>
+                                <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[8%] uppercase tracking-wider text-center">QTY</th>
+                                <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[15%] uppercase tracking-wider">CONDITION</th>
+                                <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[18%] uppercase tracking-wider">DATE BORROWED</th>
+                                <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[15%] uppercase tracking-wider">TIME</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -945,26 +945,26 @@ export default function Assets() {
                                 return (
                                     <tr key={idx}>
                                         <td className="py-2.5 text-[10px] font-extrabold text-gray-900 border-b border-gray-50">{tool.name}</td>
-                                        <td className="py-2.5 text-[9px] font-medium text-gray-800 border-b border-gray-50">{borrower}</td>
+                                        <td className="py-2.5 text-[11px] font-medium text-gray-800 border-b border-gray-50">{borrower}</td>
                                         <td className="py-2.5 border-b border-gray-50 text-center">
                                             <span className="text-[10px] font-extrabold text-gray-900 bg-gray-100 rounded-full px-2 py-0.5">{tool.qty}</span>
                                         </td>
                                         <td className="py-2.5 border-b border-gray-50">
-                                            <span className={`text-[8px] font-bold rounded-full px-2 py-0.5 ${cond === 'Good' ? 'bg-green-50 text-green-700' :
+                                            <span className={`text-[11px] font-bold rounded-full px-2 py-0.5 ${cond === 'Good' ? 'bg-green-50 text-green-700' :
                                                 cond === 'Needs Repair' ? 'bg-yellow-50 text-yellow-700' :
                                                     'bg-red-50 text-red-700'
                                                 }`}>{cond}</span>
                                         </td>
-                                        <td className="py-2.5 text-[9px] text-gray-600 border-b border-gray-50">
+                                        <td className="py-2.5 text-[11px] text-gray-600 border-b border-gray-50">
                                             {dateStr}
                                             {tool.expected_return_date && (
-                                                <span className="block text-[8px] font-semibold text-[#A63228]">
+                                                <span className="block text-[11px] font-semibold text-[#A63228]">
                                                     Due: {tool.expected_return_date}
                                                     {tool.expected_return_time ? ` • ${tool.expected_return_time}` : ''}
                                                 </span>
                                             )}
                                         </td>
-                                        <td className="py-2.5 text-[9px] text-gray-600 border-b border-gray-50">{timeStr}</td>
+                                        <td className="py-2.5 text-[11px] text-gray-600 border-b border-gray-50">{timeStr}</td>
                                     </tr>
                                 );
                             })}
@@ -978,15 +978,15 @@ export default function Assets() {
             {/* ── BORROWED TOOLS HISTORY OVERVIEW ── */}
             <div className="mb-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <div className="bg-white border border-gray-100 rounded-xl p-3 shadow-sm">
-                    <p className="text-[8px] font-bold uppercase tracking-wider text-gray-500">Currently Borrowed</p>
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Currently Borrowed</p>
                     <p className="mt-1 text-xl font-extrabold text-[#A63228]">{inUseCount}</p>
                 </div>
                 <div className="bg-white border border-gray-100 rounded-xl p-3 shadow-sm">
-                    <p className="text-[8px] font-bold uppercase tracking-wider text-gray-500">Borrow Logs</p>
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Borrow Logs</p>
                     <p className="mt-1 text-xl font-extrabold text-gray-900">{filteredBorrowHistory.filter(item => ['Check-Out', 'Borrowed', 'Borrow'].includes(item.action)).length}</p>
                 </div>
                 <div className="bg-white border border-gray-100 rounded-xl p-3 shadow-sm">
-                    <p className="text-[8px] font-bold uppercase tracking-wider text-gray-500">Return Logs</p>
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Return Logs</p>
                     <p className="mt-1 text-xl font-extrabold text-green-700">{filteredBorrowHistory.filter(item => ['Check-In', 'Returned', 'Return'].includes(item.action)).length}</p>
                 </div>
             </div>
@@ -996,30 +996,30 @@ export default function Assets() {
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-2.5 gap-2">
                     <div>
                         <div className="flex items-center gap-2">
-                            <h3 className="text-[9px] font-extrabold text-gray-900 tracking-wider uppercase">TOOLS BORROWING & RETURN HISTORY LIST</h3>
+                            <h3 className="text-[11px] font-extrabold text-gray-900 tracking-wider uppercase">TOOLS BORROWING & RETURN HISTORY LIST</h3>
                             {filterDatePreset !== 'All' && (
-                                <span className="text-[8px] font-bold text-[#A63228] bg-red-50 border border-red-200 px-1.5 py-0.2 rounded">
+                                <span className="text-[11px] font-bold text-[#A63228] bg-red-50 border border-red-200 px-1.5 py-0.2 rounded">
                                     {filterDatePreset}
                                 </span>
                             )}
                         </div>
-                        <p className="text-[8px] text-gray-500 mt-0.5">
+                        <p className="text-[11px] text-gray-500 mt-0.5">
                             {filterBorrower !== 'All' ? `History movements for borrower: ${filterBorrower}.` : 'Complete chronological audit log of tool loans, checkouts, and returns.'}
                         </p>
                     </div>
                     <div className="flex items-center gap-2 flex-wrap">
                         {filterBorrower !== 'All' && (
-                            <span className="text-[8px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+                            <span className="text-[11px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
                                 Borrower: <strong className="text-gray-900">{filterBorrower}</strong>
                             </span>
                         )}
-                        <span className="text-[9px] font-bold text-gray-600 bg-gray-100 rounded-full px-2.5 py-0.5">
+                        <span className="text-[11px] font-bold text-gray-600 bg-gray-100 rounded-full px-2.5 py-0.5">
                             {filteredBorrowHistory.length} Record(s)
                         </span>
                     </div>
                 </div>
                 {filteredBorrowHistory.length === 0 ? (
-                    <p className="text-[9px] text-gray-400 italic py-4 text-center">
+                    <p className="text-[11px] text-gray-400 italic py-4 text-center">
                         {isFilterActive ? 'No borrowing history matches the active filter criteria.' : 'No borrowing history recorded yet.'}
                     </p>
                 ) : (
@@ -1027,13 +1027,13 @@ export default function Assets() {
                     <table className="w-full text-left border-collapse min-w-[650px]">
                         <thead>
                             <tr>
-                                <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[20%] uppercase tracking-wider">TOOL NAME</th>
-                                <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[20%] uppercase tracking-wider">BORROWER</th>
-                                <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[8%] uppercase tracking-wider text-center">QTY</th>
-                                <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[14%] uppercase tracking-wider text-center">ACTION</th>
-                                <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[14%] uppercase tracking-wider">CONDITION</th>
-                                <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[14%] uppercase tracking-wider">DATE</th>
-                                <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[10%] uppercase tracking-wider">TIME</th>
+                                <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[20%] uppercase tracking-wider">TOOL NAME</th>
+                                <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[20%] uppercase tracking-wider">BORROWER</th>
+                                <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[8%] uppercase tracking-wider text-center">QTY</th>
+                                <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[14%] uppercase tracking-wider text-center">ACTION</th>
+                                <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[14%] uppercase tracking-wider">CONDITION</th>
+                                <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[14%] uppercase tracking-wider">DATE</th>
+                                <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[10%] uppercase tracking-wider">TIME</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -1045,24 +1045,24 @@ export default function Assets() {
                                 return (
                                     <tr key={item.id || idx}>
                                         <td className="py-2.5 text-[10px] font-extrabold text-gray-900 border-b border-gray-50">{item.tool_name}</td>
-                                        <td className="py-2.5 text-[9px] font-medium text-gray-800 border-b border-gray-50">{item.borrower_name || item.assigned_to || '—'}</td>
+                                        <td className="py-2.5 text-[11px] font-medium text-gray-800 border-b border-gray-50">{item.borrower_name || item.assigned_to || '—'}</td>
                                         <td className="py-2.5 border-b border-gray-50 text-center">
                                             <span className="text-[10px] font-extrabold text-gray-900 bg-gray-100 rounded-full px-2 py-0.5">{item.quantity || 1}</span>
                                         </td>
                                         <td className="py-2.5 border-b border-gray-50 text-center">
-                                            <span className={`text-[8px] font-bold rounded-full px-2 py-0.5 ${isBorrow ? 'bg-red-50 text-[#A63228] border border-red-200' : 'bg-green-50 text-green-700 border border-green-200'
+                                            <span className={`text-[11px] font-bold rounded-full px-2 py-0.5 ${isBorrow ? 'bg-red-50 text-[#A63228] border border-red-200' : 'bg-green-50 text-green-700 border border-green-200'
                                                 }`}>
                                                 {isBorrow ? 'Borrowed' : (item.action === 'Check-In' || item.action === 'Returned' || item.action === 'Return' ? 'Returned' : item.action)}
                                             </span>
                                         </td>
                                         <td className="py-2.5 border-b border-gray-50">
-                                            <span className={`text-[8px] font-bold rounded-full px-2 py-0.5 ${item.condition_status === 'Good' ? 'bg-green-50 text-green-700' :
+                                            <span className={`text-[11px] font-bold rounded-full px-2 py-0.5 ${item.condition_status === 'Good' ? 'bg-green-50 text-green-700' :
                                                 item.condition_status === 'Needs Repair' ? 'bg-yellow-50 text-yellow-700' :
                                                     'bg-red-50 text-red-700'
                                                 }`}>{item.condition_status || 'Good'}</span>
                                         </td>
-                                        <td className="py-2.5 text-[9px] text-gray-600 border-b border-gray-50">{dateStr}</td>
-                                        <td className="py-2.5 text-[9px] text-gray-600 border-b border-gray-50">{timeStr}</td>
+                                        <td className="py-2.5 text-[11px] text-gray-600 border-b border-gray-50">{dateStr}</td>
+                                        <td className="py-2.5 text-[11px] text-gray-600 border-b border-gray-50">{timeStr}</td>
                                     </tr>
                                 );
                             })}

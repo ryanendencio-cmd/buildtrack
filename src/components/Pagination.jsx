@@ -5,7 +5,7 @@ export default function Pagination({ page, pageSize, total, pageCount, setPage, 
     const end = Math.min(page * pageSize, total);
 
     return (
-        <nav className="flex flex-wrap items-center justify-between gap-2 px-2 py-2 text-[9px] text-gray-500" aria-label="Pagination">
+        <nav className="flex flex-wrap items-center justify-between gap-2 px-2 py-2 text-[11px] text-gray-500" aria-label="Pagination">
             <span aria-live="polite">Showing {start}–{end} of {total}</span>
             <div className="flex items-center gap-1.5">
                 <label className="flex items-center gap-1">
@@ -14,7 +14,7 @@ export default function Pagination({ page, pageSize, total, pageCount, setPage, 
                         aria-label="Rows per page"
                         value={pageSize}
                         onChange={(event) => setPageSize(event.target.value)}
-                        className="rounded border border-gray-200 bg-white px-1.5 py-1 text-[9px] font-semibold text-gray-700"
+                        className="rounded border border-gray-200 bg-white px-1.5 py-1 text-[11px] font-semibold text-gray-700"
                     >
                         {[10, 25, 50].map((size) => <option key={size} value={size}>{size}</option>)}
                     </select>

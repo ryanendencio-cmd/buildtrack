@@ -476,7 +476,7 @@ export default function Workers() {
         <AdminLayout>
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-3 gap-2">
                 <div>
-                    <span className="text-[9px] font-bold text-[#A63228] tracking-widest uppercase">MASTERLIST</span>
+                    <span className="text-[11px] font-bold text-[#A63228] tracking-widest uppercase">MASTERLIST</span>
                     <h1 className="text-lg font-extrabold text-gray-900 mt-0.5 tracking-tight">Worker Management</h1>
                     <p className="text-[10px] text-gray-500 mt-0.5">Manage worker profiles, mobile app access, and account approvals.</p>
                 </div>
@@ -492,15 +492,15 @@ export default function Workers() {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-3">
                 <div className="bg-white p-2.5 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-center text-center">
-                    <p className="text-[9px] font-bold text-gray-400 tracking-wider uppercase mb-0.5">TOTAL WORKERS</p>
+                    <p className="text-[11px] font-bold text-gray-400 tracking-wider uppercase mb-0.5">TOTAL WORKERS</p>
                     <h2 className="text-lg font-extrabold text-gray-900">{approvedWorkers.length}</h2>
                 </div>
                 <div className="bg-white p-2.5 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-center text-center">
-                    <p className="text-[9px] font-bold text-[#2e7d32] tracking-wider uppercase mb-0.5">ACTIVE ACCOUNTS</p>
+                    <p className="text-[11px] font-bold text-[#2e7d32] tracking-wider uppercase mb-0.5">ACTIVE ACCOUNTS</p>
                     <h2 className="text-lg font-extrabold text-[#2e7d32]">{activeCount}</h2>
                 </div>
                 <div className="bg-white p-2.5 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-center text-center">
-                    <p className="text-[9px] font-bold text-[#A63228] tracking-wider uppercase mb-0.5">INACTIVE / RESIGNED</p>
+                    <p className="text-[11px] font-bold text-[#A63228] tracking-wider uppercase mb-0.5">INACTIVE / RESIGNED</p>
                     <h2 className="text-lg font-extrabold text-[#A63228]">{inactiveCount}</h2>
                 </div>
             </div>
@@ -509,7 +509,7 @@ export default function Workers() {
             <div className="flex items-center gap-1.5 mb-3">
                 <button
                     onClick={() => setActiveTab('ALL')}
-                    className={`px-3 py-1.5 rounded-lg text-[9px] font-bold border transition-colors ${activeTab === 'ALL'
+                    className={`px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-colors ${activeTab === 'ALL'
                         ? 'bg-[#8B1A10] text-white border-transparent'
                         : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
                         }`}
@@ -518,14 +518,14 @@ export default function Workers() {
                 </button>
                 <button
                     onClick={() => setActiveTab('APPROVAL')}
-                    className={`relative px-3 py-1.5 rounded-lg text-[9px] font-bold border transition-colors ${activeTab === 'APPROVAL'
+                    className={`relative px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-colors ${activeTab === 'APPROVAL'
                         ? 'bg-[#8B1A10] text-white border-transparent'
                         : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
                         }`}
                 >
                     Account Approval
                     {pendingCount > 0 && (
-                        <span className="ml-1.5 inline-flex items-center justify-center min-w-[14px] h-[14px] px-1 rounded-full bg-[#E8C547] text-[8px] font-extrabold text-gray-900">
+                        <span className="ml-1.5 inline-flex items-center justify-center min-w-[14px] h-[14px] px-1 rounded-full bg-[#E8C547] text-[11px] font-extrabold text-gray-900">
                             {pendingCount}
                         </span>
                     )}
@@ -542,13 +542,13 @@ export default function Workers() {
                                 placeholder="Search worker name..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-full pl-7 pr-3 py-1 bg-[#f4f1ee] border border-transparent rounded-md text-[9px] font-medium outline-none focus:border-[#A63228]"
+                                className="w-full pl-7 pr-3 py-1 bg-[#f4f1ee] border border-transparent rounded-md text-[11px] font-medium outline-none focus:border-[#A63228]"
                             />
                         </div>
                         <select
                             value={statusFilter}
                             onChange={(e) => setStatusFilter(e.target.value)}
-                            className="bg-[#f4f1ee] border border-transparent text-gray-700 pl-2.5 pr-6 py-1 rounded-md text-[9px] font-bold outline-none appearance-none w-full sm:w-auto"
+                            className="bg-[#f4f1ee] border border-transparent text-gray-700 pl-2.5 pr-6 py-1 rounded-md text-[11px] font-bold outline-none appearance-none w-full sm:w-auto"
                             style={selectStyles}
                         >
                             <option value="All">All Statuses</option>
@@ -561,11 +561,11 @@ export default function Workers() {
                         <table className="w-full text-left border-collapse min-w-[600px]">
                             <thead>
                                 <tr className="bg-gray-50/50">
-                                    <th className="text-[8px] font-extrabold text-gray-500 border-y border-gray-100 py-1.5 pl-4 w-[35%] uppercase tracking-wider">WORKER INFO</th>
-                                    <th className="text-[8px] font-extrabold text-gray-500 border-y border-gray-100 py-1.5 w-[15%] uppercase tracking-wider text-center">ROLE</th>
-                                    <th className="text-[8px] font-extrabold text-gray-500 border-y border-gray-100 py-1.5 w-[13%] uppercase tracking-wider text-center">STATUS</th>
-                                    <th className="text-[8px] font-extrabold text-gray-500 border-y border-gray-100 py-1.5 w-[12%] uppercase tracking-wider text-center">ACCOUNT</th>
-                                    <th className="text-[8px] font-extrabold text-gray-500 border-y border-gray-100 py-1.5 w-[25%] uppercase tracking-wider text-center pr-4">ACTIONS</th>
+                                    <th className="text-[11px] font-extrabold text-gray-500 border-y border-gray-100 py-1.5 pl-4 w-[35%] uppercase tracking-wider">WORKER INFO</th>
+                                    <th className="text-[11px] font-extrabold text-gray-500 border-y border-gray-100 py-1.5 w-[15%] uppercase tracking-wider text-center">ROLE</th>
+                                    <th className="text-[11px] font-extrabold text-gray-500 border-y border-gray-100 py-1.5 w-[13%] uppercase tracking-wider text-center">STATUS</th>
+                                    <th className="text-[11px] font-extrabold text-gray-500 border-y border-gray-100 py-1.5 w-[12%] uppercase tracking-wider text-center">ACCOUNT</th>
+                                    <th className="text-[11px] font-extrabold text-gray-500 border-y border-gray-100 py-1.5 w-[25%] uppercase tracking-wider text-center pr-4">ACTIONS</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -578,40 +578,40 @@ export default function Workers() {
                                     >
                                         <td className="py-2 pl-4 border-b border-gray-50">
                                             <div className="flex items-center gap-1.5 flex-wrap">
-                                                <p className="text-[9px] font-extrabold text-gray-900 group-hover:text-[#A63228] transition-colors flex items-center gap-1">
+                                                <p className="text-[11px] font-extrabold text-gray-900 group-hover:text-[#A63228] transition-colors flex items-center gap-1">
                                                     <span>{worker.full_name}</span>
-                                                    <span className="text-[7.5px] text-gray-400 group-hover:text-[#A63228] opacity-0 group-hover:opacity-100 transition-opacity">👁️</span>
+                                                    <span className="text-[10px] text-gray-400 group-hover:text-[#A63228] opacity-0 group-hover:opacity-100 transition-opacity">👁️</span>
                                                 </p>
                                                 {worker.rfid_uid && (
-                                                    <span className="inline-flex items-center gap-0.5 text-[7px] font-mono font-bold bg-amber-50 text-amber-800 px-1.5 py-0.5 rounded border border-amber-200/80" title={`RFID UID: ${worker.rfid_uid}`}>
+                                                    <span className="inline-flex items-center gap-0.5 text-[10px] font-mono font-bold bg-amber-50 text-amber-800 px-1.5 py-0.5 rounded border border-amber-200/80" title={`RFID UID: ${worker.rfid_uid}`}>
                                                         💳 {worker.rfid_uid}
                                                     </span>
                                                 )}
                                             </div>
-                                            <p className="text-[7px] text-gray-400 font-mono mt-0.5">
+                                            <p className="text-[10px] text-gray-400 font-mono mt-0.5">
                                                 Worker ID: {worker.worker_code || worker.id}
                                             </p>
-                                            <p className="text-[8px] text-gray-500 font-medium mt-0.5">
+                                            <p className="text-[11px] text-gray-500 font-medium mt-0.5">
                                                 {worker.role}{worker.position ? ` · ${worker.position}` : ''}{worker.phone ? ` · ${worker.phone}` : ''}
                                             </p>
                                         </td>
                                         <td className="py-2 border-b border-gray-50 text-center">
                                             <div className="flex flex-col items-center gap-0.5">
-                                                <span className="text-[8px] text-gray-900 font-bold">{worker.role || 'Worker'}</span>
+                                                <span className="text-[11px] text-gray-900 font-bold">{worker.role || 'Worker'}</span>
                                                 {worker.position && (
-                                                    <span className="text-[7px] text-[#A63228] font-semibold bg-red-50 px-1.5 py-0.5 rounded border border-red-100 max-w-[130px] truncate" title={worker.position}>
+                                                    <span className="text-[10px] text-[#A63228] font-semibold bg-red-50 px-1.5 py-0.5 rounded border border-red-100 max-w-[130px] truncate" title={worker.position}>
                                                         {worker.position}
                                                     </span>
                                                 )}
                                             </div>
                                         </td>
                                         <td className="py-2 border-b border-gray-50 text-center">
-                                            <span className={`inline-flex items-center justify-center px-1.5 py-0.5 rounded-full text-[8px] font-extrabold uppercase tracking-wider ${worker.status === 'Active' ? 'bg-[#e6f4ea] text-[#2e7d32]' : 'bg-gray-100 text-gray-500'}`}>
+                                            <span className={`inline-flex items-center justify-center px-1.5 py-0.5 rounded-full text-[11px] font-extrabold uppercase tracking-wider ${worker.status === 'Active' ? 'bg-[#e6f4ea] text-[#2e7d32]' : 'bg-gray-100 text-gray-500'}`}>
                                                 {worker.status}
                                             </span>
                                         </td>
                                         <td className="py-2 border-b border-gray-50 text-center">
-                                            <span className={`inline-flex items-center justify-center px-1.5 py-0.5 rounded-full text-[8px] font-extrabold uppercase tracking-wider ${approvalBadgeStyles(worker.approval_status || 'Pending')}`}>
+                                            <span className={`inline-flex items-center justify-center px-1.5 py-0.5 rounded-full text-[11px] font-extrabold uppercase tracking-wider ${approvalBadgeStyles(worker.approval_status || 'Pending')}`}>
                                                 {worker.approval_status || 'Pending'}
                                             </span>
                                         </td>
@@ -619,25 +619,25 @@ export default function Workers() {
                                             <div className="flex items-center justify-center gap-1">
                                                 <button 
                                                     onClick={() => setViewWorker(worker)} 
-                                                    className="bg-white border border-gray-200 text-gray-700 px-2 py-1 rounded-sm text-[8px] font-bold hover:bg-gray-50 hover:border-gray-300 transition-colors flex items-center gap-0.5"
+                                                    className="bg-white border border-gray-200 text-gray-700 px-2 py-1 rounded-sm text-[11px] font-bold hover:bg-gray-50 hover:border-gray-300 transition-colors flex items-center gap-0.5"
                                                     title="View Profile"
                                                 >
                                                     <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                                                     View
                                                 </button>
-                                                <button onClick={() => openEditModal(worker)} className="bg-white border border-gray-200 text-gray-700 px-2 py-1 rounded-sm text-[8px] font-bold hover:bg-gray-50 transition-colors">
+                                                <button onClick={() => openEditModal(worker)} className="bg-white border border-gray-200 text-gray-700 px-2 py-1 rounded-sm text-[11px] font-bold hover:bg-gray-50 transition-colors">
                                                     Edit
                                                 </button>
                                                 <button
                                                     onClick={() => toggleWorkerStatus(worker)}
-                                                    className={`px-2 py-1 rounded-sm text-[8px] font-bold border transition-colors ${worker.status === 'Active'
+                                                    className={`px-2 py-1 rounded-sm text-[11px] font-bold border transition-colors ${worker.status === 'Active'
                                                         ? 'bg-white border-[#A63228] text-[#A63228] hover:bg-red-50'
                                                         : 'bg-[#e6f4ea] border-[#2e7d32] text-[#2e7d32] hover:bg-green-100'
                                                         }`}
                                                 >
                                                     {worker.status === 'Active' ? 'Deactivate' : 'Reactivate'}
                                                 </button>
-                                                <button onClick={() => handleDeleteWorker(worker.id)} className="bg-white border border-gray-200 text-gray-400 px-1.5 py-1 rounded-sm text-[8px] font-bold hover:text-red-600 hover:border-red-300 transition-colors">
+                                                <button onClick={() => handleDeleteWorker(worker.id)} className="bg-white border border-gray-200 text-gray-400 px-1.5 py-1 rounded-sm text-[11px] font-bold hover:text-red-600 hover:border-red-300 transition-colors">
                                                     Delete
                                                 </button>
                                             </div>
@@ -645,7 +645,7 @@ export default function Workers() {
                                     </tr>
                                 )) : (
                                     <tr>
-                                        <td colSpan="5" className="py-6 text-center text-[9px] text-gray-400 italic">No workers found matching your filter.</td>
+                                        <td colSpan="5" className="py-6 text-center text-[11px] text-gray-400 italic">No workers found matching your filter.</td>
                                     </tr>
                                 )}
                             </tbody>
@@ -659,16 +659,16 @@ export default function Workers() {
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto mb-6">
                     <div className="p-3 border-b border-gray-100">
                         <h3 className="text-xs font-extrabold text-[#1a1a1a]">Pending Account Approvals</h3>
-                        <p className="text-[8px] text-gray-500 font-medium mt-0.5">Review new worker/staff registrations before they can log in to the mobile app.</p>
+                        <p className="text-[11px] text-gray-500 font-medium mt-0.5">Review new worker/staff registrations before they can log in to the mobile app.</p>
                     </div>
                     <table className="w-full text-left border-collapse min-w-[600px]">
                         <thead>
                             <tr className="bg-gray-50/50">
-                                <th className="text-[8px] font-extrabold text-gray-500 border-y border-gray-100 py-1.5 pl-4 w-[35%] uppercase tracking-wider">WORKER INFO</th>
-                                <th className="text-[8px] font-extrabold text-gray-500 border-y border-gray-100 py-1.5 w-[15%] uppercase tracking-wider text-center">ROLE</th>
-                                <th className="text-[8px] font-extrabold text-gray-500 border-y border-gray-100 py-1.5 w-[20%] uppercase tracking-wider text-center">CONTACT</th>
-                                <th className="text-[8px] font-extrabold text-gray-500 border-y border-gray-100 py-1.5 w-[15%] uppercase tracking-wider text-center">APPLIED</th>
-                                <th className="text-[8px] font-extrabold text-gray-500 border-y border-gray-100 py-1.5 w-[25%] uppercase tracking-wider text-center pr-4">ACTIONS</th>
+                                <th className="text-[11px] font-extrabold text-gray-500 border-y border-gray-100 py-1.5 pl-4 w-[35%] uppercase tracking-wider">WORKER INFO</th>
+                                <th className="text-[11px] font-extrabold text-gray-500 border-y border-gray-100 py-1.5 w-[15%] uppercase tracking-wider text-center">ROLE</th>
+                                <th className="text-[11px] font-extrabold text-gray-500 border-y border-gray-100 py-1.5 w-[20%] uppercase tracking-wider text-center">CONTACT</th>
+                                <th className="text-[11px] font-extrabold text-gray-500 border-y border-gray-100 py-1.5 w-[15%] uppercase tracking-wider text-center">APPLIED</th>
+                                <th className="text-[11px] font-extrabold text-gray-500 border-y border-gray-100 py-1.5 w-[25%] uppercase tracking-wider text-center pr-4">ACTIONS</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -680,20 +680,20 @@ export default function Workers() {
                                     title="Click to view full worker registration profile"
                                 >
                                     <td className="py-1.5 pl-4 border-b border-gray-50">
-                                        <p className="text-[9px] font-extrabold text-gray-900 group-hover:text-[#A63228] transition-colors flex items-center gap-1">
+                                        <p className="text-[11px] font-extrabold text-gray-900 group-hover:text-[#A63228] transition-colors flex items-center gap-1">
                                             <span>{worker.full_name}</span>
-                                            <span className="text-[7.5px] text-gray-400 group-hover:text-[#A63228] opacity-0 group-hover:opacity-100 transition-opacity">👁️</span>
+                                            <span className="text-[10px] text-gray-400 group-hover:text-[#A63228] opacity-0 group-hover:opacity-100 transition-opacity">👁️</span>
                                         </p>
-                                        <p className="text-[8px] text-gray-500 font-medium mt-0.5">{worker.address || 'No address on file'}</p>
+                                        <p className="text-[11px] text-gray-500 font-medium mt-0.5">{worker.address || 'No address on file'}</p>
                                     </td>
                                     <td className="py-1.5 border-b border-gray-50 text-center">
-                                        <span className="text-[8px] text-gray-700 font-semibold">{worker.role}{worker.position ? ` · ${worker.position}` : ''}</span>
+                                        <span className="text-[11px] text-gray-700 font-semibold">{worker.role}{worker.position ? ` · ${worker.position}` : ''}</span>
                                     </td>
                                     <td className="py-1.5 border-b border-gray-50 text-center">
-                                        <span className="text-[8px] text-gray-700 font-medium">{worker.phone || '—'}</span>
+                                        <span className="text-[11px] text-gray-700 font-medium">{worker.phone || '—'}</span>
                                     </td>
                                     <td className="py-1.5 border-b border-gray-50 text-center">
-                                        <span className="text-[8px] text-gray-500 font-medium">
+                                        <span className="text-[11px] text-gray-500 font-medium">
                                             {worker.created_at ? new Date(worker.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
                                         </span>
                                     </td>
@@ -703,7 +703,7 @@ export default function Workers() {
                                                 <select
                                                     value={approvalRoles[worker.id]?.role || worker.role || 'Worker'}
                                                     onChange={e => setApprovalRoles(prev => ({ ...prev, [worker.id]: { ...(prev[worker.id] || {}), role: e.target.value } }))}
-                                                    className="bg-gray-50 border border-gray-200 rounded text-[8px] font-semibold px-1.5 py-1 outline-none focus:border-[#A63228]"
+                                                    className="bg-gray-50 border border-gray-200 rounded text-[11px] font-semibold px-1.5 py-1 outline-none focus:border-[#A63228]"
                                                 >
                                                     <option value="Worker">Worker</option>
                                                     <option value="Staff">Staff</option>
@@ -711,7 +711,7 @@ export default function Workers() {
                                                 <select
                                                     value={approvalRoles[worker.id]?.position || worker.position || 'Worker'}
                                                     onChange={e => setApprovalRoles(prev => ({ ...prev, [worker.id]: { ...(prev[worker.id] || {}), position: e.target.value } }))}
-                                                    className="bg-gray-50 border border-gray-200 rounded text-[8px] font-semibold px-1.5 py-1 outline-none focus:border-[#A63228]"
+                                                    className="bg-gray-50 border border-gray-200 rounded text-[11px] font-semibold px-1.5 py-1 outline-none focus:border-[#A63228]"
                                                 >
                                                     <option value="Worker">Worker</option>
                                                     <option value="Attendance Monitoring">Attendance Monitoring</option>
@@ -724,13 +724,13 @@ export default function Workers() {
                                             <div className="flex items-center gap-1.5">
                                                 <button
                                                     onClick={() => handleApproval(worker, 'Approved')}
-                                                    className="bg-[#e6f4ea] border border-[#2e7d32] text-[#2e7d32] px-2 py-1 rounded-sm text-[8px] font-bold hover:bg-green-100 transition-colors"
+                                                    className="bg-[#e6f4ea] border border-[#2e7d32] text-[#2e7d32] px-2 py-1 rounded-sm text-[11px] font-bold hover:bg-green-100 transition-colors"
                                                 >
                                                     Approve
                                                 </button>
                                                 <button
                                                     onClick={() => handleApproval(worker, 'Rejected')}
-                                                    className="bg-white border border-[#A63228] text-[#A63228] px-2 py-1 rounded-sm text-[8px] font-bold hover:bg-red-50 transition-colors"
+                                                    className="bg-white border border-[#A63228] text-[#A63228] px-2 py-1 rounded-sm text-[11px] font-bold hover:bg-red-50 transition-colors"
                                                 >
                                                     Reject
                                                 </button>
@@ -740,7 +740,7 @@ export default function Workers() {
                                 </tr>
                             )) : (
                                 <tr>
-                                    <td colSpan="5" className="py-6 text-center text-[9px] text-gray-400 italic">No pending account approvals.</td>
+                                    <td colSpan="5" className="py-6 text-center text-[11px] text-gray-400 italic">No pending account approvals.</td>
                                 </tr>
                             )}
                         </tbody>
@@ -755,7 +755,7 @@ export default function Workers() {
                         <div className="flex justify-between items-center p-3 border-b border-gray-100 shrink-0">
                             <div>
                                 <h3 className="text-xs font-extrabold text-[#1a1a1a]">{modalState === 'ADD' ? 'Register New Worker' : 'Edit Worker Profile'}</h3>
-                                <p className="text-[8px] text-gray-500 font-medium mt-0.5">Fill in the worker's details for the mobile app.</p>
+                                <p className="text-[11px] text-gray-500 font-medium mt-0.5">Fill in the worker's details for the mobile app.</p>
                             </div>
                             <button onClick={() => setModalState('NONE')} className="text-gray-400 hover:text-gray-700 bg-gray-50 p-1 rounded-full hover:bg-gray-100 transition-colors">
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
@@ -765,40 +765,40 @@ export default function Workers() {
                         <div className="overflow-y-auto p-3">
                             <form onSubmit={handleSaveWorker} className="flex flex-col gap-2.5">
                                 <div>
-                                    <h4 className="text-[7px] font-extrabold text-gray-400 uppercase tracking-widest mb-1 border-b border-gray-100 pb-0.5">Personal Information</h4>
+                                    <h4 className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-1 border-b border-gray-100 pb-0.5">Personal Information</h4>
                                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 mb-1.5">
                                         <div>
-                                            <label className="block text-[8px] font-bold text-gray-700 mb-0.5 uppercase">First Name <span className="text-[#A63228]">*</span></label>
+                                            <label className="block text-[11px] font-bold text-gray-700 mb-0.5 uppercase">First Name <span className="text-[#A63228]">*</span></label>
                                             <input
                                                 type="text"
                                                 name="firstName"
                                                 value={formData.firstName}
                                                 onChange={handleNameChange}
                                                 required
-                                                className="w-full bg-[#f4f1ee] border border-transparent rounded-md px-2 py-1.5 text-[9px] font-medium focus:border-[#A63228] outline-none capitalize"
+                                                className="w-full bg-[#f4f1ee] border border-transparent rounded-md px-2 py-1.5 text-[11px] font-medium focus:border-[#A63228] outline-none capitalize"
                                                 placeholder="e.g. Juan"
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-[8px] font-bold text-gray-700 mb-0.5 uppercase">Middle Name</label>
+                                            <label className="block text-[11px] font-bold text-gray-700 mb-0.5 uppercase">Middle Name</label>
                                             <input
                                                 type="text"
                                                 name="middleName"
                                                 value={formData.middleName}
                                                 onChange={handleNameChange}
-                                                className="w-full bg-[#f4f1ee] border border-transparent rounded-md px-2 py-1.5 text-[9px] font-medium focus:border-[#A63228] outline-none capitalize"
+                                                className="w-full bg-[#f4f1ee] border border-transparent rounded-md px-2 py-1.5 text-[11px] font-medium focus:border-[#A63228] outline-none capitalize"
                                                 placeholder="e.g. Santos"
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-[8px] font-bold text-gray-700 mb-0.5 uppercase">Last Name <span className="text-[#A63228]">*</span></label>
+                                            <label className="block text-[11px] font-bold text-gray-700 mb-0.5 uppercase">Last Name <span className="text-[#A63228]">*</span></label>
                                             <input
                                                 type="text"
                                                 name="lastName"
                                                 value={formData.lastName}
                                                 onChange={handleNameChange}
                                                 required
-                                                className="w-full bg-[#f4f1ee] border border-transparent rounded-md px-2 py-1.5 text-[9px] font-medium focus:border-[#A63228] outline-none capitalize"
+                                                className="w-full bg-[#f4f1ee] border border-transparent rounded-md px-2 py-1.5 text-[11px] font-medium focus:border-[#A63228] outline-none capitalize"
                                                 placeholder="e.g. Dela Cruz"
                                             />
                                         </div>
@@ -806,29 +806,29 @@ export default function Workers() {
 
                                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 mb-1.5">
                                         <div>
-                                            <label className="block text-[8px] font-bold text-gray-700 mb-0.5 uppercase">Birthday <span className="text-[#A63228]">*</span></label>
+                                            <label className="block text-[11px] font-bold text-gray-700 mb-0.5 uppercase">Birthday <span className="text-[#A63228]">*</span></label>
                                             <input
                                                 type="date"
                                                 name="birthday"
                                                 value={formData.birthday || ''}
                                                 onChange={handleBirthdayChange}
                                                 required
-                                                className="w-full bg-[#f4f1ee] border border-transparent rounded-md px-2 py-1 text-[9px] font-medium focus:border-[#A63228] outline-none"
+                                                className="w-full bg-[#f4f1ee] border border-transparent rounded-md px-2 py-1 text-[11px] font-medium focus:border-[#A63228] outline-none"
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-[8px] font-bold text-gray-700 mb-0.5 uppercase">Age</label>
+                                            <label className="block text-[11px] font-bold text-gray-700 mb-0.5 uppercase">Age</label>
                                             <input
                                                 type="number"
                                                 name="age"
                                                 value={formData.age || ''}
                                                 readOnly
-                                                className="w-full bg-gray-100 border border-transparent rounded-md px-2 py-1 text-[9px] font-bold text-gray-600 outline-none"
+                                                className="w-full bg-gray-100 border border-transparent rounded-md px-2 py-1 text-[11px] font-bold text-gray-600 outline-none"
                                                 placeholder="Auto"
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-[8px] font-bold text-gray-700 mb-0.5 uppercase">Phone No. <span className="text-[#A63228]">*</span></label>
+                                            <label className="block text-[11px] font-bold text-gray-700 mb-0.5 uppercase">Phone No. <span className="text-[#A63228]">*</span></label>
                                             <input
                                                 type="text"
                                                 name="phone"
@@ -836,21 +836,21 @@ export default function Workers() {
                                                 onChange={handlePhoneChange}
                                                 maxLength="11"
                                                 required
-                                                className="w-full bg-[#f4f1ee] border border-transparent rounded-md px-2 py-1 text-[9px] font-medium focus:border-[#A63228] outline-none"
+                                                className="w-full bg-[#f4f1ee] border border-transparent rounded-md px-2 py-1 text-[11px] font-medium focus:border-[#A63228] outline-none"
                                                 placeholder="09XX XXX XXXX"
                                             />
                                         </div>
                                     </div>
 
                                     <div className="mt-1.5 p-2 bg-gray-50 rounded-lg border border-gray-100">
-                                        <label className="block text-[8px] font-extrabold text-gray-700 mb-1 uppercase">Home Address Details</label>
+                                        <label className="block text-[11px] font-extrabold text-gray-700 mb-1 uppercase">Home Address Details</label>
                                         <input
                                             type="text"
                                             name="street"
                                             value={formData.street || ''}
                                             onChange={handleInputChange}
                                             placeholder="House No. / Building / Street / Subdivision"
-                                            className="w-full bg-white border border-gray-200 rounded-md px-2 py-1 text-[8.5px] font-medium text-gray-900 focus:border-[#A63228] outline-none mb-1.5"
+                                            className="w-full bg-white border border-gray-200 rounded-md px-2 py-1 text-[11px] font-medium text-gray-900 focus:border-[#A63228] outline-none mb-1.5"
                                         />
                                         <PhilippineAddressSelector
                                             value={formData.addressObj || {}}
@@ -867,7 +867,7 @@ export default function Workers() {
                                             }}
                                         />
                                         {formData.address && (
-                                            <p className="text-[8px] text-gray-500 font-bold mt-1 truncate">
+                                            <p className="text-[11px] text-gray-500 font-bold mt-1 truncate">
                                                 📍 {formData.address}
                                             </p>
                                         )}
@@ -875,17 +875,17 @@ export default function Workers() {
                                 </div>
 
                                 <div>
-                                    <h4 className="text-[7px] font-extrabold text-gray-400 uppercase tracking-widest mb-1 border-b border-gray-100 pb-0.5 mt-1">App Access & Compensation</h4>
+                                    <h4 className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-1 border-b border-gray-100 pb-0.5 mt-1">App Access & Compensation</h4>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 mb-1.5">
                                         <div>
-                                            <label className="block text-[8px] font-bold text-gray-700 mb-0.5 uppercase">Role</label>
-                                            <select name="role" value={formData.role} onChange={handleInputChange} className="w-full bg-[#f4f1ee] border border-transparent rounded-md pl-2 pr-6 py-1.5 text-[9px] font-medium focus:border-[#A63228] outline-none appearance-none" style={selectStyles}>
+                                            <label className="block text-[11px] font-bold text-gray-700 mb-0.5 uppercase">Role</label>
+                                            <select name="role" value={formData.role} onChange={handleInputChange} className="w-full bg-[#f4f1ee] border border-transparent rounded-md pl-2 pr-6 py-1.5 text-[11px] font-medium focus:border-[#A63228] outline-none appearance-none" style={selectStyles}>
                                                 <option value="Worker">Worker</option>
                                                 <option value="Staff">Staff</option>
                                             </select>
                                         </div>
                                         <div>
-                                            <label className="block text-[8px] font-bold text-gray-700 mb-0.5 uppercase">Daily Salary Rate (₱) <span className="text-[#A63228]">*</span></label>
+                                            <label className="block text-[11px] font-bold text-gray-700 mb-0.5 uppercase">Daily Salary Rate (₱) <span className="text-[#A63228]">*</span></label>
                                             <input
                                                 type="number"
                                                 name="daily_rate"
@@ -893,23 +893,23 @@ export default function Workers() {
                                                 onChange={handleInputChange}
                                                 required
                                                 min="0"
-                                                className="w-full bg-[#f4f1ee] border border-transparent rounded-md px-2 py-1.5 text-[9px] font-bold text-[#A63228] focus:border-[#A63228] outline-none"
+                                                className="w-full bg-[#f4f1ee] border border-transparent rounded-md px-2 py-1.5 text-[11px] font-bold text-[#A63228] focus:border-[#A63228] outline-none"
                                                 placeholder="600"
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-[8px] font-bold text-gray-700 mb-0.5 uppercase">Account Status</label>
-                                            <select name="status" value={formData.status} onChange={handleInputChange} className="w-full bg-[#f4f1ee] border border-transparent rounded-md pl-2 pr-6 py-1.5 text-[9px] font-medium focus:border-[#A63228] outline-none appearance-none" style={selectStyles}>
+                                            <label className="block text-[11px] font-bold text-gray-700 mb-0.5 uppercase">Account Status</label>
+                                            <select name="status" value={formData.status} onChange={handleInputChange} className="w-full bg-[#f4f1ee] border border-transparent rounded-md pl-2 pr-6 py-1.5 text-[11px] font-medium focus:border-[#A63228] outline-none appearance-none" style={selectStyles}>
                                                 <option value="Active">Active (Can Login)</option>
                                                 <option value="Inactive">Inactive (Resigned/Blocked)</option>
                                             </select>
                                         </div>
                                         <div>
                                             <div className="flex items-center justify-between mb-0.5">
-                                                <label className="block text-[8px] font-bold text-gray-700 uppercase">
+                                                <label className="block text-[11px] font-bold text-gray-700 uppercase">
                                                     RFID Card UID
                                                 </label>
-                                                <span className="text-[7.5px] text-amber-700 font-semibold flex items-center gap-1">
+                                                <span className="text-[10px] text-amber-700 font-semibold flex items-center gap-1">
                                                     <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
                                                     <span>Tap card on ESP32 to auto-fill</span>
                                                 </span>
@@ -919,7 +919,7 @@ export default function Workers() {
                                             {isReplacingRfid && (
                                                 <div className="mb-1.5 p-2 bg-amber-50 border border-amber-200 rounded-md flex flex-col gap-1">
                                                     <div className="flex items-center justify-between">
-                                                        <span className="text-[8px] font-extrabold text-amber-900 uppercase flex items-center gap-1">
+                                                        <span className="text-[11px] font-extrabold text-amber-900 uppercase flex items-center gap-1">
                                                             <span>⚠️</span> Replacing Lost / Damaged Card
                                                         </span>
                                                         {originalRfidUid && (
@@ -930,16 +930,16 @@ export default function Workers() {
                                                                     setIsReplacingRfid(false);
                                                                     setTapAlert(null);
                                                                 }}
-                                                                className="text-[7.5px] font-bold text-gray-600 hover:text-gray-900 underline cursor-pointer"
+                                                                className="text-[10px] font-bold text-gray-600 hover:text-gray-900 underline cursor-pointer"
                                                             >
                                                                 Cancel Replacement
                                                             </button>
                                                         )}
                                                     </div>
-                                                    <p className="text-[7.5px] text-amber-800">
+                                                    <p className="text-[10px] text-amber-800">
                                                         Previous Card: <code className="font-mono bg-white px-1 py-0.5 rounded border border-amber-300 text-red-700 line-through font-bold">{originalRfidUid}</code>
                                                     </p>
-                                                    <p className="text-[7px] text-amber-700 italic">
+                                                    <p className="text-[10px] text-amber-700 italic">
                                                         Tap the new RFID card on the ESP32 hardware reader, or type the new UID below. The lost card will be disconnected once saved.
                                                     </p>
                                                 </div>
@@ -957,7 +957,7 @@ export default function Workers() {
                                                                 value={formData.rfid_uid || ''}
                                                                 onChange={(e) => setFormData(prev => ({ ...prev, rfid_uid: e.target.value.toUpperCase() }))}
                                                                 placeholder={isReplacingRfid ? "Tap NEW card on ESP32 or enter new UID" : "Tap card on ESP32 or enter UID"}
-                                                                className={`w-full bg-[#f4f1ee] border rounded-md pl-2 pr-24 py-1.5 text-[9px] font-mono font-bold text-gray-800 tracking-wider outline-none transition-all ${
+                                                                className={`w-full bg-[#f4f1ee] border rounded-md pl-2 pr-24 py-1.5 text-[11px] font-mono font-bold text-gray-800 tracking-wider outline-none transition-all ${
                                                                     duplicateWorker 
                                                                         ? 'border-red-500 bg-red-50/70 ring-2 ring-red-400 text-red-900' 
                                                                         : tapAlert 
@@ -966,7 +966,7 @@ export default function Workers() {
                                                                 }`}
                                                             />
                                                             {formData.rfid_uid && (
-                                                                <span className={`absolute right-1.5 top-1/2 -translate-y-1/2 text-[7.5px] font-bold px-1.5 py-0.5 rounded border ${
+                                                                <span className={`absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] font-bold px-1.5 py-0.5 rounded border ${
                                                                     duplicateWorker 
                                                                         ? 'text-red-700 bg-red-100 border-red-300 animate-pulse' 
                                                                         : 'text-emerald-700 bg-emerald-50 border-emerald-200'
@@ -981,13 +981,13 @@ export default function Workers() {
                                                             <div className="mt-1.5 p-2 bg-red-50 border-l-4 border-red-500 rounded-r-md flex items-start gap-1.5 shadow-xs">
                                                                 <span className="text-xs">🚫</span>
                                                                 <div className="flex-1">
-                                                                    <div className="text-[8px] font-extrabold text-red-900 uppercase">
+                                                                    <div className="text-[11px] font-extrabold text-red-900 uppercase">
                                                                         Bawal ang Duplicate RFID Card!
                                                                     </div>
-                                                                    <p className="text-[7.5px] text-red-800 mt-0.5 leading-snug">
+                                                                    <p className="text-[10px] text-red-800 mt-0.5 leading-snug">
                                                                         Ang card na <code className="font-mono bg-white px-1 py-0.2 rounded border border-red-200 font-bold">{cleanCurrent}</code> ay kasalukuyang nakatalaga na kay <strong className="text-red-950 underline">{duplicateWorker.full_name || `${duplicateWorker.first_name} ${duplicateWorker.last_name}`}</strong> ({duplicateWorker.role || 'Worker'}).
                                                                     </p>
-                                                                    <p className="text-[7px] text-red-700 mt-0.5 font-medium italic">
+                                                                    <p className="text-[10px] text-red-700 mt-0.5 font-medium italic">
                                                                         Bawal maglagay ng parehong RFID card sa magkaibang account. Mangyaring gumamit ng ibang card.
                                                                     </p>
                                                                 </div>
@@ -1009,7 +1009,7 @@ export default function Workers() {
                                                                 setModalOpenedAt(Date.now());
                                                                 setTapAlert('Ready: Tap new replacement card on your ESP32 scanner.');
                                                             }}
-                                                            className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded text-[7.5px] font-bold transition-all cursor-pointer shadow-xs"
+                                                            className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded text-[10px] font-bold transition-all cursor-pointer shadow-xs"
                                                             title="Change or replace this RFID card if lost or damaged"
                                                         >
                                                             <span>🔄</span> Change / Replace RFID (Lost Card)
@@ -1022,7 +1022,7 @@ export default function Workers() {
                                                                     setTapAlert('RFID card unlinked. Click Save to apply.');
                                                                 }
                                                             }}
-                                                            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded text-[7.5px] font-bold transition-all cursor-pointer"
+                                                            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded text-[10px] font-bold transition-all cursor-pointer"
                                                             title="Unlink and disconnect physical RFID card"
                                                         >
                                                             <span>✕</span> Unlink Card
@@ -1035,7 +1035,7 @@ export default function Workers() {
                                                             setFormData(prev => ({ ...prev, rfid_uid: originalRfidUid }));
                                                             setTapAlert(null);
                                                         }}
-                                                        className="text-[7.5px] text-gray-500 hover:text-gray-800 underline font-medium cursor-pointer"
+                                                        className="text-[10px] text-gray-500 hover:text-gray-800 underline font-medium cursor-pointer"
                                                     >
                                                         Restore previous card ({originalRfidUid})
                                                     </button>
@@ -1043,19 +1043,19 @@ export default function Workers() {
                                             </div>
 
                                             {tapAlert ? (
-                                                <p className="text-[7.5px] font-bold text-emerald-700 mt-1 flex items-center gap-1">
+                                                <p className="text-[10px] font-bold text-emerald-700 mt-1 flex items-center gap-1">
                                                     <span>✅</span> {tapAlert}
                                                 </p>
                                             ) : (
-                                                <p className="text-[7px] text-gray-400 mt-0.5">
+                                                <p className="text-[10px] text-gray-400 mt-0.5">
                                                     Scan with hardware reader or type UID manually.
                                                 </p>
                                             )}
                                         </div>
                                         <div className="sm:col-span-2">
-                                            <label className="block text-[8px] font-bold text-gray-700 mb-1 uppercase flex items-center justify-between">
+                                            <label className="block text-[11px] font-bold text-gray-700 mb-1 uppercase flex items-center justify-between">
                                                 <span>Position / Roles (Select all that apply) <span className="text-[#A63228]">*</span></span>
-                                                <span className="text-[7.5px] font-medium text-gray-500 normal-case bg-gray-100 px-1.5 py-0.5 rounded">
+                                                <span className="text-[10px] font-medium text-gray-500 normal-case bg-gray-100 px-1.5 py-0.5 rounded">
                                                     Saved as: <strong className="text-[#A63228]">{Array.isArray(formData.positions) ? formData.positions.join(', ') : (formData.position || 'Worker')}</strong>
                                                 </span>
                                             </label>
@@ -1081,19 +1081,19 @@ export default function Workers() {
                                                                 readOnly
                                                                 className="w-3.5 h-3.5 rounded text-[#A63228] focus:ring-[#A63228] accent-[#A63228] cursor-pointer"
                                                             />
-                                                            <span className="text-[8.5px] leading-tight select-none">
+                                                            <span className="text-[11px] leading-tight select-none">
                                                                 {opt}
                                                             </span>
                                                         </label>
                                                     );
                                                 })}
                                             </div>
-                                            <p className="text-[7px] text-gray-400 mt-1">
+                                            <p className="text-[10px] text-gray-400 mt-1">
                                                 * Note: Specific mobile features (such as Tools or Attendance monitoring) unlock automatically based on these keywords.
                                             </p>
                                         </div>
                                         <div className="sm:col-span-2">
-                                            <label className="block text-[8px] font-bold text-gray-700 mb-0.5 uppercase">
+                                            <label className="block text-[11px] font-bold text-gray-700 mb-0.5 uppercase">
                                                 {modalState === 'ADD' ? 'Initial Mobile Login Password' : 'Change Password (Optional)'}
                                             </label>
                                             <input
@@ -1102,13 +1102,13 @@ export default function Workers() {
                                                 value={formData.password || ''}
                                                 onChange={handleInputChange}
                                                 placeholder={modalState === 'ADD' ? 'Create password for mobile app' : 'Leave blank to keep existing password'}
-                                                className="w-full bg-[#f4f1ee] border border-transparent rounded-md px-2 py-1.5 text-[9px] font-medium focus:border-[#A63228] outline-none"
+                                                className="w-full bg-[#f4f1ee] border border-transparent rounded-md px-2 py-1.5 text-[11px] font-medium focus:border-[#A63228] outline-none"
                                             />
                                         </div>
                                     </div>
                                 </div>
 
-                                <button type="submit" className="w-full mt-1 py-2 bg-[#E8C547] text-gray-900 rounded-lg text-[9px] font-bold hover:bg-[#d4b33d] transition-colors shadow-sm">
+                                <button type="submit" className="w-full mt-1 py-2 bg-[#E8C547] text-gray-900 rounded-lg text-[11px] font-bold hover:bg-[#d4b33d] transition-colors shadow-sm">
                                     {modalState === 'ADD' ? 'Save New Worker' : 'Update Profile'}
                                 </button>
                             </form>
@@ -1129,8 +1129,8 @@ export default function Workers() {
                             </svg>
                         </div>
                         <h3 className="text-[11px] font-extrabold text-gray-900 mb-1">Success!</h3>
-                        <p className="text-[9px] text-gray-500 mb-4 px-2 leading-relaxed">{successMsg}</p>
-                        <button onClick={() => setModalState('NONE')} className="w-full py-1.5 bg-[#8B1A10] text-white rounded-lg text-[9px] font-bold hover:bg-[#72150d] transition-colors">
+                        <p className="text-[11px] text-gray-500 mb-4 px-2 leading-relaxed">{successMsg}</p>
+                        <button onClick={() => setModalState('NONE')} className="w-full py-1.5 bg-[#8B1A10] text-white rounded-lg text-[11px] font-bold hover:bg-[#72150d] transition-colors">
                             Done
                         </button>
                     </div>
@@ -1157,15 +1157,15 @@ export default function Workers() {
                                 <div className="pr-6">
                                     <h3 className="text-sm font-extrabold text-white leading-tight">{viewWorker.full_name}</h3>
                                     <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                                        <span className="text-[7.5px] bg-white/20 text-white px-2 py-0.5 rounded font-bold uppercase tracking-wider">
+                                        <span className="text-[10px] bg-white/20 text-white px-2 py-0.5 rounded font-bold uppercase tracking-wider">
                                             {viewWorker.role || 'Worker'}
                                         </span>
-                                        <span className={`text-[7.5px] px-2 py-0.5 rounded font-extrabold uppercase tracking-wider ${
+                                        <span className={`text-[10px] px-2 py-0.5 rounded font-extrabold uppercase tracking-wider ${
                                             viewWorker.status === 'Active' ? 'bg-[#e6f4ea] text-[#2e7d32]' : 'bg-gray-700 text-gray-300'
                                         }`}>
                                             {viewWorker.status || 'Active'}
                                         </span>
-                                        <span className={`text-[7.5px] px-2 py-0.5 rounded font-extrabold uppercase tracking-wider ${approvalBadgeStyles(viewWorker.approval_status || 'Pending')}`}>
+                                        <span className={`text-[10px] px-2 py-0.5 rounded font-extrabold uppercase tracking-wider ${approvalBadgeStyles(viewWorker.approval_status || 'Pending')}`}>
                                             {viewWorker.approval_status || 'Pending'}
                                         </span>
                                     </div>
@@ -1174,24 +1174,24 @@ export default function Workers() {
                         </div>
 
                         {/* Profile Body */}
-                        <div className="overflow-y-auto p-4 flex flex-col gap-3 text-gray-700 text-[9px]">
+                        <div className="overflow-y-auto p-4 flex flex-col gap-3 text-gray-700 text-[11px]">
                             {/* Compensation & RFID Summary */}
                             <div className="grid grid-cols-2 gap-2 bg-[#f8f6f3] p-2.5 rounded-lg border border-gray-200/70">
                                 <div>
-                                    <span className="text-[7.5px] uppercase font-bold text-gray-400 block mb-0.5">Daily Salary Rate</span>
+                                    <span className="text-[10px] uppercase font-bold text-gray-400 block mb-0.5">Daily Salary Rate</span>
                                     <span className="text-xs font-black text-[#A63228]">
                                         ₱{Number(viewWorker.daily_rate || 600).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                     </span>
-                                    <span className="text-[7px] text-gray-400 block mt-0.5">per regular 8h workday</span>
+                                    <span className="text-[10px] text-gray-400 block mt-0.5">per regular 8h workday</span>
                                 </div>
                                 <div>
-                                    <span className="text-[7.5px] uppercase font-bold text-gray-400 block mb-0.5">Physical RFID Card</span>
+                                    <span className="text-[10px] uppercase font-bold text-gray-400 block mb-0.5">Physical RFID Card</span>
                                     {viewWorker.rfid_uid ? (
                                         <div className="flex items-center gap-1 flex-wrap mt-0.5">
-                                            <span className="font-mono font-extrabold text-[8.5px] text-amber-900 bg-amber-100 px-1.5 py-0.5 rounded border border-amber-300">
+                                            <span className="font-mono font-extrabold text-[11px] text-amber-900 bg-amber-100 px-1.5 py-0.5 rounded border border-amber-300">
                                                 💳 {viewWorker.rfid_uid}
                                             </span>
-                                            <span className="text-[7px] text-emerald-700 font-bold bg-emerald-50 px-1 py-0.5 rounded border border-emerald-200">
+                                            <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-1 py-0.5 rounded border border-emerald-200">
                                                 LINKED
                                             </span>
                                             <button
@@ -1207,14 +1207,14 @@ export default function Workers() {
                                                         setTapAlert('Ready: Tap new replacement card on your ESP32 scanner.');
                                                     }, 150);
                                                 }}
-                                                className="ml-1 text-[7px] font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 px-1.5 py-0.5 rounded border border-amber-300 transition-all cursor-pointer inline-flex items-center gap-0.5"
+                                                className="ml-1 text-[10px] font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 px-1.5 py-0.5 rounded border border-amber-300 transition-all cursor-pointer inline-flex items-center gap-0.5"
                                                 title="Replace lost or damaged RFID card"
                                             >
                                                 <span>🔄</span> Replace Card
                                             </button>
                                         </div>
                                     ) : (
-                                        <span className="text-[8px] text-gray-400 italic font-medium block mt-1">
+                                        <span className="text-[11px] text-gray-400 italic font-medium block mt-1">
                                             No RFID card linked
                                         </span>
                                     )}
@@ -1233,17 +1233,17 @@ export default function Workers() {
                                     />
                                 </div>
                                 <div className="min-w-0">
-                                    <h4 className="text-[8px] font-extrabold uppercase tracking-wider text-gray-500">Worker ID QR Code</h4>
+                                    <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-gray-500">Worker ID QR Code</h4>
                                     <p className="mt-1 break-all font-mono text-[10px] font-bold text-gray-900">
                                         {viewWorker.worker_code || viewWorker.id}
                                     </p>
-                                    <p className="mt-1 text-[8px] leading-relaxed text-gray-500">
+                                    <p className="mt-1 text-[11px] leading-relaxed text-gray-500">
                                         Scan to read this worker's ID.
                                     </p>
                                     <button
                                         type="button"
                                         onClick={() => downloadWorkerQrCode(viewWorker)}
-                                        className="mt-2 inline-flex items-center gap-1 rounded bg-[#A63228] px-2 py-1 text-[8px] font-bold text-white transition-colors hover:bg-[#84251e]"
+                                        className="mt-2 inline-flex items-center gap-1 rounded bg-[#A63228] px-2 py-1 text-[11px] font-bold text-white transition-colors hover:bg-[#84251e]"
                                     >
                                         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -1256,13 +1256,13 @@ export default function Workers() {
 
                             {/* Job Positions / Specializations */}
                             <div>
-                                <h4 className="text-[7.5px] font-extrabold text-gray-400 uppercase tracking-widest mb-1 pb-0.5 border-b border-gray-100">
+                                <h4 className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-1 pb-0.5 border-b border-gray-100">
                                     Specializations & Roles
                                 </h4>
                                 <div className="flex flex-wrap gap-1 mt-1">
                                     {viewWorker.position ? (
                                         viewWorker.position.split(',').map((pos, i) => (
-                                            <span key={i} className="bg-red-50 text-[#A63228] border border-red-100 px-2 py-0.5 rounded text-[8px] font-bold">
+                                            <span key={i} className="bg-red-50 text-[#A63228] border border-red-100 px-2 py-0.5 rounded text-[11px] font-bold">
                                                 {pos.trim()}
                                             </span>
                                         ))
@@ -1274,25 +1274,25 @@ export default function Workers() {
 
                             {/* Personal Details */}
                             <div>
-                                <h4 className="text-[7.5px] font-extrabold text-gray-400 uppercase tracking-widest mb-1.5 pb-0.5 border-b border-gray-100">
+                                <h4 className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-1.5 pb-0.5 border-b border-gray-100">
                                     Personal Details
                                 </h4>
                                 <div className="grid grid-cols-2 gap-2 bg-gray-50 p-2.5 rounded-lg border border-gray-100">
                                     <div>
-                                        <span className="text-[7.5px] text-gray-400 font-bold uppercase block">Contact Phone</span>
-                                        <span className="text-[9px] font-extrabold text-gray-900 mt-0.5 block">
+                                        <span className="text-[10px] text-gray-400 font-bold uppercase block">Contact Phone</span>
+                                        <span className="text-[11px] font-extrabold text-gray-900 mt-0.5 block">
                                             {viewWorker.phone || '—'}
                                         </span>
                                     </div>
                                     <div>
-                                        <span className="text-[7.5px] text-gray-400 font-bold uppercase block">Age</span>
-                                        <span className="text-[9px] font-extrabold text-gray-900 mt-0.5 block">
+                                        <span className="text-[10px] text-gray-400 font-bold uppercase block">Age</span>
+                                        <span className="text-[11px] font-extrabold text-gray-900 mt-0.5 block">
                                             {viewWorker.age ? `${viewWorker.age} years old` : '—'}
                                         </span>
                                     </div>
                                     <div className="col-span-2">
-                                        <span className="text-[7.5px] text-gray-400 font-bold uppercase block">Birth Date</span>
-                                        <span className="text-[9px] font-bold text-gray-900 mt-0.5 block">
+                                        <span className="text-[10px] text-gray-400 font-bold uppercase block">Birth Date</span>
+                                        <span className="text-[11px] font-bold text-gray-900 mt-0.5 block">
                                             {viewWorker.birthday ? new Date(viewWorker.birthday).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '—'}
                                         </span>
                                     </div>
@@ -1301,11 +1301,11 @@ export default function Workers() {
 
                             {/* Address Details */}
                             <div>
-                                <h4 className="text-[7.5px] font-extrabold text-gray-400 uppercase tracking-widest mb-1.5 pb-0.5 border-b border-gray-100">
+                                <h4 className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-1.5 pb-0.5 border-b border-gray-100">
                                     Residential Address
                                 </h4>
                                 <div className="bg-gray-50 p-2.5 rounded-lg border border-gray-100">
-                                    <p className="text-[8.5px] font-semibold text-gray-800 leading-relaxed flex items-start gap-1">
+                                    <p className="text-[11px] font-semibold text-gray-800 leading-relaxed flex items-start gap-1">
                                         <span className="shrink-0">📍</span>
                                         <span>{viewWorker.address || 'No complete address on file.'}</span>
                                     </p>
@@ -1313,7 +1313,7 @@ export default function Workers() {
                             </div>
 
                             {/* Metadata Footer */}
-                            <div className="flex justify-between items-center text-[7.5px] text-gray-400 pt-1.5 border-t border-gray-100">
+                            <div className="flex justify-between items-center text-[10px] text-gray-400 pt-1.5 border-t border-gray-100">
                                 <span>Worker ID: {viewWorker.worker_code || viewWorker.id}</span>
                                 <span>
                                     {viewWorker.created_at ? `Registered: ${new Date(viewWorker.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : ''}
@@ -1329,7 +1329,7 @@ export default function Workers() {
                                     setViewWorker(null);
                                     openEditModal(target);
                                 }}
-                                className="px-3 py-1.5 bg-[#E8C547] text-gray-900 rounded-md text-[8.5px] font-extrabold hover:bg-[#d4b33d] transition-colors shadow-sm flex items-center gap-1"
+                                className="px-3 py-1.5 bg-[#E8C547] text-gray-900 rounded-md text-[11px] font-extrabold hover:bg-[#d4b33d] transition-colors shadow-sm flex items-center gap-1"
                             >
                                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                                 Edit Profile
@@ -1339,7 +1339,7 @@ export default function Workers() {
                                     toggleWorkerStatus(viewWorker);
                                     setViewWorker(prev => ({ ...prev, status: prev.status === 'Active' ? 'Inactive' : 'Active' }));
                                 }}
-                                className={`px-2.5 py-1.5 rounded-md text-[8.5px] font-bold border transition-colors ${
+                                className={`px-2.5 py-1.5 rounded-md text-[11px] font-bold border transition-colors ${
                                     viewWorker.status === 'Active'
                                         ? 'bg-white border-[#A63228] text-[#A63228] hover:bg-red-50'
                                         : 'bg-[#e6f4ea] border-[#2e7d32] text-[#2e7d32] hover:bg-green-100'
@@ -1349,7 +1349,7 @@ export default function Workers() {
                             </button>
                             <button
                                 onClick={handleCloseProfileModal}
-                                className="px-3 py-1.5 bg-gray-200 text-gray-700 rounded-md text-[8.5px] font-bold hover:bg-gray-300 transition-colors"
+                                className="px-3 py-1.5 bg-gray-200 text-gray-700 rounded-md text-[11px] font-bold hover:bg-gray-300 transition-colors"
                             >
                                 Close
                             </button>

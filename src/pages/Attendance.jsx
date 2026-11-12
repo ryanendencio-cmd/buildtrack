@@ -727,7 +727,7 @@ export default function Attendance() {
         <AdminLayout>
             {/* ── HEADER TITLE ── */}
             <div className="mb-3">
-                <span className="text-[9px] font-bold text-[#A63228] tracking-widest uppercase">ATTENDANCE MANAGEMENT</span>
+                <span className="text-[11px] font-bold text-[#A63228] tracking-widest uppercase">ATTENDANCE MANAGEMENT</span>
                 <h1 className="text-xl font-extrabold text-gray-900 mt-0.5 tracking-tight">Attendance Management</h1>
                 <p className="text-[10px] text-gray-500 mt-0.5">Automated attendance system with schedule tracking and non-working day management.</p>
             </div>
@@ -758,7 +758,7 @@ export default function Attendance() {
                     </div>
                     <div>
                         <div className="flex flex-wrap items-center gap-2">
-                            <span className={`text-[8px] font-extrabold px-2 py-0.5 rounded uppercase tracking-wider ${
+                            <span className={`text-[11px] font-extrabold px-2 py-0.5 rounded uppercase tracking-wider ${
                                 isNonWorkingDay
                                     ? 'bg-blue-200 text-blue-900'
                                     : isAttendanceOpen
@@ -767,7 +767,7 @@ export default function Attendance() {
                             }`}>
                                 {terminalLabel}
                             </span>
-                            <span className="text-[9px] text-gray-500 font-bold">
+                            <span className="text-[11px] text-gray-500 font-bold">
                                 {selectedDate === todayISO ? `Site Clock: ${currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}` : `Date: ${selectedDate}`}
                             </span>
                         </div>
@@ -816,7 +816,7 @@ export default function Attendance() {
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-4 gap-3">
 
                 <div className="w-full md:w-auto">
-                    <label className="block text-[8px] font-bold text-gray-400 tracking-wider uppercase mb-1">PROJECT</label>
+                    <label className="block text-[11px] font-bold text-gray-400 tracking-wider uppercase mb-1">PROJECT</label>
                     <select
                         value={currentProjectId}
                         onChange={handleProjectChange}
@@ -900,19 +900,19 @@ export default function Attendance() {
                         type="date"
                         value={selectedDate}
                         onChange={(e) => setSelectedDate(e.target.value)}
-                        className="bg-[#f4f1ee] px-2 py-1 rounded text-[9px] font-bold text-[#A63228] outline-none border border-transparent focus:border-[#A63228]"
+                        className="bg-[#f4f1ee] px-2 py-1 rounded text-[11px] font-bold text-[#A63228] outline-none border border-transparent focus:border-[#A63228]"
                     />
                 </div>
 
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 mb-2.5">
                     <div>
-                        <p className="text-[9px] font-extrabold text-orange-900 uppercase">Overtime requirement for {selectedDate}</p>
-                        <p className="text-[9px] text-orange-800">Workers only earn overtime when this is enabled and their minutes are approved below.</p>
+                        <p className="text-[11px] font-extrabold text-orange-900 uppercase">Overtime requirement for {selectedDate}</p>
+                        <p className="text-[11px] text-orange-800">Workers only earn overtime when this is enabled and their minutes are approved below.</p>
                     </div>
                     <button
                         type="button"
                         onClick={() => handleOvertimeRequirementChange(!overtimeDayRequired)}
-                        className={`px-3 py-1.5 rounded-lg text-[9px] font-bold text-white ${overtimeDayRequired ? 'bg-[#2e7d32]' : 'bg-gray-500'}`}
+                        className={`px-3 py-1.5 rounded-lg text-[11px] font-bold text-white ${overtimeDayRequired ? 'bg-[#2e7d32]' : 'bg-gray-500'}`}
                     >
                         {overtimeDayRequired ? 'Required — click to disable' : 'Not required — click to enable'}
                     </button>
@@ -932,21 +932,21 @@ export default function Attendance() {
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     <div className="bg-[#e6f4ea]/40 rounded-lg p-2 text-center border border-[#c3e6cb]">
                         <h2 className="text-lg font-extrabold text-[#2e7d32]">{presentCount}</h2>
-                        <p className="text-[8px] font-bold text-[#2e7d32] tracking-wider mt-0.5 uppercase">FULL DAY</p>
+                        <p className="text-[11px] font-bold text-[#2e7d32] tracking-wider mt-0.5 uppercase">FULL DAY</p>
                     </div>
                     <div className="bg-[#fff8e1] rounded-lg p-2 text-center border border-[#ffe082]">
                         <h2 className="text-lg font-extrabold text-[#f57f17]">{lateCount}</h2>
-                        <p className="text-[8px] font-bold text-[#f57f17] tracking-wider mt-0.5 uppercase">LATE</p>
+                        <p className="text-[11px] font-bold text-[#f57f17] tracking-wider mt-0.5 uppercase">LATE</p>
                     </div>
                     <div className="bg-[#fff3e0] rounded-lg p-2 text-center border border-[#ffcc80]">
                         <h2 className="text-lg font-extrabold text-[#e65100]">{halfdayCount}</h2>
-                        <p className="text-[8px] font-bold text-[#e65100] tracking-wider mt-0.5 uppercase">HALFDAY</p>
+                        <p className="text-[11px] font-bold text-[#e65100] tracking-wider mt-0.5 uppercase">HALFDAY</p>
                     </div>
                     <div className={isNonWorkingDay ? "bg-[#e8f0fe] rounded-lg p-2 text-center border border-[#aecbfa]" : "bg-[#fdecea] rounded-lg p-2 text-center border border-[#f5c6cb]"}>
                         <h2 className={`text-lg font-extrabold ${isNonWorkingDay ? 'text-[#1967d2]' : 'text-[#A63228]'}`}>
                             {isNonWorkingDay ? '0' : absentCount}
                         </h2>
-                        <p className={`text-[8px] font-bold tracking-wider mt-0.5 uppercase ${isNonWorkingDay ? 'text-[#1967d2]' : 'text-[#A63228]'}`}>
+                        <p className={`text-[11px] font-bold tracking-wider mt-0.5 uppercase ${isNonWorkingDay ? 'text-[#1967d2]' : 'text-[#A63228]'}`}>
                             {isNonWorkingDay ? 'REST DAY (0 ABSENT)' : 'ABSENT'}
                         </p>
                     </div>
@@ -955,8 +955,8 @@ export default function Attendance() {
 
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-3 overflow-x-auto">
                 <div className="flex justify-between items-center mb-3">
-                    <h3 className="text-[9px] font-extrabold text-gray-900 tracking-wider uppercase">2-SESSION WORKER ATTENDANCE (MORNING & AFTERNOON)</h3>
-                    <span className="text-[8px] text-gray-500 font-bold bg-gray-50 px-2 py-0.5 rounded border border-gray-200">
+                    <h3 className="text-[11px] font-extrabold text-gray-900 tracking-wider uppercase">2-SESSION WORKER ATTENDANCE (MORNING & AFTERNOON)</h3>
+                    <span className="text-[11px] text-gray-500 font-bold bg-gray-50 px-2 py-0.5 rounded border border-gray-200">
                         AM: {attendanceSettings.morning_time_in_start}–{attendanceSettings.morning_time_in_close} Time In / {attendanceSettings.morning_time_out_start}–{attendanceSettings.morning_time_out_close} Time Out
                         {' • '}
                         PM: {attendanceSettings.afternoon_time_in_start}–{attendanceSettings.afternoon_time_in_close} Time In / {attendanceSettings.afternoon_time_out_start}–{attendanceSettings.afternoon_time_out_close} Time Out
@@ -965,14 +965,14 @@ export default function Attendance() {
                 <table className="w-full text-left border-collapse min-w-[900px]">
                     <thead>
                         <tr>
-                            <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[20%] uppercase tracking-wider">WORKER NAME</th>
-                            <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[14%] uppercase tracking-wider text-center">ROLE</th>
-                            <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[16%] uppercase tracking-wider text-center">STATUS</th>
-                            <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[14%] uppercase tracking-wider text-center">MORNING (IN-OUT)</th>
-                            <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[14%] uppercase tracking-wider text-center">AFTERNOON (IN-OUT)</th>
-                            <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[11%] uppercase tracking-wider text-right pr-3">EARNED WAGE</th>
-                            <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[13%] uppercase tracking-wider text-center">OVERTIME</th>
-                            <th className="text-[8px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[11%] uppercase tracking-wider text-right pr-4">ADVANCE</th>
+                            <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[20%] uppercase tracking-wider">WORKER NAME</th>
+                            <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[14%] uppercase tracking-wider text-center">ROLE</th>
+                            <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[16%] uppercase tracking-wider text-center">STATUS</th>
+                            <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[14%] uppercase tracking-wider text-center">MORNING (IN-OUT)</th>
+                            <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[14%] uppercase tracking-wider text-center">AFTERNOON (IN-OUT)</th>
+                            <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[11%] uppercase tracking-wider text-right pr-3">EARNED WAGE</th>
+                            <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[13%] uppercase tracking-wider text-center">OVERTIME</th>
+                            <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[11%] uppercase tracking-wider text-right pr-4">ADVANCE</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -990,10 +990,10 @@ export default function Attendance() {
                                 <tr key={worker.id} className="hover:bg-gray-50/50 transition-colors">
                                     <td className="py-2.5 text-[10px] font-extrabold text-gray-900 border-b border-gray-50">{worker.worker_name || worker.name}</td>
                                     <td className="py-2.5 border-b border-gray-50 text-center">
-                                        <span className="text-[9px] font-bold text-gray-900 uppercase tracking-wider">{worker.role}</span>
+                                        <span className="text-[11px] font-bold text-gray-900 uppercase tracking-wider">{worker.role}</span>
                                     </td>
                                     <td className="py-2.5 border-b border-gray-50 text-center">
-                                        <span className={`inline-block px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider ${
+                                        <span className={`inline-block px-1.5 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider ${
                                             isNonWorkingDay
                                                 ? 'bg-blue-100 text-blue-700 font-extrabold'
                                                 : worker.status === 'Present'
@@ -1019,17 +1019,17 @@ export default function Attendance() {
                                                 : worker.status}
                                         </span>
                                     </td>
-                                    <td className="py-2.5 text-[9px] font-bold text-gray-800 border-b border-gray-50 text-center">
+                                    <td className="py-2.5 text-[11px] font-bold text-gray-800 border-b border-gray-50 text-center">
                                         <span className={mIn !== '—' ? 'text-gray-900' : 'text-gray-400'}>{mIn}</span>
                                         <span className="text-gray-400 mx-1">→</span>
                                         <span className={mOut !== '—' ? 'text-blue-600' : 'text-gray-400'}>{mOut}</span>
                                     </td>
-                                    <td className="py-2.5 text-[9px] font-bold text-gray-800 border-b border-gray-50 text-center">
+                                    <td className="py-2.5 text-[11px] font-bold text-gray-800 border-b border-gray-50 text-center">
                                         <span className={aIn !== '—' ? 'text-gray-900' : 'text-gray-400'}>{aIn}</span>
                                         <span className="text-gray-400 mx-1">→</span>
                                         <span className={aOut !== '—' ? 'text-blue-600' : 'text-gray-400'}>{aOut}</span>
                                     </td>
-                                    <td className="py-2.5 text-[9px] font-extrabold border-b border-gray-50 text-right pr-3">
+                                    <td className="py-2.5 text-[11px] font-extrabold border-b border-gray-50 text-right pr-3">
                                         {isNonWorkingDay ? (
                                             <span className="text-gray-400 font-medium">₱0.00 (Off)</span>
                                         ) : worker.status !== 'Absent' ? (
@@ -1051,18 +1051,18 @@ export default function Attendance() {
                                             value={overtimeMinutesInputs[worker.id] ?? worker.overtime_minutes ?? 0}
                                             onChange={event => setOvertimeMinutesInputs(previous => ({ ...previous, [worker.id]: event.target.value }))}
                                             disabled={!overtimeDayRequired}
-                                            className="w-16 border border-gray-200 rounded px-1.5 py-1 text-[9px] disabled:bg-gray-100"
+                                            className="w-16 border border-gray-200 rounded px-1.5 py-1 text-[11px] disabled:bg-gray-100"
                                         />
                                         <button
                                             type="button"
                                             onClick={() => handleOvertimeApproval(worker)}
                                             disabled={!overtimeDayRequired || Number(overtimeMinutesInputs[worker.id] ?? worker.overtime_minutes ?? 0) <= 0}
-                                            className={`ml-1 px-2 py-1 rounded text-[8px] font-bold text-white disabled:bg-gray-300 ${worker.overtime_approved ? 'bg-gray-500' : 'bg-[#2e7d32]'}`}
+                                            className={`ml-1 px-2 py-1 rounded text-[11px] font-bold text-white disabled:bg-gray-300 ${worker.overtime_approved ? 'bg-gray-500' : 'bg-[#2e7d32]'}`}
                                             title={worker.overtime_approved ? 'Revoke approval' : 'Approve recorded overtime'}
                                         >
                                             {worker.overtime_approved ? 'Approved' : 'Approve'}
                                         </button>
-                                        <div className="text-[8px] text-gray-500 mt-1">
+                                        <div className="text-[11px] text-gray-500 mt-1">
                                             {approvedOvertimePay > 0 ? `₱${approvedOvertimePay.toFixed(2)}` : 'minutes'}
                                         </div>
                                     </td>
@@ -1083,7 +1083,7 @@ export default function Attendance() {
 
 
             <div className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 mb-4">
-                <h3 className="text-[9px] font-extrabold text-[#A63228] tracking-wider uppercase mb-2">DAILY MANPOWER EXPENSE</h3>
+                <h3 className="text-[11px] font-extrabold text-[#A63228] tracking-wider uppercase mb-2">DAILY MANPOWER EXPENSE</h3>
                 <div className="flex flex-col gap-1.5">
                     <div className="flex justify-between items-center text-[10px] border-b border-gray-50 pb-1.5">
                         <span className="text-gray-600 font-medium">Skilled Workers/Operators ({skilledPresent} present)</span>
@@ -1113,7 +1113,7 @@ export default function Attendance() {
                         <div className="flex justify-between items-start p-4 border-b border-gray-100">
                             <div>
                                 <h2 className="text-sm font-extrabold text-gray-900">RFID Attendance Kiosk</h2>
-                                <p className="text-[9px] text-gray-500 mt-1 leading-relaxed">Please tap the ID card on the ESP32 scanner to log attendance.</p>
+                                <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">Please tap the ID card on the ESP32 scanner to log attendance.</p>
                             </div>
                             <button onClick={closeRfidKiosk} className="text-gray-400 bg-gray-100 rounded-full p-1 hover:text-gray-800 transition-colors">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
@@ -1123,30 +1123,30 @@ export default function Attendance() {
                         <div className="flex flex-col items-center justify-center p-6 pb-4 text-center">
                             <div className="w-20 h-20 bg-[#fce8e6] rounded-full flex items-center justify-center text-[#A63228] font-extrabold text-sm mb-4">RFID</div>
                             <h3 className="text-[13px] font-extrabold text-gray-900 mb-1">Waiting for Card...</h3>
-                            <p className="text-[9px] text-gray-500 max-w-[220px] mb-2">Tap the worker's registered RFID/NFC ID card on the ESP32 scanner.</p>
+                            <p className="text-[11px] text-gray-500 max-w-[220px] mb-2">Tap the worker's registered RFID/NFC ID card on the ESP32 scanner.</p>
                             
-                            <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-[8px] font-bold px-2.5 py-1 rounded-full mb-3">
+                            <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-bold px-2.5 py-1 rounded-full mb-3">
                                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                                 <span>ESP32 Hardware Endpoint Online</span>
                             </div>
 
                             {/* Developer Tools for Simulation */}
                             <div className="w-full mt-2 p-3 bg-gray-50 border border-dashed border-gray-300 rounded-lg">
-                                <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mb-2">Simulation Tools (2-Session Rules)</p>
+                                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">Simulation Tools (2-Session Rules)</p>
                                 <div className="flex flex-col gap-1.5">
-                                    <button onClick={() => simulateTapCard('Juan Dela Cruz', 'Skilled - Mason', 800, '07:45 AM')} className="w-full py-1.5 bg-white border border-gray-200 text-gray-700 rounded text-[9px] font-bold hover:bg-gray-100 shadow-sm transition-colors text-left px-3">
+                                    <button onClick={() => simulateTapCard('Juan Dela Cruz', 'Skilled - Mason', 800, '07:45 AM')} className="w-full py-1.5 bg-white border border-gray-200 text-gray-700 rounded text-[11px] font-bold hover:bg-gray-100 shadow-sm transition-colors text-left px-3">
                                         🌅 Morning On-Time (7:45 AM): <span className="text-[#2e7d32]">Juan (On-time)</span>
                                     </button>
-                                    <button onClick={() => simulateTapCard('Pedro Santos', 'Laborer / Helper', 600, '08:30 AM')} className="w-full py-1.5 bg-white border border-gray-200 text-gray-700 rounded text-[9px] font-bold hover:bg-gray-100 shadow-sm transition-colors text-left px-3">
+                                    <button onClick={() => simulateTapCard('Pedro Santos', 'Laborer / Helper', 600, '08:30 AM')} className="w-full py-1.5 bg-white border border-gray-200 text-gray-700 rounded text-[11px] font-bold hover:bg-gray-100 shadow-sm transition-colors text-left px-3">
                                         🌅 Morning Late (8:30 AM): <span className="text-[#f57f17]">Pedro (Late -₱100)</span>
                                     </button>
-                                    <button onClick={() => simulateTapCard('Juan Dela Cruz', 'Skilled - Mason', 800, '12:00 PM')} className="w-full py-1.5 bg-white border border-gray-200 text-gray-700 rounded text-[9px] font-bold hover:bg-gray-100 shadow-sm transition-colors text-left px-3">
+                                    <button onClick={() => simulateTapCard('Juan Dela Cruz', 'Skilled - Mason', 800, '12:00 PM')} className="w-full py-1.5 bg-white border border-gray-200 text-gray-700 rounded text-[11px] font-bold hover:bg-gray-100 shadow-sm transition-colors text-left px-3">
                                         🕛 Morning Out (12:00 PM): <span className="text-blue-600">Juan Time Out</span>
                                     </button>
-                                    <button onClick={() => simulateTapCard('Juan Dela Cruz', 'Skilled - Mason', 800, '01:00 PM')} className="w-full py-1.5 bg-white border border-gray-200 text-gray-700 rounded text-[9px] font-bold hover:bg-gray-100 shadow-sm transition-colors text-left px-3">
+                                    <button onClick={() => simulateTapCard('Juan Dela Cruz', 'Skilled - Mason', 800, '01:00 PM')} className="w-full py-1.5 bg-white border border-gray-200 text-gray-700 rounded text-[11px] font-bold hover:bg-gray-100 shadow-sm transition-colors text-left px-3">
                                         🌇 Afternoon In (1:00 PM): <span className="text-[#2e7d32]">Juan Afternoon On-time</span>
                                     </button>
-                                    <button onClick={() => simulateTapCard('Pedro Santos', 'Laborer / Helper', 600, '01:25 PM')} className="w-full py-1.5 bg-white border border-gray-200 text-gray-700 rounded text-[9px] font-bold hover:bg-gray-100 shadow-sm transition-colors text-left px-3">
+                                    <button onClick={() => simulateTapCard('Pedro Santos', 'Laborer / Helper', 600, '01:25 PM')} className="w-full py-1.5 bg-white border border-gray-200 text-gray-700 rounded text-[11px] font-bold hover:bg-gray-100 shadow-sm transition-colors text-left px-3">
                                         🌇 Afternoon Late (1:25 PM): <span className="text-[#d84315]">Pedro (Double Late -₱200)</span>
                                     </button>
                                 </div>
@@ -1163,13 +1163,13 @@ export default function Attendance() {
                         <div className="flex justify-between items-start p-4 border-b border-gray-100">
                             <div>
                                 <h2 className="text-sm font-extrabold text-gray-900">RFID Attendance Kiosk</h2>
-                                <p className="text-[9px] text-gray-500 mt-1 leading-relaxed">Please tap the ID card on the ESP32 scanner to log attendance.</p>
+                                <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">Please tap the ID card on the ESP32 scanner to log attendance.</p>
                             </div>
                         </div>
                         <div className="flex flex-col items-center justify-center p-10 text-center">
                             <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center text-gray-400 font-extrabold text-sm mb-4 animate-pulse">RFID</div>
                             <h3 className="text-[13px] font-extrabold text-gray-700 mb-1.5">Reading Card...</h3>
-                            <p className="text-[9px] text-gray-500 max-w-[200px]">Please keep the card near the ESP32 scanner</p>
+                            <p className="text-[11px] text-gray-500 max-w-[200px]">Please keep the card near the ESP32 scanner</p>
                         </div>
                     </div>
                 </div>
@@ -1183,11 +1183,11 @@ export default function Attendance() {
                             <svg className="w-3.5 h-3.5 text-[#2e7d32]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
                         </div>
                         <h3 className="text-sm font-extrabold text-[#2e7d32] mb-1">Time In Successful</h3>
-                        <p className="text-[8px] text-gray-500 mb-4 leading-relaxed">Worker attendance logged for today.</p>
+                        <p className="text-[11px] text-gray-500 mb-4 leading-relaxed">Worker attendance logged for today.</p>
                         <div className="flex flex-col gap-2.5 mb-5 bg-gray-50 p-3 rounded-lg border border-gray-100">
-                            <div><span className="block text-[8px] font-bold text-gray-400 uppercase">WORKER NAME</span><span className="text-[11px] font-extrabold text-gray-900">{scannedData.name}</span></div>
-                            <div><span className="block text-[8px] font-bold text-gray-400 uppercase">ROLE</span><span className="text-[10px] font-bold text-gray-700 uppercase">{scannedData.displayRole}</span></div>
-                            <div><span className="block text-[8px] font-bold text-gray-400 uppercase">TIME IN</span><span className="text-lg font-extrabold text-[#2e7d32]">{scannedData.time}</span></div>
+                            <div><span className="block text-[11px] font-bold text-gray-400 uppercase">WORKER NAME</span><span className="text-[11px] font-extrabold text-gray-900">{scannedData.name}</span></div>
+                            <div><span className="block text-[11px] font-bold text-gray-400 uppercase">ROLE</span><span className="text-[10px] font-bold text-gray-700 uppercase">{scannedData.displayRole}</span></div>
+                            <div><span className="block text-[11px] font-bold text-gray-400 uppercase">TIME IN</span><span className="text-lg font-extrabold text-[#2e7d32]">{scannedData.time}</span></div>
                         </div>
                         <button onClick={() => setRfidState('WAITING')} className="w-full py-2 bg-[#8B1A10] text-white rounded-lg text-xs font-bold hover:bg-[#72150d] transition-colors">DONE</button>
                     </div>
@@ -1202,11 +1202,11 @@ export default function Attendance() {
                             <svg className="w-3.5 h-3.5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
                         </div>
                         <h3 className="text-sm font-extrabold text-blue-600 mb-1">Time Out Successful</h3>
-                        <p className="text-[8px] text-gray-500 mb-4 leading-relaxed">Shift completed for today.</p>
+                        <p className="text-[11px] text-gray-500 mb-4 leading-relaxed">Shift completed for today.</p>
                         <div className="flex flex-col gap-2.5 mb-5 bg-gray-50 p-3 rounded-lg border border-gray-100">
-                            <div><span className="block text-[8px] font-bold text-gray-400 uppercase">WORKER NAME</span><span className="text-[11px] font-extrabold text-gray-900">{scannedData.name}</span></div>
-                            <div><span className="block text-[8px] font-bold text-gray-400 uppercase">ROLE</span><span className="text-[10px] font-bold text-gray-700 uppercase">{scannedData.displayRole}</span></div>
-                            <div><span className="block text-[8px] font-bold text-gray-400 uppercase">TIME OUT</span><span className="text-lg font-extrabold text-blue-600">{scannedData.time}</span></div>
+                            <div><span className="block text-[11px] font-bold text-gray-400 uppercase">WORKER NAME</span><span className="text-[11px] font-extrabold text-gray-900">{scannedData.name}</span></div>
+                            <div><span className="block text-[11px] font-bold text-gray-400 uppercase">ROLE</span><span className="text-[10px] font-bold text-gray-700 uppercase">{scannedData.displayRole}</span></div>
+                            <div><span className="block text-[11px] font-bold text-gray-400 uppercase">TIME OUT</span><span className="text-lg font-extrabold text-blue-600">{scannedData.time}</span></div>
                         </div>
                         <button onClick={() => setRfidState('WAITING')} className="w-full py-2 bg-[#8B1A10] text-white rounded-lg text-xs font-bold hover:bg-[#72150d] transition-colors">DONE</button>
                     </div>
@@ -1222,7 +1222,7 @@ export default function Attendance() {
                         </div>
                         <h3 className="text-sm font-extrabold text-[#A63228] mb-1">Action Denied</h3>
                         <p className="text-[10px] text-gray-900 font-bold mb-1">{scannedData.name}</p>
-                        <p className="text-[9px] text-gray-500 mb-5 leading-relaxed">{scannedData.message}</p>
+                        <p className="text-[11px] text-gray-500 mb-5 leading-relaxed">{scannedData.message}</p>
                         <button onClick={() => setRfidState('WAITING')} className="w-full py-2 bg-gray-200 text-gray-800 rounded-lg text-xs font-bold hover:bg-gray-300 transition-colors">Try Again</button>
                     </div>
                 </div>
@@ -1283,28 +1283,28 @@ export default function Attendance() {
                                 {formData.status !== 'Absent' && (
                                     <div className="space-y-2.5">
                                         <div className="p-2.5 bg-gray-50 rounded-lg border border-gray-100">
-                                            <span className="block text-[8px] font-extrabold text-[#A63228] uppercase tracking-wider mb-1.5">Morning Session (8:00 AM - 12:00 PM)</span>
+                                            <span className="block text-[11px] font-extrabold text-[#A63228] uppercase tracking-wider mb-1.5">Morning Session (8:00 AM - 12:00 PM)</span>
                                             <div className="grid grid-cols-2 gap-2">
                                                 <div>
-                                                    <label className="block text-[8px] font-bold text-gray-600 mb-0.5 uppercase">Morning Time In</label>
+                                                    <label className="block text-[11px] font-bold text-gray-600 mb-0.5 uppercase">Morning Time In</label>
                                                     <input type="text" name="morningIn" value={formData.morningIn || ''} onChange={handleInputChange} className="w-full bg-white border border-gray-200 rounded px-2 py-1.5 text-xs font-medium focus:border-[#A63228] outline-none" placeholder="07:45 AM" />
                                                 </div>
                                                 <div>
-                                                    <label className="block text-[8px] font-bold text-gray-600 mb-0.5 uppercase">Morning Time Out</label>
+                                                    <label className="block text-[11px] font-bold text-gray-600 mb-0.5 uppercase">Morning Time Out</label>
                                                     <input type="text" name="morningOut" value={formData.morningOut || ''} onChange={handleInputChange} className="w-full bg-white border border-gray-200 rounded px-2 py-1.5 text-xs font-medium focus:border-[#A63228] outline-none" placeholder="12:00 PM" />
                                                 </div>
                                             </div>
                                         </div>
 
                                         <div className="p-2.5 bg-gray-50 rounded-lg border border-gray-100">
-                                            <span className="block text-[8px] font-extrabold text-[#A63228] uppercase tracking-wider mb-1.5">Afternoon Session (1:00 PM - 5:00 PM)</span>
+                                            <span className="block text-[11px] font-extrabold text-[#A63228] uppercase tracking-wider mb-1.5">Afternoon Session (1:00 PM - 5:00 PM)</span>
                                             <div className="grid grid-cols-2 gap-2">
                                                 <div>
-                                                    <label className="block text-[8px] font-bold text-gray-600 mb-0.5 uppercase">Afternoon Time In</label>
+                                                    <label className="block text-[11px] font-bold text-gray-600 mb-0.5 uppercase">Afternoon Time In</label>
                                                     <input type="text" name="afternoonIn" value={formData.afternoonIn || ''} onChange={handleInputChange} className="w-full bg-white border border-gray-200 rounded px-2 py-1.5 text-xs font-medium focus:border-[#A63228] outline-none" placeholder="01:00 PM" />
                                                 </div>
                                                 <div>
-                                                    <label className="block text-[8px] font-bold text-gray-600 mb-0.5 uppercase">Afternoon Time Out</label>
+                                                    <label className="block text-[11px] font-bold text-gray-600 mb-0.5 uppercase">Afternoon Time Out</label>
                                                     <input type="text" name="afternoonOut" value={formData.afternoonOut || ''} onChange={handleInputChange} className="w-full bg-white border border-gray-200 rounded px-2 py-1.5 text-xs font-medium focus:border-[#A63228] outline-none" placeholder="05:00 PM" />
                                                 </div>
                                             </div>
@@ -1414,7 +1414,7 @@ export default function Attendance() {
                                 </div>
                             </div>
 
-                            <div className="text-[9px] text-gray-400 font-medium">
+                            <div className="text-[11px] text-gray-400 font-medium">
                                 Authorized Officer: <span className="text-gray-700 font-bold">{currentOfficerName}</span>
                             </div>
 
@@ -1458,7 +1458,7 @@ export default function Attendance() {
                                     <div className="flex items-center justify-between">
                                         <div>
                                             <span className="block text-[10px] font-bold text-gray-900 uppercase">Automatic Schedule Mode</span>
-                                            <span className="block text-[9px] text-gray-500">Automatically open and close attendance according to designated shift hours.</span>
+                                            <span className="block text-[11px] text-gray-500">Automatically open and close attendance according to designated shift hours.</span>
                                         </div>
                                         <label className="relative inline-flex items-center cursor-pointer">
                                             <input
@@ -1473,7 +1473,7 @@ export default function Attendance() {
 
                                     <div className="grid grid-cols-2 gap-3 pt-2 border-t border-gray-200/60">
                                         <div>
-                                            <label className="block text-[9px] font-bold text-gray-700 mb-1 uppercase tracking-wider">Opening Time (Open Time)</label>
+                                            <label className="block text-[11px] font-bold text-gray-700 mb-1 uppercase tracking-wider">Opening Time (Open Time)</label>
                                             <input
                                                 type="time"
                                                 value={settingsForm.open_time}
@@ -1481,10 +1481,10 @@ export default function Attendance() {
                                                 required
                                                 className="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-2 text-xs font-semibold focus:border-[#A63228] outline-none"
                                             />
-                                            <span className="text-[8px] text-gray-400 mt-0.5 block">Default: 07:00 AM (before 8:00 AM)</span>
+                                            <span className="text-[11px] text-gray-400 mt-0.5 block">Default: 07:00 AM (before 8:00 AM)</span>
                                         </div>
                                         <div>
-                                            <label className="block text-[9px] font-bold text-gray-700 mb-1 uppercase tracking-wider">Closing Cutoff (Close Cutoff)</label>
+                                            <label className="block text-[11px] font-bold text-gray-700 mb-1 uppercase tracking-wider">Closing Cutoff (Close Cutoff)</label>
                                             <input
                                                 type="time"
                                                 value={settingsForm.close_time}
@@ -1492,7 +1492,7 @@ export default function Attendance() {
                                                 required
                                                 className="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-2 text-xs font-semibold focus:border-[#A63228] outline-none"
                                             />
-                                            <span className="text-[8px] text-gray-400 mt-0.5 block">Default: 05:30 PM (after 5:00 PM)</span>
+                                            <span className="text-[11px] text-gray-400 mt-0.5 block">Default: 05:30 PM (after 5:00 PM)</span>
                                         </div>
                                     </div>
                                 </div>
@@ -1502,7 +1502,7 @@ export default function Attendance() {
                                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                                         {attendanceTimeFields.map(field => (
                                             <div key={field.key}>
-                                                <label className="block text-[8px] font-bold text-gray-600 mb-1 uppercase">{field.label}</label>
+                                                <label className="block text-[11px] font-bold text-gray-600 mb-1 uppercase">{field.label}</label>
                                                 <input
                                                     type="time"
                                                     value={settingsForm[field.key]}
@@ -1513,7 +1513,7 @@ export default function Attendance() {
                                             </div>
                                         ))}
                                     </div>
-                                    <p className="text-[8px] text-gray-500 mt-2">Time In is rejected after its closing time. Time Out is accepted only during its configured window.</p>
+                                    <p className="text-[11px] text-gray-500 mt-2">Time In is rejected after its closing time. Time Out is accepted only during its configured window.</p>
                                 </div>
 
                                 <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
@@ -1526,7 +1526,7 @@ export default function Attendance() {
                                             ['overtime_interval_minutes', 'Overtime interval (minutes)']
                                         ].map(([key, label]) => (
                                             <div key={key}>
-                                                <label className="block text-[8px] font-bold text-gray-600 mb-1 uppercase">{label}</label>
+                                                <label className="block text-[11px] font-bold text-gray-600 mb-1 uppercase">{label}</label>
                                                 <input
                                                     type="number"
                                                     min="0"
@@ -1539,13 +1539,13 @@ export default function Attendance() {
                                             </div>
                                         ))}
                                     </div>
-                                    <p className="text-[8px] text-gray-500 mt-2">Overtime is included only for minutes recorded and approved by an Admin on a date marked as requiring overtime. Incomplete intervals do not earn a partial interval.</p>
+                                    <p className="text-[11px] text-gray-500 mt-2">Overtime is included only for minutes recorded and approved by an Admin on a date marked as requiring overtime. Incomplete intervals do not earn a partial interval.</p>
                                 </div>
 
                                 <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 flex items-center justify-between">
                                     <div>
                                         <span className="block text-[10px] font-bold text-gray-900 uppercase">Auto Sundays Off (Rest Day)</span>
-                                        <span className="block text-[9px] text-gray-500">Automatically treat all Sundays as Rest Days (0 Absences).</span>
+                                        <span className="block text-[11px] text-gray-500">Automatically treat all Sundays as Rest Days (0 Absences).</span>
                                     </div>
                                     <label className="relative inline-flex items-center cursor-pointer">
                                         <input
@@ -1584,7 +1584,7 @@ export default function Attendance() {
                             <div className="mt-2 pt-4 border-t border-gray-100">
                                 <h4 className="text-[10px] font-extrabold text-gray-900 uppercase tracking-wider mb-2 flex items-center justify-between">
                                     <span>Declared Non-Working Days</span>
-                                    <span className="text-[9px] text-gray-400 font-normal">({nonWorkingDays.length} recorded)</span>
+                                    <span className="text-[11px] text-gray-400 font-normal">({nonWorkingDays.length} recorded)</span>
                                 </h4>
 
                                 {nonWorkingDays.length === 0 ? (
@@ -1595,7 +1595,7 @@ export default function Attendance() {
                                             <div key={item.date} className="flex justify-between items-center bg-gray-50 p-2.5 rounded-lg border border-gray-100 text-xs">
                                                 <div>
                                                     <span className="font-extrabold text-gray-900 text-[11px] block">{item.date}</span>
-                                                    <span className="text-[9px] text-gray-600 block">{item.reason} {item.set_by ? `• by ${item.set_by}` : ''}</span>
+                                                    <span className="text-[11px] text-gray-600 block">{item.reason} {item.set_by ? `• by ${item.set_by}` : ''}</span>
                                                 </div>
                                                 <button
                                                     onClick={() => handleDeleteNonWorkingDay(item.date)}
