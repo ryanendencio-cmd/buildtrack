@@ -154,10 +154,6 @@ export default function AdminLayout({ children }) {
       label: 'System',
       items: [
         {
-          name: 'Notifications', path: '/notifications', badge: unreadCount,
-          icon: (<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>)
-        },
-        {
           name: 'Reports', path: '/reports',
           icon: (<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>)
         },
@@ -344,8 +340,28 @@ export default function AdminLayout({ children }) {
             )}
           </div>
 
-          {/* Right: Only Night/Dark Mode Toggle */}
-          <div className="flex items-center ml-auto">
+          {/* Right: Notification Bell & Night/Dark Mode Toggle */}
+          <div className="flex items-center gap-1 ml-auto">
+            <Link
+              to="/notifications"
+              className={`relative p-2 rounded-lg transition-all cursor-pointer flex items-center justify-center ${
+                location.pathname.toLowerCase().startsWith('/notifications')
+                  ? 'text-[#A63228] bg-red-50/80 font-bold'
+                  : 'text-gray-500 hover:text-[#A63228] hover:bg-gray-100'
+              }`}
+              title="Notifications"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+              </svg>
+              {unreadCount > 0 && (
+                <span className="absolute top-0.5 right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-[#A63228] text-white text-[9.5px] font-extrabold flex items-center justify-center leading-none ring-2 ring-white shadow-2xs">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
+            </Link>
+
             <button
               onClick={() => setIsDarkMode(!isDarkMode)}
               className="p-2 rounded-lg text-gray-500 hover:text-[#A63228] hover:bg-gray-100 transition-all cursor-pointer flex items-center justify-center"

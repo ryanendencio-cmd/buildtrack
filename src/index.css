@@ -226,6 +226,11 @@ html.dark .hover\:bg-gray-100:hover {
   background-color: #2b2b35 !important;
 }
 
+html.dark .ring-white {
+  --tw-ring-color: #1a1a20 !important;
+  box-shadow: 0 0 0 2px #1a1a20 !important;
+}
+
 /* Inputs and Selects */
 html.dark input,
 html.dark select {
