@@ -10,6 +10,17 @@ const isUpcomingStatus = (statusStr) => {
   return s === 'UPCOMING' || s === 'STANDBY' || s.includes('UPCOMING') || s.includes('STANDBY');
 };
 
+const isOngoingStatus = (statusStr) => {
+  const s = (statusStr || '').toUpperCase();
+  return s === 'ONGOING' || s === 'ACTIVE' || s === '';
+};
+
+const getProjectExpenseLimit = (project) => {
+  const budget = Number(project?.budget ?? project?.contract_amount ?? project?.contract ?? 0);
+  const contractAmount = Number(project?.contract_amount ?? project?.contract ?? budget);
+  return Math.min(budget, contractAmount);
+};
+
 export default function Dashboard() {
   const [projects, setProjects] = useState([]);
   const [selectedProjectId, setSelectedProjectId] = useState('ALL');
@@ -62,9 +73,9 @@ export default function Dashboard() {
 
     let totalBudget = 0;
     if (selectedProjectId === 'ALL') {
-      totalBudget = projects.reduce((sum, p) => sum + Number(p.budget || p.contract || 0), 0);
+      totalBudget = projects.reduce((sum, p) => sum + getProjectExpenseLimit(p), 0);
     } else {
-      totalBudget = Number(targetProject?.budget || targetProject?.contract || 0);
+      totalBudget = targetProject ? getProjectExpenseLimit(targetProject) : 0;
     }
     const remaining = Math.max(0, totalBudget - totalSpent);
     const percent = totalBudget > 0 ? Math.round((totalSpent / totalBudget) * 100) : 0;
@@ -158,7 +169,7 @@ export default function Dashboard() {
     return projects.map(p => {
       const pExpenses = rawExpenses.filter(e => isProjectMatch(e, p));
       const spent = pExpenses.reduce((s, e) => s + Number(e.amount || 0), 0);
-      const budget = Number(p.budget || p.contract || 0);
+      const budget = getProjectExpenseLimit(p);
       const workersCount = rawWorkers.filter(w => isProjectMatch(w, p)).length;
       const pct = budget > 0 ? Math.round((spent / budget) * 100) : 0;
       return {
@@ -173,7 +184,7 @@ export default function Dashboard() {
 
   const activePieProject = useMemo(() => {
     if (pieChartProjectId === 'ALL') {
-      const totalBudget = projects.reduce((sum, p) => sum + Number(p.budget || p.contract || 0), 0);
+      const totalBudget = projects.reduce((sum, p) => sum + getProjectExpenseLimit(p), 0);
       const totalSpent = rawExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
       return {
         id: 'ALL',
@@ -194,7 +205,7 @@ export default function Dashboard() {
     return {
       id: 'ALL',
       name: 'All Projects',
-      budget: projects.reduce((sum, p) => sum + Number(p.budget || p.contract || 0), 0),
+      budget: projects.reduce((sum, p) => sum + getProjectExpenseLimit(p), 0),
       spent: rawExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0)
     };
   }, [pieChartProjectId, projects, rawExpenses, projectSummaries]);
@@ -287,7 +298,7 @@ export default function Dashboard() {
                 <div>
                   <p className="text-[11px] font-bold text-gray-400 group-hover:text-[#A63228] transition-colors tracking-wider uppercase">ACTIVE PROJECTS</p>
                   <h2 className="text-xl font-extrabold text-gray-900 group-hover:text-[#A63228] transition-colors mt-0.5">
-                    {projects.filter(p => !isUpcomingStatus(p.status)).length}
+                    {projects.filter(p => isOngoingStatus(p.status) || isUpcomingStatus(p.status)).length}
                   </h2>
                 </div>
                 <div className="w-9 h-9 rounded-xl bg-[#FDF2F0] text-[#8B1A10] border border-[#8B1A10]/15 flex items-center justify-center shrink-0 group-hover:bg-[#8B1A10] group-hover:text-white transition-all shadow-2xs">
@@ -1164,7 +1175,7 @@ export default function Dashboard() {
             <thead>
               <tr>
                 <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[50%] uppercase tracking-wider">PROJECT</th>
-                <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 text-right pr-4 w-[25%] uppercase tracking-wider">BUDGET</th>
+                <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 text-right pr-4 w-[25%] uppercase tracking-wider">EXPENSE LIMIT</th>
                 <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 pl-4 w-[25%] uppercase tracking-wider">PROGRESS</th>
               </tr>
             </thead>
@@ -1205,7 +1216,7 @@ export default function Dashboard() {
                         </span>
                       )}
                     </td>
-                    <td className="py-2 text-[10px] text-gray-900 font-extrabold border-b border-gray-50 text-right pr-4">₱{Number(p.budget || p.contract || 0).toLocaleString()}</td>
+                    <td className="py-2 text-[10px] text-gray-900 font-extrabold border-b border-gray-50 text-right pr-4">₱{getProjectExpenseLimit(p).toLocaleString()}</td>
                     <td className="py-2 border-b border-gray-50 pl-4">
                       <div className="flex items-center gap-2">
                         <div className="w-14 bg-gray-200 rounded-full h-1 overflow-hidden"><div className="bg-[#A63228] h-full rounded-full" style={{ width: `${p.progress || 0}%` }}></div></div>
@@ -1702,9 +1713,9 @@ export default function Dashboard() {
                   </div>
 
                   <div className="text-right">
-                    <span className="text-[11px] uppercase tracking-wider text-gray-400 font-bold block">Total Budget</span>
+                    <span className="text-[11px] uppercase tracking-wider text-gray-400 font-bold block">Total Expense Limit</span>
                     <strong className="text-xs font-extrabold text-gray-900">
-                      ₱{projects.reduce((s, p) => s + Number(p.budget || p.contract || 0), 0).toLocaleString()}
+                      ₱{projects.reduce((sum, p) => sum + getProjectExpenseLimit(p), 0).toLocaleString()}
                     </strong>
                   </div>
                 </div>

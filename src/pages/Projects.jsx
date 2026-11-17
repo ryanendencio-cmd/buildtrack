@@ -18,14 +18,68 @@ const isUpcomingStatus = (statusStr) => {
     return s === 'UPCOMING' || s === 'STANDBY';
 };
 
+const PROJECT_TYPE_OPTIONS = [
+    'New Construction',
+    'Renovation / Remodeling',
+    'Addition / Extension',
+    'Repair / Maintenance',
+    'Restoration',
+    'Other'
+];
+
+const BUILDING_TYPE_OPTIONS = [
+    'Single-family house',
+    'Duplex / Townhouse',
+    'Apartment / Condominium',
+    'Office',
+    'Retail / Commercial',
+    'Other'
+];
+
+const capitalizeFirstLetter = (value) => {
+    const firstLetterIndex = value.search(/[a-z]/i);
+    return firstLetterIndex === -1
+        ? value
+        : `${value.slice(0, firstLetterIndex)}${value[firstLetterIndex].toUpperCase()}${value.slice(firstLetterIndex + 1)}`;
+};
+
+const getDropdownType = (value, options) => {
+    const type = String(value || '').trim();
+    if (!type) return { selection: '', other: '' };
+    const option = options.find(item => item.toLowerCase() === type.toLowerCase());
+    if (option && option !== 'Other') return { selection: option, other: '' };
+    return { selection: 'Other', other: capitalizeFirstLetter(type) };
+};
+
+const resolveDropdownType = (selection, other) =>
+    selection === 'Other' ? capitalizeFirstLetter(other.trim()) : selection.trim();
+
 export default function Projects() {
     const [projects, setProjects] = useState([]);
+    const [expenses, setExpenses] = useState([]);
+    const [expensesLoading, setExpensesLoading] = useState(true);
+    const [expensesLoadError, setExpensesLoadError] = useState(false);
 
     useEffect(() => {
         api.get('/projects').then(data => setProjects(Array.isArray(data) ? data : [])).catch(err => {
             console.error(err);
             setProjects([]);
         });
+    }, []);
+
+    useEffect(() => {
+        api.get('/expenses')
+            .then(data => {
+                if (!Array.isArray(data)) {
+                    throw new Error('Unexpected response while loading project expenses.');
+                }
+                setExpenses(data);
+            })
+            .catch(err => {
+                console.error(err);
+                setExpensesLoadError(true);
+            })
+            .finally(() => setExpensesLoading(false));
     }, []);
 
     const [searchTerm, setSearchTerm] = useState('');
@@ -47,7 +101,15 @@ export default function Projects() {
     const [formData, setFormData] = useState({
         id: null,
         title: '',
-        contract: '',
+        projectType: '',
+        projectTypeOther: '',
+        buildingType: '',
+        buildingTypeOther: '',
+        numberOfFloors: '',
+        lotArea: '',
+        floorArea: '',
+        projectDescription: '',
+        contractAmount: '',
         startDate: '',
         targetDate: '',
         status: 'ONGOING'
@@ -55,10 +117,11 @@ export default function Projects() {
 
     const [saving, setSaving] = useState(false);
     const [dateError, setDateError] = useState('');
-    const [contractError, setContractError] = useState('');
-    const [contractFocused, setContractFocused] = useState(false);
+    const [contractAmountError, setContractAmountError] = useState('');
+    const [projectDetailsError, setProjectDetailsError] = useState('');
+    const [contractAmountFocused, setContractAmountFocused] = useState(false);
     const [budgetProject, setBudgetProject] = useState(null);
-    const contractInputRef = useRef(null);
+    const contractAmountInputRef = useRef(null);
 
     const MAX_AMOUNT = 999999999999;
     const formatCurrency = (value) => {
@@ -69,6 +132,7 @@ export default function Projects() {
             : '';
     };
     const formatEditingCurrency = (value) => {
+        if (String(value ?? '').trim() === '') return '';
         const [integerPart, ...fractionParts] = value.split('.');
         const integer = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',') || '0';
         return fractionParts.length
@@ -88,6 +152,9 @@ export default function Projects() {
     const handleInputChange = (e) => {
         const { name } = e.target;
         let { value } = e.target;
+        if (name === 'projectTypeOther' || name === 'buildingTypeOther') {
+            value = capitalizeFirstLetter(value);
+        }
         if (name === 'startDate') {
             if (value && formData.targetDate && value > formData.targetDate) {
                 setDateError('Start date cannot be after target date.');
@@ -100,28 +167,12 @@ export default function Projects() {
             } else {
                 setDateError('');
             }
-        } else if (name === 'contract') {
-            value = value.replace(/[^\d.]/g, '');
-            const decimalIndex = value.indexOf('.');
-            if (decimalIndex !== -1) {
-                value = `${value.slice(0, decimalIndex + 1)}${value
-                    .slice(decimalIndex + 1)
-                    .replace(/\./g, '')
-                    .slice(0, 2)}`;
-            }
-            const num = parseFloat(value);
-            if (num > MAX_AMOUNT) {
-                setContractError('Budget allocated cannot exceed ₱999,999,999,999.');
-            } else if (num < 0) {
-                setContractError('Budget cannot be negative.');
-            } else {
-                setContractError('');
-            }
         }
+        setProjectDetailsError('');
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
-    const handleContractChange = (e) => {
+    const handleCurrencyChange = (e, fieldName, inputRef, setError, label) => {
         const input = e.target;
         const charactersBeforeCursor = input.value
             .slice(0, input.selectionStart ?? input.value.length)
@@ -134,18 +185,20 @@ export default function Projects() {
                 .replace(/\./g, '')
                 .slice(0, 2)}`;
         }
+        const [integerPart, ...fractionParts] = value.split('.');
+        value = `${integerPart.slice(0, String(MAX_AMOUNT).length)}${fractionParts.length ? `.${fractionParts[0]}` : ''}`;
 
         const amount = parseFloat(value);
         if (amount > MAX_AMOUNT) {
-            setContractError('Budget allocated cannot exceed ₱999,999,999,999.');
+            setError(`${label} cannot exceed ₱999,999,999,999.`);
         } else {
-            setContractError('');
+            setError('');
         }
-        setFormData(prev => ({ ...prev, contract: value }));
+        setFormData(prev => ({ ...prev, [fieldName]: value }));
 
         const formatted = formatEditingCurrency(value);
         requestAnimationFrame(() => {
-            const field = contractInputRef.current;
+            const field = inputRef.current;
             if (!field) return;
             let cursor = 0;
             let countedCharacters = 0;
@@ -156,6 +209,8 @@ export default function Projects() {
             field.setSelectionRange(cursor, cursor);
         });
     };
+    const handleContractAmountChange = (e) =>
+        handleCurrencyChange(e, 'contractAmount', contractAmountInputRef, setContractAmountError, 'Contract amount');
 
     const activeOngoingProject = projects.find(p => isOngoingStatus(p.status));
 
@@ -163,7 +218,15 @@ export default function Projects() {
         setFormData({
             id: null,
             title: '',
-            contract: '',
+            projectType: '',
+            projectTypeOther: '',
+            buildingType: '',
+            buildingTypeOther: '',
+            numberOfFloors: '',
+            lotArea: '',
+            floorArea: '',
+            projectDescription: '',
+            contractAmount: '',
             startDate: '',
             targetDate: '',
             status: activeOngoingProject ? 'UPCOMING' : 'ONGOING'
@@ -179,7 +242,9 @@ export default function Projects() {
             street: ''
         });
         setDateError('');
-        setContractError('');
+        setContractAmountError('');
+        setProjectDetailsError('');
+        setContractAmountFocused(false);
         setModalState('ADD');
     };
 
@@ -195,30 +260,55 @@ export default function Projects() {
 
         const streetVal = parts[0] && !parts[0].toLowerCase().startsWith('brgy.') && !parts[0].toLowerCase().startsWith('zip') ? parts[0] : '';
 
+        const savedProjectType = proj.project_type ?? proj.projectType;
+        const savedBuildingType = proj.building_type ?? proj.buildingType;
+        const projectType = getDropdownType(savedProjectType, PROJECT_TYPE_OPTIONS);
+        const buildingType = getDropdownType(savedBuildingType, BUILDING_TYPE_OPTIONS);
+        if (String(savedProjectType || '').trim().toLowerCase() === 'other') {
+            projectType.other = proj.project_type_other ?? proj.projectTypeOther ?? '';
+        }
+        if (String(savedBuildingType || '').trim().toLowerCase() === 'other') {
+            buildingType.other = proj.building_type_other ?? proj.buildingTypeOther ?? '';
+        }
+        const numberOfFloors = proj.number_of_floors ?? proj.numberOfFloors;
+        const lotArea = proj.lot_area ?? proj.lotArea;
+        const floorArea = proj.floor_area ?? proj.floorArea;
+        const projectDescription = proj.project_description ?? proj.projectDescription;
         setFormData({
             id: proj.id,
-            title: proj.name || '',
-            contract: String(proj.budget || ''),
-            startDate: proj.start_date ? String(proj.start_date).slice(0, 10) : '',
-            targetDate: proj.end_date ? String(proj.end_date).slice(0, 10) : '',
+            title: proj.name || proj.title || '',
+            projectType: projectType.selection,
+            projectTypeOther: projectType.other,
+            buildingType: buildingType.selection,
+            buildingTypeOther: buildingType.other,
+            numberOfFloors: numberOfFloors == null ? '' : String(numberOfFloors),
+            lotArea: lotArea == null ? '' : String(lotArea),
+            floorArea: floorArea == null ? '' : String(floorArea),
+            projectDescription: projectDescription == null ? '' : String(projectDescription),
+            contractAmount: String(proj.contract_amount ?? proj.contractAmount ?? proj.contract ?? proj.budget ?? ''),
+            startDate: (proj.start_date ?? proj.startDate) ? String(proj.start_date ?? proj.startDate).slice(0, 10) : '',
+            targetDate: (proj.end_date ?? proj.targetDate) ? String(proj.end_date ?? proj.targetDate).slice(0, 10) : '',
             status: (proj.status || 'ONGOING').toUpperCase()
         });
 
         setDateError('');
-        setContractError('');
+        setContractAmountError('');
+        setProjectDetailsError('');
+        setContractAmountFocused(false);
 
         // 1. If project already has stored address_obj, load it directly
-        if (proj.address_obj && typeof proj.address_obj === 'object' && proj.address_obj.regionCode) {
+        const savedAddress = proj.address_obj ?? proj.addressObj;
+        if (savedAddress && typeof savedAddress === 'object' && savedAddress.regionCode) {
             setAddressState({
-                regionCode: proj.address_obj.regionCode || '',
-                regionName: proj.address_obj.regionName || '',
-                provinceCode: proj.address_obj.provinceCode || '',
-                provinceName: proj.address_obj.provinceName || '',
-                cityCode: proj.address_obj.cityCode || '',
-                cityName: proj.address_obj.cityName || '',
-                barangayName: proj.address_obj.barangayName || bgyVal,
-                zipCode: proj.address_obj.zipCode || zipVal,
-                street: proj.address_obj.street || streetVal
+                regionCode: savedAddress.regionCode || '',
+                regionName: savedAddress.regionName || '',
+                provinceCode: savedAddress.provinceCode || '',
+                provinceName: savedAddress.provinceName || '',
+                cityCode: savedAddress.cityCode || '',
+                cityName: savedAddress.cityName || '',
+                barangayName: savedAddress.barangayName || bgyVal,
+                zipCode: savedAddress.zipCode || zipVal,
+                street: savedAddress.street || streetVal
             });
             setModalState('EDIT');
             return;
@@ -239,21 +329,40 @@ export default function Projects() {
 
     const handleInitialSubmit = (e) => {
         e.preventDefault();
+        const projectType = resolveDropdownType(formData.projectType, formData.projectTypeOther);
+        const buildingType = resolveDropdownType(formData.buildingType, formData.buildingTypeOther);
+        if (modalState === 'ADD') {
+            const floorCount = Number(formData.numberOfFloors);
+            const lotArea = Number(formData.lotArea);
+            const floorArea = Number(formData.floorArea);
+            if (!projectType || !buildingType) {
+                setProjectDetailsError('Project Type and Building Type are required.');
+                return;
+            }
+            if (!Number.isInteger(floorCount) || floorCount < 1) {
+                setProjectDetailsError('Enter a valid number of floors (at least 1).');
+                return;
+            }
+            if (!Number.isFinite(lotArea) || lotArea <= 0 || !Number.isFinite(floorArea) || floorArea <= 0) {
+                setProjectDetailsError('Lot Area and Floor Area must be greater than 0.');
+                return;
+            }
+        }
         if (formData.targetDate && formData.startDate && formData.targetDate < formData.startDate) {
             setDateError('Target date cannot be before start date.');
             return;
         }
-        const contractNum = parseFloat(formData.contract || 0);
-        if (contractNum > MAX_AMOUNT) {
-            setContractError('Budget allocated cannot exceed ₱999,999,999,999.');
+        const contractAmountNum = parseFloat(formData.contractAmount || 0);
+        if (contractAmountNum > MAX_AMOUNT) {
+            setContractAmountError('Contract amount cannot exceed ₱999,999,999,999.');
             return;
         }
-        if (contractNum <= 0) {
-            setContractError('Please enter a valid budget amount.');
+        if (contractAmountNum <= 0) {
+            setContractAmountError('Please enter a valid contract amount.');
             return;
         }
         setDateError('');
-        setContractError('');
+        setContractAmountError('');
         setModalState('CONFIRM');
     };
 
@@ -274,11 +383,20 @@ export default function Projects() {
             name: formData.title.toUpperCase(),
             location: locationString,
             address_obj: addressState,
-            budget: parseFloat(formData.contract || 0),
+            project_type: resolveDropdownType(formData.projectType, formData.projectTypeOther),
+            building_type: resolveDropdownType(formData.buildingType, formData.buildingTypeOther),
+            number_of_floors: formData.numberOfFloors === '' ? null : Number(formData.numberOfFloors),
+            lot_area: formData.lotArea === '' ? null : Number(formData.lotArea),
+            floor_area: formData.floorArea === '' ? null : Number(formData.floorArea),
+            project_description: formData.projectDescription.trim(),
+            contract_amount: parseFloat(formData.contractAmount || 0),
             start_date: formData.startDate || null,
             end_date: formData.targetDate || null,
             status: formData.status || 'ONGOING'
         };
+        if (!formData.id) {
+            payload.budget = parseFloat(formData.contractAmount || 0);
+        }
 
         if (formData.id) {
             api.put(`/projects/${formData.id}`, payload).then(() => {
@@ -331,7 +449,28 @@ export default function Projects() {
     const ongoingCount = projects.filter(p => isOngoingStatus(p.status)).length;
     const upcomingCount = projects.filter(p => isUpcomingStatus(p.status)).length;
     const completedCount = projects.filter(p => (p.status || '').toUpperCase() === 'COMPLETED').length;
-    const totalBudget = projects.reduce((acc, p) => acc + Number(p.budget || 0), 0);
+    const totalContractValue = projects.reduce((acc, p) => acc + Number(p.contract_amount ?? p.budget ?? 0), 0);
+    const expensesByProject = new Map();
+    expenses.forEach(expense => {
+        const projectId = expense.project_id;
+        if (projectId == null) return;
+        const key = String(projectId);
+        expensesByProject.set(key, (expensesByProject.get(key) || 0) + Number(expense.amount || 0));
+    });
+    const getRemainingBudget = (project) => {
+        const limits = [project.budget, project.contract_amount]
+            .filter(value => value !== undefined && value !== null && value !== '')
+            .map(Number)
+            .filter(value => Number.isFinite(value) && value >= 0);
+        if (limits.length === 0) return null;
+        return Math.min(...limits) - (expensesByProject.get(String(project.id)) || 0);
+    };
+    const getRemainingBudgetDisplay = (project) => {
+        if (expensesLoadError) return 'Unavailable';
+        if (expensesLoading) return 'Loading...';
+        const remainingBudget = getRemainingBudget(project);
+        return remainingBudget === null ? '—' : `₱${remainingBudget.toLocaleString()}`;
+    };
 
     const selectStyles = {
         backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3e%3cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3e%3c/svg%3e")`,
@@ -416,7 +555,7 @@ export default function Projects() {
                 </div>
                 <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-center text-center col-span-2 md:col-span-1">
                     <p className="text-[11px] font-bold text-[#A63228] tracking-wider uppercase mb-0.5">TOTAL CONTRACT VALUE</p>
-                    <h2 className="text-lg font-extrabold text-[#A63228]">₱{totalBudget.toLocaleString()}</h2>
+                    <h2 className="text-lg font-extrabold text-[#A63228]">₱{totalContractValue.toLocaleString()}</h2>
                 </div>
             </div>
 
@@ -444,12 +583,14 @@ export default function Projects() {
                             </p>
                             <div className="flex items-center justify-between mb-2 bg-[#f9fafb] border border-gray-100 rounded-lg px-2 py-1.5">
                                 <div>
-                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Current Budget</p>
-                                    <p className="text-[11px] font-extrabold text-[#A63228]">₱{Number(proj.budget || 0).toLocaleString()}</p>
+                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Remaining Budget</p>
+                                    <p className="text-[11px] font-extrabold text-[#A63228]">
+                                        {getRemainingBudgetDisplay(proj)}
+                                    </p>
                                 </div>
                                 {(proj.status || '').toUpperCase() !== 'COMPLETED' && (
                                     <button type="button" onClick={() => setBudgetProject(proj)} className="text-[11px] font-bold bg-[#E8C547] text-gray-900 px-2 py-1 rounded-md hover:bg-[#d4b33d] transition-colors">
-                                        + Add Budget
+                                        + Add Expense Budget
                                     </button>
                                 )}
                             </div>
@@ -497,6 +638,129 @@ export default function Projects() {
                                     <label className="block text-[11px] font-bold text-gray-700 mb-1 uppercase">Project Title <span className="text-[#A63228]">*</span></label>
                                     <input type="text" name="title" value={formData.title} onChange={handleInputChange} required className="w-full bg-[#f4f1ee] rounded-md px-2.5 py-1.5 text-[10px] font-medium focus:border-[#A63228] outline-none" placeholder="e.g. House Construction" />
                                 </div>
+
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div>
+                                        <label className="block text-[11px] font-bold text-gray-700 mb-1 uppercase">
+                                            Project Type {modalState === 'ADD' && <span className="text-[#A63228]">*</span>}
+                                        </label>
+                                        <select
+                                            name="projectType"
+                                            value={formData.projectType}
+                                            onChange={handleInputChange}
+                                            required={modalState === 'ADD'}
+                                            className="w-full bg-[#f4f1ee] rounded-md px-2.5 py-1.5 text-[10px] font-medium focus:border-[#A63228] outline-none"
+                                        >
+                                            <option value="" disabled hidden>Select Project Type</option>
+                                            {PROJECT_TYPE_OPTIONS.map(option => <option key={option} value={option}>{option}</option>)}
+                                        </select>
+                                        {formData.projectType === 'Other' && (
+                                            <input
+                                                type="text"
+                                                name="projectTypeOther"
+                                                value={formData.projectTypeOther}
+                                                onChange={handleInputChange}
+                                                required
+                                                className="mt-1 w-full bg-[#f4f1ee] rounded-md px-2.5 py-1.5 text-[10px] font-medium focus:border-[#A63228] outline-none"
+                                                placeholder="Specify project type"
+                                            />
+                                        )}
+                                    </div>
+                                    <div>
+                                        <label className="block text-[11px] font-bold text-gray-700 mb-1 uppercase">
+                                            Building Type {modalState === 'ADD' && <span className="text-[#A63228]">*</span>}
+                                        </label>
+                                        <select
+                                            name="buildingType"
+                                            value={formData.buildingType}
+                                            onChange={handleInputChange}
+                                            required={modalState === 'ADD'}
+                                            className="w-full bg-[#f4f1ee] rounded-md px-2.5 py-1.5 text-[10px] font-medium focus:border-[#A63228] outline-none"
+                                        >
+                                            <option value="" disabled hidden>Select Building Type</option>
+                                            {BUILDING_TYPE_OPTIONS.map(option => <option key={option} value={option}>{option}</option>)}
+                                        </select>
+                                        {formData.buildingType === 'Other' && (
+                                            <input
+                                                type="text"
+                                                name="buildingTypeOther"
+                                                value={formData.buildingTypeOther}
+                                                onChange={handleInputChange}
+                                                required
+                                                className="mt-1 w-full bg-[#f4f1ee] rounded-md px-2.5 py-1.5 text-[10px] font-medium focus:border-[#A63228] outline-none"
+                                                placeholder="Specify building type"
+                                            />
+                                        )}
+                                    </div>
+                                    <div>
+                                        <label className="block text-[11px] font-bold text-gray-700 mb-1 uppercase">
+                                            Number of Floors {modalState === 'ADD' && <span className="text-[#A63228]">*</span>}
+                                        </label>
+                                        <input
+                                            type="number"
+                                            name="numberOfFloors"
+                                            min="1"
+                                            step="1"
+                                            value={formData.numberOfFloors}
+                                            onChange={handleInputChange}
+                                            required={modalState === 'ADD'}
+                                            className="w-full bg-[#f4f1ee] rounded-md px-2.5 py-1.5 text-[10px] font-medium focus:border-[#A63228] outline-none"
+                                            placeholder="e.g. 2"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[11px] font-bold text-gray-700 mb-1 uppercase">
+                                            Lot Area (m²) {modalState === 'ADD' && <span className="text-[#A63228]">*</span>}
+                                        </label>
+                                        <input
+                                            type="number"
+                                            name="lotArea"
+                                            min="0.01"
+                                            step="any"
+                                            value={formData.lotArea}
+                                            onChange={handleInputChange}
+                                            required={modalState === 'ADD'}
+                                            className="w-full bg-[#f4f1ee] rounded-md px-2.5 py-1.5 text-[10px] font-medium focus:border-[#A63228] outline-none"
+                                            placeholder="e.g. 100"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[11px] font-bold text-gray-700 mb-1 uppercase">
+                                            Floor Area (m²) {modalState === 'ADD' && <span className="text-[#A63228]">*</span>}
+                                        </label>
+                                        <input
+                                            type="number"
+                                            name="floorArea"
+                                            min="0.01"
+                                            step="any"
+                                            value={formData.floorArea}
+                                            onChange={handleInputChange}
+                                            required={modalState === 'ADD'}
+                                            className="w-full bg-[#f4f1ee] rounded-md px-2.5 py-1.5 text-[10px] font-medium focus:border-[#A63228] outline-none"
+                                            placeholder="e.g. 80"
+                                        />
+                                    </div>
+                                    <div className="col-span-2">
+                                        <label className="block text-[11px] font-bold text-gray-700 mb-1 uppercase">
+                                            Project Description <span className="text-gray-400 font-normal">(Optional)</span>
+                                        </label>
+                                        <textarea
+                                            name="projectDescription"
+                                            value={formData.projectDescription}
+                                            onChange={handleInputChange}
+                                            rows="3"
+                                            maxLength={250}
+                                            className="w-full resize-y bg-[#f4f1ee] rounded-md px-2.5 py-1.5 text-[10px] font-medium focus:border-[#A63228] outline-none"
+                                            placeholder="Add additional project details"
+                                        />
+                                        <p className="mt-1 text-right text-[10px] text-gray-400">
+                                            {formData.projectDescription.length}/250
+                                        </p>
+                                    </div>
+                                </div>
+                                {projectDetailsError && (
+                                    <p className="text-[11px] text-red-600 font-bold -mt-1">{projectDetailsError}</p>
+                                )}
 
                                 <div className="bg-[#f9fafb] p-3 rounded-lg border border-gray-200">
                                     <label className="block text-[11px] font-extrabold text-gray-700 uppercase mb-2">Location Details (Philippines)</label>
@@ -554,32 +818,26 @@ export default function Projects() {
                                         {dateError}
                                     </p>
                                 )}
-                                <div>
-                                    <div className="flex justify-between items-center mb-1">
-                                        <label className="block text-[11px] font-bold text-gray-700 uppercase">Contract Amount / Budget (₱) <span className="text-[#A63228]">*</span></label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div className="col-span-2">
+                                        <label className="block text-[11px] font-bold text-gray-700 uppercase mb-1">Contract Amount (₱) <span className="text-[#A63228]">*</span></label>
+                                        <div className="relative">
+                                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] font-extrabold text-gray-500">₱</span>
+                                            <input
+                                                ref={contractAmountInputRef}
+                                                type="text"
+                                                inputMode="decimal"
+                                                name="contractAmount"
+                                                value={contractAmountFocused ? formatEditingCurrency(formData.contractAmount) : formatCurrency(formData.contractAmount)}
+                                                onFocus={() => setContractAmountFocused(true)}
+                                                onBlur={() => setContractAmountFocused(false)}
+                                                onChange={handleContractAmountChange}
+                                                required
+                                                className={`w-full bg-[#f4f1ee] rounded-md pl-6 pr-2.5 py-1.5 text-[10px] font-extrabold focus:border-[#A63228] outline-none border transition-colors ${contractAmountError ? 'border-red-500 text-red-600' : 'border-transparent'}`}
+                                            />
+                                        </div>
+                                        {contractAmountError && <p className="text-[10px] text-red-600 font-bold mt-1">{contractAmountError}</p>}
                                     </div>
-                                    <div className="relative">
-                                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] font-extrabold text-gray-500">₱</span>
-                                        <input
-                                            ref={contractInputRef}
-                                            type="text"
-                                            inputMode="decimal"
-                                            name="contract"
-                                            value={contractFocused ? formatEditingCurrency(formData.contract) : formatCurrency(formData.contract)}
-                                            onFocus={() => setContractFocused(true)}
-                                            onBlur={() => setContractFocused(false)}
-                                            onChange={handleContractChange}
-                                            required
-                                            className={`w-full bg-[#f4f1ee] rounded-md pl-6 pr-2.5 py-1.5 text-[10px] font-extrabold focus:border-[#A63228] outline-none border transition-colors ${contractError ? 'border-red-500 text-red-600' : 'border-transparent'}`}
-                                            placeholder="0.00"
-                                        />
-                                    </div>
-                                    {contractError && (
-                                        <p className="text-[11px] text-red-600 font-bold mt-1 flex items-center gap-1">
-                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
-                                            {contractError}
-                                        </p>
-                                    )}
                                 </div>
 
                                 {modalState === 'EDIT' && (
@@ -601,7 +859,7 @@ export default function Projects() {
 
                                 <button
                                     type="submit"
-                                    disabled={Boolean(dateError) || Boolean(contractError) || parseFloat(formData.contract || 0) > MAX_AMOUNT}
+                                    disabled={Boolean(dateError) || Boolean(contractAmountError) || parseFloat(formData.contractAmount || 0) > MAX_AMOUNT}
                                     className="w-full mt-2 py-2 bg-[#E8C547] text-gray-900 rounded-lg text-[10px] font-bold hover:bg-[#d4b33d] transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     Review & Save
@@ -617,12 +875,19 @@ export default function Projects() {
                     <div className="bg-white rounded-xl p-5 w-full max-w-[300px] shadow-2xl relative text-center">
                         <h3 className="text-sm font-extrabold text-[#1a1a1a] mb-1">Confirm Details</h3>
                         <p className="text-[11px] text-gray-500 mb-4 font-medium">Please review the project information.</p>
-                        <div className="bg-[#f4f1ee] rounded-lg p-3 text-left mb-5 border border-[#e5dfd8]">
-                            <p className="text-[10px] font-extrabold text-gray-900 mb-1 leading-snug">{formData.title}</p>
-                            <p className="text-[11px] text-gray-600 mb-1 leading-normal"><strong className="text-gray-700">Location:</strong> {assembledLocationPreview}</p>
-                            <p className="text-[11px] text-gray-600 mb-1">Start: <span className="font-bold text-gray-900">{formData.startDate}</span>{formData.targetDate ? ` · Target: ${formData.targetDate}` : ''}</p>
-                            <p className="text-[11px] text-gray-600 mb-2">Status: <span className="font-bold text-[#A63228]">{formData.status}</span></p>
-                            <p className="text-[11px] font-extrabold text-[#A63228]">₱{parseFloat(formData.contract || 0).toLocaleString()}</p>
+                        <div className="bg-[#f4f1ee] rounded-lg p-3 text-left mb-5 border border-[#e5dfd8] min-w-0" style={{ overflowWrap: 'anywhere' }}>
+                            <p className="text-[10px] font-extrabold text-gray-900 mb-2 leading-snug">{formData.title || '—'}</p>
+                            <div className="space-y-1">
+                                <p className="text-[11px] text-gray-600 leading-normal">Project type: <span className="font-bold text-gray-900">{resolveDropdownType(formData.projectType, formData.projectTypeOther) || '—'}</span></p>
+                                <p className="text-[11px] text-gray-600 leading-normal">Building type: <span className="font-bold text-gray-900">{resolveDropdownType(formData.buildingType, formData.buildingTypeOther) || '—'}</span></p>
+                                <p className="text-[11px] text-gray-600 leading-normal">Floors: <span className="font-bold text-gray-900">{formData.numberOfFloors || '—'}</span></p>
+                                <p className="text-[11px] text-gray-600 leading-normal">Lot Area: <span className="font-bold text-gray-900">{formData.lotArea ? `${formData.lotArea} m²` : '—'}</span></p>
+                                <p className="text-[11px] text-gray-600 leading-normal">Floor area: <span className="font-bold text-gray-900">{formData.floorArea ? `${formData.floorArea} m²` : '—'}</span></p>
+                                <p className="text-[11px] text-gray-600 leading-normal">Description: <span className="font-bold text-gray-900">{formData.projectDescription.trim() || '—'}</span></p>
+                                <p className="text-[11px] text-gray-600 leading-normal">Location: <span className="font-bold text-gray-900">{assembledLocationPreview || '—'}</span></p>
+                                <p className="text-[11px] text-gray-600 leading-normal">Status: <span className="font-bold text-[#A63228]">{formData.status || '—'}</span></p>
+                                <p className="text-[11px] text-gray-600 leading-normal">Contract amount: <span className="font-extrabold text-[#A63228]">₱{parseFloat(formData.contractAmount || 0).toLocaleString()}</span></p>
+                            </div>
                         </div>
                         <div className="flex gap-2">
                             <button onClick={() => { setModalState(formData.id ? 'EDIT' : 'ADD'); setDateError(''); }} disabled={saving} className="flex-1 py-1.5 bg-white border border-[#A63228] text-[#A63228] rounded-lg text-[11px] font-bold hover:bg-red-50 transition-colors">Back</button>

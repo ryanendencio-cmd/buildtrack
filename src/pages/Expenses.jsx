@@ -243,7 +243,8 @@ export default function Expenses() {
             setMockProjects(data.map(p => ({
                 id: String(p.id),
                 name: p.name,
-                allocated: Number(p.budget) || 0,
+                allocated: Number(p.budget ?? p.contract_amount) || 0,
+                contractAmount: Number(p.contract_amount ?? p.budget) || 0,
                 actual: 0,
                 status: p.status || 'ONGOING'
             })));
@@ -254,10 +255,14 @@ export default function Expenses() {
     const currentProjectId = id || (activeProject?.id ?? (mockProjects[0]?.id ?? "1"));
     const currentProjectData = mockProjects.find(p => p.id === currentProjectId);
     const currentProjectName = currentProjectData?.name || '';
+    const expenseLimit = currentProjectData
+        ? Math.min(currentProjectData.allocated, currentProjectData.contractAmount)
+        : 0;
     const isCurrentProjectOngoing = isOngoingStatus(currentProjectData?.status);
     const isCurrentProjectUpcoming = !isCurrentProjectOngoing;
 
     const [expensesList, setExpensesList] = useState([]);
+    const totalActualExpense = expensesList.reduce((sum, item) => sum + Number(item.amount || 0), 0);
 
     useEffect(() => {
         if (!currentProjectId) return;
@@ -269,11 +274,28 @@ export default function Expenses() {
     }, [currentProjectId, mockProjects, currentProjectName]);
 
     const MAX_AMOUNT = 999999999999;
+    const MAX_INTEGER_DIGITS = String(MAX_AMOUNT).length;
+    const limitAmountIntegerDigits = (value) => {
+        const raw = String(value ?? '');
+        const sign = raw.startsWith('-') ? '-' : '';
+        const sanitized = raw.replace(/[^\d.]/g, '');
+        const decimalIndex = sanitized.indexOf('.');
+        const integerPart = (decimalIndex === -1 ? sanitized : sanitized.slice(0, decimalIndex))
+            .slice(0, MAX_INTEGER_DIGITS);
+        const fractionPart = decimalIndex === -1
+            ? ''
+            : sanitized.slice(decimalIndex + 1).replace(/\./g, '');
+        return `${sign}${integerPart}${decimalIndex === -1 ? '' : `.${fractionPart}`}`;
+    };
     const [amountError, setAmountError] = useState('');
 
     // ── GENERAL ADD/EDIT HANDLERS ──
     const handleInputChange = (e, isEdit = false) => {
-        const { name, value } = e.target;
+        const { name } = e.target;
+        let { value } = e.target;
+        if (['amount', 'cashTendered', 'change', 'cashPaid'].includes(name)) {
+            value = limitAmountIntegerDigits(value);
+        }
         if (name === 'project') {
             const matched = mockProjects.find(p => p.name === value);
             if (matched && !isOngoingStatus(matched?.status)) {
@@ -281,7 +303,7 @@ export default function Expenses() {
                 return;
             }
         }
-        if (name === 'amount' || name === 'cashTendered') {
+        if (name === 'amount' || name === 'cashTendered' || name === 'change' || name === 'cashPaid') {
             const num = parseFloat(value);
             if (num > MAX_AMOUNT) {
                 setAmountError('Amount cannot exceed ₱999,999,999,999.');
@@ -365,8 +387,9 @@ export default function Expenses() {
     };
 
     const handleItemChange = (index, field, value) => {
+        const inputValue = field === 'price' ? limitAmountIntegerDigits(value) : value;
         const newItems = [...formData.items];
-        const currentItem = { ...newItems[index], [field]: value };
+        const currentItem = { ...newItems[index], [field]: inputValue };
         const itemCat = currentItem.category || formData.category || 'Materials';
         if (field === 'description') {
             if (itemCat === 'Materials') {
@@ -423,6 +446,11 @@ export default function Expenses() {
             setAmountError('Total amount cannot exceed ₱999,999,999,999.');
             return;
         }
+        if (totalActualExpense + amt > expenseLimit) {
+            const remaining = Math.max(expenseLimit - totalActualExpense, 0);
+            setAmountError(`This expense exceeds the remaining project expense limit of ₱${remaining.toLocaleString()}.`);
+            return;
+        }
         if (amt <= 0) {
             setAmountError('Please add at least one item with quantity and unit price.');
             return;
@@ -455,6 +483,12 @@ export default function Expenses() {
         const proj = mockProjects.find(p => p.id === String(currentProjectId) || p.name === formData.project);
         if (proj && !isOngoingStatus(proj?.status)) {
             alert(`Cannot add expenses: The project "${proj?.name || 'Project'}" is not Ongoing. The project status must be ONGOING.`);
+            return;
+        }
+        const expenseAmount = Number(formData.amount || computedTotal);
+        if (totalActualExpense + expenseAmount > expenseLimit) {
+            const remaining = Math.max(expenseLimit - totalActualExpense, 0);
+            alert(`This expense exceeds the remaining project expense limit of ₱${remaining.toLocaleString()}.`);
             return;
         }
         const resolvedItems = formData.items.map(it => ({
@@ -498,6 +532,11 @@ export default function Expenses() {
         const cash = parseFloat(formData.cashTendered || 0);
         if (amt > MAX_AMOUNT || cash > MAX_AMOUNT) {
             setAmountError('Amount cannot exceed ₱999,999,999,999.');
+            return;
+        }
+        if (totalActualExpense + amt > expenseLimit) {
+            const remaining = Math.max(expenseLimit - totalActualExpense, 0);
+            setAmountError(`This expense exceeds the remaining project expense limit of ₱${remaining.toLocaleString()}.`);
             return;
         }
         if (amt <= 0) {
@@ -645,7 +684,7 @@ export default function Expenses() {
     };
     const handleDeleteClick = () => { setReceiptModalState('CONFIRM_DELETE'); };
 
-    const confirmEditSave = () => {
+    const confirmEditSave = async () => {
         const amt = parseFloat(editFormData.amount || 0);
         if (amt > MAX_AMOUNT) {
             alert('Expense amount cannot exceed ₱999,999,999,999.');
@@ -653,6 +692,13 @@ export default function Expenses() {
         }
         if (amt <= 0) {
             alert('Please enter a valid expense amount.');
+            return;
+        }
+        const existingAmount = Number(expensesList.find(exp => exp.id === editFormData.id)?.amount || 0);
+        const spentWithoutCurrent = totalActualExpense - existingAmount;
+        if (spentWithoutCurrent + amt > expenseLimit) {
+            const remaining = Math.max(expenseLimit - spentWithoutCurrent, 0);
+            alert(`This update exceeds the remaining project expense limit of ₱${remaining.toLocaleString()}.`);
             return;
         }
         const paid = parseFloat(editFormData.cashPaid || editFormData.amount || 0);
@@ -670,7 +716,12 @@ export default function Expenses() {
             date: normalizeDate(editFormData.date),
             items: [{ qty: editFormData.qty || '1', description: editFormData.desc }]
         };
-        api.put(`/expenses/${updatedExp.id}`, updatedExp).catch(console.error);
+        try {
+            await api.put(`/expenses/${updatedExp.id}`, updatedExp);
+        } catch (err) {
+            alert(err.message || 'Failed to update expense.');
+            return;
+        }
         setExpensesList(expensesList.map(exp => exp.id === updatedExp.id ? updatedExp : exp));
         setSelectedReceipt(updatedExp);
         setSuccessMessage('Receipt details updated successfully.');
@@ -687,7 +738,7 @@ export default function Expenses() {
         setReceiptModalState('SUCCESS_ACTION');
     };
 
-    const confirmRestore = () => {
+    const confirmRestore = async () => {
         if (selectedReceipt) {
             const restoredPayload = {
                 ...selectedReceipt,
@@ -695,9 +746,13 @@ export default function Expenses() {
                 project_id: selectedReceipt.project_id || currentProjectId
             };
             delete restoredPayload.id;
-            api.post('/expenses', restoredPayload).then(newExp => {
+            try {
+                const newExp = await api.post('/expenses', restoredPayload);
                 setExpensesList(prev => [newExp, ...prev.filter(exp => exp.id !== selectedReceipt.id)]);
-            }).catch(console.error);
+            } catch (err) {
+                alert(err.message || 'Failed to restore expense.');
+                return;
+            }
         }
         setDeletedExpenses(deletedExpenses.filter(item => item.id !== selectedReceipt.id));
         setSuccessMessage('Receipt restored successfully.');
@@ -819,9 +874,11 @@ export default function Expenses() {
     const activeReceiptPagination = usePagination(sortedReceipts, gallerySort);
     const deletedReceiptPagination = usePagination(sortedDeletedReceipts, gallerySort);
     const allocatedBudget = currentProjectData?.allocated || 0;
-    const totalActualExpense = expensesList.reduce((sum, item) => sum + Number(item.amount || 0), 0);
-    const remainingBudget = allocatedBudget - totalActualExpense;
-    const overallProgress = allocatedBudget > 0 ? Math.min((totalActualExpense / allocatedBudget) * 100, 100) : 0;
+    const contractAmount = currentProjectData?.contractAmount || 0;
+    const remainingBudget = expenseLimit - totalActualExpense;
+    const overallProgress = expenseLimit > 0 ? Math.min((totalActualExpense / expenseLimit) * 100, 100) : 0;
+    const exceedsExpenseLimit = totalActualExpense + computedTotal > expenseLimit;
+    const isExpenseLimitReached = remainingBudget <= 0;
 
     const tableTotal = displayedExpenses.reduce((sum, item) => sum + Number(item.amount || 0), 0);
     const matTotal = expensesList.filter(e => e.category === 'Materials').reduce((sum, e) => sum + Number(e.amount || 0), 0);
@@ -856,11 +913,19 @@ export default function Expenses() {
                             <button
                                 onClick={() => {
                                     if (isCurrentProjectUpcoming) return;
+                                    if (isExpenseLimitReached) {
+                                        setAmountError('This project has reached its expense limit.');
+                                        return;
+                                    }
                                     setModalState('ADD');
                                 }}
-                                disabled={isCurrentProjectUpcoming}
-                                title={!isCurrentProjectOngoing ? `Cannot add expenses: This project is ${currentProjectData?.status || 'not Ongoing'}.` : "Add Expense"}
-                                className={isCurrentProjectUpcoming
+                                disabled={isCurrentProjectUpcoming || isExpenseLimitReached}
+                                title={!isCurrentProjectOngoing
+                                    ? `Cannot add expenses: This project is ${currentProjectData?.status || 'not Ongoing'}.`
+                                    : isExpenseLimitReached
+                                        ? 'This project has reached its expense limit.'
+                                        : 'Add Expense'}
+                                className={isCurrentProjectUpcoming || isExpenseLimitReached
                                     ? "bg-gray-100 text-gray-400 border border-gray-200 px-3 py-1.5 rounded-lg font-bold text-[10px] shadow-sm cursor-not-allowed opacity-75 flex items-center justify-center gap-1 flex-1 md:flex-none"
                                     : "bg-[#E8C547] text-gray-900 px-3 py-1.5 rounded-lg font-bold text-[10px] shadow-sm hover:bg-[#d4b33d] transition-colors flex items-center justify-center gap-1 flex-1 md:flex-none"
                                 }
@@ -885,26 +950,36 @@ export default function Expenses() {
                         </div>
                     )}
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+                    {isExpenseLimitReached && isCurrentProjectOngoing && (
+                        <div className="bg-red-50 border border-red-200 text-red-800 px-3.5 py-2.5 rounded-xl text-[11px] font-semibold mb-3">
+                            This project has reached its expense limit. New expenses and cash advances cannot be recorded until the limit increases or existing expenses are removed.
+                        </div>
+                    )}
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 mb-3">
                         <div className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-center">
                             <span className="text-[11px] font-bold text-gray-400 tracking-wider uppercase mb-0.5">ACTUAL EXPENSES</span>
                             <h2 className="text-xl font-extrabold text-[#A63228]">₱{totalActualExpense.toLocaleString()}</h2>
                         </div>
                         <div className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-center">
-                            <span className="text-[11px] font-bold text-gray-400 tracking-wider uppercase mb-0.5">REMAINING BUDGET</span>
+                            <span className="text-[11px] font-bold text-gray-400 tracking-wider uppercase mb-0.5">REMAINING EXPENSE LIMIT</span>
                             <h2 className={`text-xl font-extrabold ${remainingBudget < 0 ? 'text-[#A63228]' : 'text-[#2e7d32]'}`}>
                                 {remainingBudget < 0 ? `-₱${Math.abs(remainingBudget).toLocaleString()}` : `₱${remainingBudget.toLocaleString()}`}
                             </h2>
                         </div>
                         <div className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-center">
-                            <span className="text-[11px] font-bold text-gray-400 tracking-wider uppercase mb-0.5">ALLOCATED BUDGET</span>
+                            <span className="text-[11px] font-bold text-gray-400 tracking-wider uppercase mb-0.5">EXPENSE BUDGET</span>
                             <h2 className="text-xl font-extrabold text-gray-900">₱{allocatedBudget.toLocaleString()}</h2>
+                        </div>
+                        <div className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-center">
+                            <span className="text-[11px] font-bold text-gray-400 tracking-wider uppercase mb-0.5">CONTRACT AMOUNT</span>
+                            <h2 className="text-xl font-extrabold text-gray-900">₱{contractAmount.toLocaleString()}</h2>
                         </div>
                     </div>
 
                     <div className="bg-gradient-to-r from-[#5a0f0a] via-[#7B1F16] to-[#4a0c08] rounded-xl shadow-sm p-4 text-white mb-3">
                         <div className="flex justify-between items-center mb-3">
-                            <h3 className="text-[11px] font-extrabold tracking-widest uppercase text-white/70">EXPENSES VS BUDGET</h3>
+                            <h3 className="text-[11px] font-extrabold tracking-widest uppercase text-white/70">EXPENSES VS LIMIT</h3>
                             <span className="text-[11px] text-white/70 font-bold uppercase tracking-wider">{overallProgress.toFixed(0)}% USED</span>
                         </div>
 
@@ -1363,7 +1438,7 @@ export default function Expenses() {
                             </div>
                             <div className="p-3 border-t border-gray-100 bg-gray-50 flex gap-2">
                                 <button onClick={() => setReceiptModalState('VIEW')} className="flex-1 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg text-[10px] font-bold hover:bg-gray-100">Cancel</button>
-                                <button onClick={confirmEditSave} disabled={Boolean(amountError) || parseFloat(editFormData.amount || 0) > MAX_AMOUNT} className="flex-1 py-1.5 bg-[#8B1A10] text-white rounded-lg text-[10px] font-bold hover:bg-[#72150d] disabled:opacity-50 disabled:cursor-not-allowed">Save Changes</button>
+                                <button onClick={confirmEditSave} disabled={Boolean(amountError) || parseFloat(editFormData.amount || 0) > MAX_AMOUNT || (totalActualExpense - Number(expensesList.find(exp => exp.id === editFormData.id)?.amount || 0) + Number(editFormData.amount || 0) > expenseLimit)} className="flex-1 py-1.5 bg-[#8B1A10] text-white rounded-lg text-[10px] font-bold hover:bg-[#72150d] disabled:opacity-50 disabled:cursor-not-allowed">Save Changes</button>
                             </div>
                         </div>
                     )}
@@ -1705,6 +1780,11 @@ export default function Expenses() {
                                     {amountError && (
                                         <p className="text-[11px] text-red-600 font-bold mt-0.5">{amountError}</p>
                                     )}
+                                    {exceedsExpenseLimit && !amountError && (
+                                        <p className="text-[11px] text-red-600 font-bold mt-0.5">
+                                            Expense exceeds the remaining limit of ₱{Math.max(remainingBudget, 0).toLocaleString()}.
+                                        </p>
+                                    )}
                                 </div>
                                 <div className="flex gap-2 w-full sm:w-auto">
                                     <button
@@ -1716,8 +1796,12 @@ export default function Expenses() {
                                     </button>
                                     <button
                                         type="submit"
-                                        disabled={computedTotal <= 0 || computedTotal > MAX_AMOUNT || !photoData}
-                                        title={!photoData ? "A receipt must be uploaded before saving (Receipt is REQUIRED)" : "Save All Items"}
+                                        disabled={computedTotal <= 0 || computedTotal > MAX_AMOUNT || !photoData || exceedsExpenseLimit}
+                                        title={!photoData
+                                            ? "A receipt must be uploaded before saving (Receipt is REQUIRED)"
+                                            : exceedsExpenseLimit
+                                                ? "The total expense exceeds the remaining project expense limit"
+                                                : "Save All Items"}
                                         className="flex-1 sm:flex-initial px-4 py-2 bg-[#E8C547] text-gray-900 rounded-xl text-xs font-extrabold hover:bg-[#d4b33d] transition-colors shadow-sm uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                         Save All {formData.items.length} Item(s)

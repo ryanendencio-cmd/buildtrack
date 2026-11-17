@@ -6,6 +6,14 @@ import AddBudgetModal from '../components/AddBudgetModal'
 import Pagination from '../components/Pagination'
 import { usePagination } from '../components/usePagination'
 
+const getTodayISO = () => {
+    const date = new Date()
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+}
+
 export default function ProjectDetails() {
     const { id } = useParams()
 
@@ -14,12 +22,24 @@ export default function ProjectDetails() {
     const [attendance, setAttendance] = useState([])
     const [assets, setAssets] = useState([])
     const [additions, setAdditions] = useState([])
+    const [clientPayments, setClientPayments] = useState([])
     const [loading, setLoading] = useState(true)
     const additionsPagination = usePagination(additions, id)
 
     const [completeModal, setCompleteModal] = useState(false)
     const [successModal, setSuccessModal] = useState(false)
     const [showAddBudget, setShowAddBudget] = useState(false)
+    const [showAddPayment, setShowAddPayment] = useState(false)
+    const [paymentSaving, setPaymentSaving] = useState(false)
+    const [paymentError, setPaymentError] = useState('')
+    const [paymentForm, setPaymentForm] = useState({
+        amount: '',
+        date: getTodayISO(),
+        paymentType: 'Downpayment',
+        paymentMethod: 'Cash',
+        reference: '',
+        note: ''
+    })
     const [showUnreceiptedList, setShowUnreceiptedList] = useState(false)
 
     useEffect(() => {
@@ -30,8 +50,9 @@ export default function ProjectDetails() {
             api.get(`/expenses/${id}`).catch(() => []),
             api.get(`/attendance/${id}`).catch(() => []),
             api.get(`/assets/${id}`).catch(() => []),
-            api.get(`/projects/${id}/budget-additions`).catch(() => [])
-        ]).then(([projs, exp, att, ast, added]) => {
+            api.get(`/projects/${id}/budget-additions`).catch(() => []),
+            api.get(`/projects/${id}/client-payments`).catch(() => [])
+        ]).then(([projs, exp, att, ast, added, payments]) => {
             const projectList = Array.isArray(projs) ? projs : []
             const found = projectList.find(p => String(p.id) === String(id))
             setProject(found || null)
@@ -39,6 +60,7 @@ export default function ProjectDetails() {
             setAttendance(Array.isArray(att) ? att : [])
             setAssets(Array.isArray(ast) ? ast : [])
             setAdditions(Array.isArray(added) ? added : [])
+            setClientPayments(Array.isArray(payments) ? payments : [])
         }).catch(console.error)
         .finally(() => setLoading(false))
     }, [id])
@@ -70,10 +92,16 @@ export default function ProjectDetails() {
     )
 
     const totalSpent = expenses.reduce((s, e) => s + Number(e.amount || 0), 0)
-    const budget = Number(project.budget || 0)
+    const budget = Number(project.budget ?? project.contract_amount ?? 0)
+    const contractAmount = Number(project.contract_amount ?? project.budget ?? 0)
+    const expenseLimit = Math.min(budget, contractAmount)
     const addedTotal = additions.reduce((s, a) => s + Number(a.amount || 0), 0)
-    const remaining = budget - totalSpent
-    const percent = budget > 0 ? Math.min(Math.round((totalSpent / budget) * 100), 100) : 0
+    const totalPaymentsReceived = clientPayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0)
+    const balanceDue = contractAmount - totalPaymentsReceived
+    const downPaymentTarget = Math.round(contractAmount * 0.2 * 100) / 100
+    const suggestedDownPayment = Math.max(0, downPaymentTarget - totalPaymentsReceived)
+    const remaining = expenseLimit - totalSpent
+    const percent = expenseLimit > 0 ? Math.min(Math.round((totalSpent / expenseLimit) * 100), 100) : 0
 
     const today = new Date().toISOString().split('T')[0]
     const todayAtt = attendance.filter(a => a.date === today)
@@ -113,9 +141,60 @@ export default function ProjectDetails() {
 
     // Total cost = all verified expense receipts
     const totalCombinedCost = totalSpent
-    const remainingBudget = budget - totalCombinedCost
-    const usedPercent = budget > 0 ? Math.min(Math.round((totalCombinedCost / budget) * 100), 100) : 0
+    const remainingBudget = expenseLimit - totalCombinedCost
+    const usedPercent = expenseLimit > 0 ? Math.min(Math.round((totalCombinedCost / expenseLimit) * 100), 100) : 0
     const isOverBudget = remainingBudget < 0
+
+    const openAddPayment = () => {
+        setPaymentError('')
+        setPaymentForm({
+            amount: '',
+            date: getTodayISO(),
+            paymentType: totalPaymentsReceived < downPaymentTarget ? 'Downpayment' : 'Progress Payment',
+            paymentMethod: 'Cash',
+            reference: '',
+            note: ''
+        })
+        setShowAddPayment(true)
+    }
+
+    const handleAddClientPayment = async (e) => {
+        e.preventDefault()
+        const amount = Number(paymentForm.amount)
+        if (!Number.isFinite(amount) || amount <= 0 || amount > 999999999999) {
+            setPaymentError('Enter a payment amount greater than 0 and no more than ₱999,999,999,999.')
+            return
+        }
+
+        setPaymentSaving(true)
+        setPaymentError('')
+        try {
+            const payment = await api.post(`/projects/${id}/client-payments`, {
+                amount: Math.round(amount * 100) / 100,
+                date: paymentForm.date,
+                payment_type: paymentForm.paymentType,
+                payment_method: paymentForm.paymentMethod,
+                reference: paymentForm.reference.trim(),
+                note: paymentForm.note.trim()
+            })
+            setClientPayments(prev => [payment, ...prev])
+            setShowAddPayment(false)
+        } catch (err) {
+            setPaymentError(err.message || 'Failed to record client payment.')
+        } finally {
+            setPaymentSaving(false)
+        }
+    }
+
+    const handleDeleteClientPayment = async (payment) => {
+        if (!window.confirm(`Delete the payment of ₱${Number(payment.amount || 0).toLocaleString()}?`)) return
+        try {
+            await api.delete(`/projects/${id}/client-payments/${payment.id}`)
+            setClientPayments(prev => prev.filter(item => item.id !== payment.id))
+        } catch (err) {
+            alert(`Failed to delete payment: ${err.message}`)
+        }
+    }
 
     return (
         <AdminLayout>
@@ -126,9 +205,12 @@ export default function ProjectDetails() {
                     Back to Projects
                 </Link>
                 <div className="flex items-center gap-2">
+                    <button onClick={openAddPayment} className="bg-[#2e7d32] text-white px-3 py-1.5 rounded-lg font-bold text-[10px] shadow-sm hover:bg-[#1b5e20] transition-colors flex items-center gap-1.5">
+                        <span>+</span> Record Client Payment
+                    </button>
                     {isOngoing && (
                         <button onClick={() => setShowAddBudget(true)} className="bg-[#E8C547] text-gray-900 px-3 py-1.5 rounded-lg font-bold text-[10px] shadow-sm hover:bg-[#d4b33d] transition-colors flex items-center gap-1.5">
-                            <span>+</span> Add Budget
+                            <span>+</span> Add Expense Budget
                         </button>
                     )}
                     {isOngoing && (
@@ -166,8 +248,12 @@ export default function ProjectDetails() {
                     </div>
                     <div className="flex items-center gap-4">
                         <div>
-                            <p className="text-[11px] font-bold text-gray-400 tracking-widest uppercase mb-0.5">CONTRACT</p>
-                            <p className="text-xs font-extrabold text-[#A63228]">₱{budget.toLocaleString()}</p>
+                            <p className="text-[11px] font-bold text-gray-400 tracking-widest uppercase mb-0.5">CONTRACT AMOUNT</p>
+                            <p className="text-xs font-extrabold text-[#A63228]">₱{contractAmount.toLocaleString()}</p>
+                        </div>
+                        <div>
+                            <p className="text-[11px] font-bold text-gray-400 tracking-widest uppercase mb-0.5">EXPENSE BUDGET</p>
+                            <p className="text-xs font-extrabold text-gray-700">₱{budget.toLocaleString()}</p>
                             {addedTotal > 0 && (
                                 <p className="text-[10px] text-gray-400 font-semibold mt-0.5">includes ₱{addedTotal.toLocaleString()} added</p>
                             )}
@@ -179,6 +265,75 @@ export default function ProjectDetails() {
                 </div>
             </div>
 
+            {/* ── CLIENT PAYMENTS ── */}
+            <section className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 mb-4">
+                <div className="flex justify-between items-center gap-3 mb-3">
+                    <div>
+                        <h3 className="text-[11px] font-extrabold text-[#A63228] tracking-widest uppercase">CLIENT PAYMENTS</h3>
+                        <p className="text-[10px] text-gray-500 mt-0.5">Record received payments separately from project expenses.</p>
+                    </div>
+                    <button onClick={openAddPayment} className="shrink-0 bg-[#2e7d32] text-white px-3 py-1.5 rounded-lg font-bold text-[10px] hover:bg-[#1b5e20]">
+                        + Record Payment
+                    </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
+                    <div className="rounded-lg bg-gray-50 border border-gray-100 p-3">
+                        <p className="text-[10px] font-bold text-gray-400 uppercase">Contract Amount</p>
+                        <p className="text-sm font-extrabold text-gray-900">₱{contractAmount.toLocaleString()}</p>
+                        <p className="text-[10px] text-gray-500 mt-1">20% downpayment target: ₱{downPaymentTarget.toLocaleString()}</p>
+                    </div>
+                    <div className="rounded-lg bg-green-50 border border-green-100 p-3">
+                        <p className="text-[10px] font-bold text-green-700 uppercase">Payments Received</p>
+                        <p className="text-sm font-extrabold text-green-800">₱{totalPaymentsReceived.toLocaleString()}</p>
+                    </div>
+                    <div className={`rounded-lg border p-3 ${balanceDue < 0 ? 'bg-blue-50 border-blue-100' : 'bg-amber-50 border-amber-100'}`}>
+                        <p className={`text-[10px] font-bold uppercase ${balanceDue < 0 ? 'text-blue-700' : 'text-amber-700'}`}>
+                            {balanceDue < 0 ? 'Client Credit' : 'Balance Due'}
+                        </p>
+                        <p className={`text-sm font-extrabold ${balanceDue < 0 ? 'text-blue-800' : 'text-amber-800'}`}>
+                            ₱{Math.abs(balanceDue).toLocaleString()}
+                        </p>
+                    </div>
+                </div>
+
+                {clientPayments.length === 0 ? (
+                    <p className="text-[11px] text-gray-400 italic py-2">No client payments recorded yet.</p>
+                ) : (
+                    <div className="overflow-x-auto">
+                        <table className="w-full min-w-[560px] text-left">
+                            <thead>
+                                <tr className="border-b border-gray-100">
+                                    <th className="py-2 text-[10px] text-gray-400 uppercase">Date / Type</th>
+                                    <th className="py-2 text-[10px] text-gray-400 uppercase">Method / Reference</th>
+                                    <th className="py-2 text-[10px] text-gray-400 uppercase text-right">Amount</th>
+                                    <th className="py-2 w-10"></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {clientPayments.map(payment => (
+                                    <tr key={payment.id} className="border-b border-gray-50">
+                                        <td className="py-2 pr-2">
+                                            <p className="text-[11px] font-bold text-gray-800">{formatDate(payment.date)}</p>
+                                            <p className="text-[10px] text-gray-500">{payment.payment_type}</p>
+                                        </td>
+                                        <td className="py-2 pr-2">
+                                            <p className="text-[11px] text-gray-700">{payment.payment_method}</p>
+                                            {payment.reference && <p className="text-[10px] text-gray-400">Ref: {payment.reference}</p>}
+                                            {payment.note && <p className="text-[10px] text-gray-400">{payment.note}</p>}
+                                        </td>
+                                        <td className="py-2 text-right text-[11px] font-extrabold text-green-700">₱{Number(payment.amount || 0).toLocaleString()}</td>
+                                        <td className="py-2 text-right">
+                                            <button type="button" onClick={() => handleDeleteClientPayment(payment)} className="text-[10px] font-bold text-gray-400 hover:text-red-600" title="Delete payment">Delete</button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </section>
+
             {/* ── PROJECT MONITORING ── */}
             <div>
                 <h3 className="text-[11px] font-extrabold text-[#A63228] tracking-widest uppercase mb-1.5">PROJECT MONITORING</h3>
@@ -186,7 +341,7 @@ export default function ProjectDetails() {
                 {/* ── MAIN BUDGET CARD ── */}
                 <div className={`rounded-xl shadow-sm p-4 text-white mb-3 ${isOverBudget ? 'bg-gradient-to-r from-[#7a0000] via-[#a00000] to-[#5a0000]' : 'bg-gradient-to-r from-[#5a0f0a] via-[#7B1F16] to-[#4a0c08]'}`}>
                     <div className="flex justify-between items-center mb-2">
-                        <p className="text-[11px] font-bold text-white/70 tracking-widest uppercase">BUDGET OVERVIEW</p>
+                        <p className="text-[11px] font-bold text-white/70 tracking-widest uppercase">EXPENSE LIMIT OVERVIEW</p>
                         <span className={`text-[11px] font-extrabold px-2 py-0.5 rounded-full ${isOverBudget ? 'bg-red-300/30 text-red-200' : 'bg-white/10 text-white/80'}`}>
                             {isOverBudget ? '⚠ OVER BUDGET' : `${usedPercent}% USED`}
                         </span>
@@ -199,8 +354,8 @@ export default function ProjectDetails() {
                             <h2 className={`text-xl font-extrabold ${isOverBudget ? 'text-red-300' : ''}`}>₱{totalCombinedCost.toLocaleString()}</h2>
                         </div>
                         <div className="text-right">
-                            <p className="text-[11px] text-white/50 font-medium mb-0.5">Contract Budget</p>
-                            <h2 className="text-base font-extrabold text-white/80">₱{budget.toLocaleString()}</h2>
+                            <p className="text-[11px] text-white/50 font-medium mb-0.5">Maximum Expense Limit</p>
+                            <h2 className="text-base font-extrabold text-white/80">₱{expenseLimit.toLocaleString()}</h2>
                         </div>
                     </div>
 
@@ -214,7 +369,7 @@ export default function ProjectDetails() {
 
                     {/* Remaining */}
                     <div className="flex justify-between items-center text-[11px] font-medium mb-3">
-                        <span className="text-white/60">{usedPercent}% of budget used</span>
+                        <span className="text-white/60">{usedPercent}% of expense limit used</span>
                         <span className={`font-bold ${isOverBudget ? 'text-red-300' : 'text-[#E8C547]'}`}>
                             {isOverBudget ? `Over by ₱${Math.abs(remainingBudget).toLocaleString()}` : `Remaining: ₱${remainingBudget.toLocaleString()}`}
                         </span>
@@ -334,6 +489,129 @@ export default function ProjectDetails() {
                     </div>
                 )}
             </div>
+
+            {showAddPayment && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-3">
+                    <div className="bg-white rounded-2xl w-full max-w-[420px] shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+                        <div className="flex justify-between items-center p-4 border-b border-gray-100">
+                            <div>
+                                <h3 className="text-xs font-extrabold text-gray-900">Record Client Payment</h3>
+                                <p className="text-[11px] text-gray-500 mt-0.5">{project.name}</p>
+                            </div>
+                            <button type="button" onClick={() => setShowAddPayment(false)} className="text-gray-400 hover:text-gray-700">✕</button>
+                        </div>
+                        <form onSubmit={handleAddClientPayment} className="p-4 overflow-y-auto flex flex-col gap-3">
+                            <div className="grid grid-cols-2 gap-2 rounded-lg bg-gray-50 border border-gray-100 p-3">
+                                <div>
+                                    <p className="text-[10px] font-bold text-gray-400 uppercase">Contract Amount</p>
+                                    <p className="text-[11px] font-extrabold text-gray-900">₱{contractAmount.toLocaleString()}</p>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] font-bold text-gray-400 uppercase">Balance Due</p>
+                                    <p className="text-[11px] font-extrabold text-amber-700">₱{Math.max(0, balanceDue).toLocaleString()}</p>
+                                </div>
+                            </div>
+
+                            <div>
+                                <div className="flex justify-between items-center mb-1">
+                                    <label className="text-[11px] font-bold text-gray-700 uppercase">Payment Amount (₱) *</label>
+                                    <button
+                                        type="button"
+                                        onClick={() => setPaymentForm(prev => ({ ...prev, amount: suggestedDownPayment.toFixed(2) }))}
+                                        disabled={suggestedDownPayment <= 0}
+                                        className="text-[10px] font-bold text-[#2e7d32] hover:underline disabled:text-gray-400 disabled:no-underline"
+                                    >
+                                        Use 20% downpayment ({`₱${suggestedDownPayment.toLocaleString()}`})
+                                    </button>
+                                </div>
+                                <input
+                                    type="number"
+                                    min="0.01"
+                                    max="999999999999"
+                                    step="0.01"
+                                    value={paymentForm.amount}
+                                    onChange={e => setPaymentForm(prev => ({ ...prev, amount: e.target.value }))}
+                                    required
+                                    className="w-full bg-[#f4f1ee] rounded-md px-2.5 py-2 text-xs font-bold outline-none focus:border-[#2e7d32] border border-transparent"
+                                    placeholder="0.00"
+                                />
+                                <p className="text-[10px] text-gray-400 mt-1">Suggested amount is the remaining balance toward 20% of the contract amount.</p>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label className="block text-[11px] font-bold text-gray-700 uppercase mb-1">Payment Type *</label>
+                                    <select
+                                        value={paymentForm.paymentType}
+                                        onChange={e => setPaymentForm(prev => ({ ...prev, paymentType: e.target.value }))}
+                                        required
+                                        className="w-full bg-[#f4f1ee] rounded-md px-2.5 py-2 text-[11px] outline-none"
+                                    >
+                                        <option value="Downpayment">Downpayment</option>
+                                        <option value="Progress Payment">Progress Payment</option>
+                                        <option value="Final Payment">Final Payment</option>
+                                        <option value="Other">Other</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-[11px] font-bold text-gray-700 uppercase mb-1">Payment Method *</label>
+                                    <select
+                                        value={paymentForm.paymentMethod}
+                                        onChange={e => setPaymentForm(prev => ({ ...prev, paymentMethod: e.target.value }))}
+                                        required
+                                        className="w-full bg-[#f4f1ee] rounded-md px-2.5 py-2 text-[11px] outline-none"
+                                    >
+                                        <option value="Cash">Cash</option>
+                                        <option value="Bank Transfer">Bank Transfer</option>
+                                        <option value="Check">Check</option>
+                                        <option value="E-wallet">E-wallet</option>
+                                        <option value="Other">Other</option>
+                                    </select>
+                                </div>
+                                <div className="col-span-2">
+                                    <label className="block text-[11px] font-bold text-gray-700 uppercase mb-1">Date Received *</label>
+                                    <input
+                                        type="date"
+                                        value={paymentForm.date}
+                                        onChange={e => setPaymentForm(prev => ({ ...prev, date: e.target.value }))}
+                                        required
+                                        className="w-full bg-[#f4f1ee] rounded-md px-2.5 py-2 text-[11px] outline-none"
+                                    />
+                                </div>
+                                <div className="col-span-2">
+                                    <label className="block text-[11px] font-bold text-gray-700 uppercase mb-1">Reference / Receipt No. <span className="font-normal text-gray-400">(Optional)</span></label>
+                                    <input
+                                        type="text"
+                                        maxLength={100}
+                                        value={paymentForm.reference}
+                                        onChange={e => setPaymentForm(prev => ({ ...prev, reference: e.target.value }))}
+                                        className="w-full bg-[#f4f1ee] rounded-md px-2.5 py-2 text-[11px] outline-none"
+                                        placeholder="e.g. bank transaction or receipt number"
+                                    />
+                                </div>
+                                <div className="col-span-2">
+                                    <label className="block text-[11px] font-bold text-gray-700 uppercase mb-1">Note <span className="font-normal text-gray-400">(Optional)</span></label>
+                                    <textarea
+                                        rows="2"
+                                        maxLength={250}
+                                        value={paymentForm.note}
+                                        onChange={e => setPaymentForm(prev => ({ ...prev, note: e.target.value }))}
+                                        className="w-full resize-y bg-[#f4f1ee] rounded-md px-2.5 py-2 text-[11px] outline-none"
+                                        placeholder="Additional payment details"
+                                    />
+                                </div>
+                            </div>
+                            {paymentError && <p className="text-[11px] text-red-600 font-bold">{paymentError}</p>}
+                            <div className="flex gap-2 pt-1">
+                                <button type="button" onClick={() => setShowAddPayment(false)} disabled={paymentSaving} className="flex-1 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-[11px] font-bold">Cancel</button>
+                                <button type="submit" disabled={paymentSaving} className="flex-1 py-2 bg-[#2e7d32] text-white rounded-lg text-[11px] font-bold disabled:opacity-60">
+                                    {paymentSaving ? 'Saving...' : 'Save Payment'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
 
             {showAddBudget && (
                 <AddBudgetModal

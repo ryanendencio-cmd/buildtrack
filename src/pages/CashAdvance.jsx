@@ -4,6 +4,7 @@ import AdminLayout from '../components/AdminLayout'
 import { api } from '../api'
 import Pagination from '../components/Pagination'
 import { usePagination } from '../components/usePagination'
+import RejectionReasonModal from '../components/RejectionReasonModal'
 
 const ADVANCE_REASONS = [
     'Emergency / Medical Expenses',
@@ -25,6 +26,7 @@ export default function CashAdvance() {
 
     const [modalState, setModalState] = useState('NONE'); // NONE, ADD, CONFIRM, SUCCESS, DELETE_CONFIRM
     const [selectedAdvanceForDelete, setSelectedAdvanceForDelete] = useState(null);
+    const [rejectionAdvance, setRejectionAdvance] = useState(null);
     const [formError, setFormError] = useState('');
 
     const [formData, setFormData] = useState({
@@ -56,7 +58,10 @@ export default function CashAdvance() {
                 setMockProjects(projs.map(p => ({
                     id: String(p.id),
                     name: p.name,
-                    budget: Number(p.budget) || 0,
+                    budget: Math.min(
+                        Number(p.budget ?? p.contract_amount) || 0,
+                        Number(p.contract_amount ?? p.budget) || 0
+                    ),
                     status: p.status || 'ONGOING'
                 })));
             }
@@ -221,11 +226,15 @@ export default function CashAdvance() {
     }, [formSelectedProject, formSelectedWorker]);
 
     // Actions
-    const handleApproveStatus = (advId, newStatus) => {
-        api.put(`/cash-advances/${advId}/approve`, { status: newStatus }).then(() => {
+    const handleApproveStatus = (advId, newStatus, rejectionReason = null) => {
+        return api.put(`/cash-advances/${advId}/approve`, {
+            status: newStatus,
+            ...(newStatus === 'Rejected' ? { rejection_reason: rejectionReason } : {})
+        }).then(() => {
             fetchCashAdvances();
             loadInitialData(); // Reload expenses so project budget spent updates immediately
         }).catch(err => {
+            if (newStatus === 'Rejected') throw err;
             console.error(err);
             alert(err.message || 'Failed to update status.');
         });
@@ -660,7 +669,7 @@ export default function CashAdvance() {
                                                             </button>
                                                             <button
                                                                 type="button"
-                                                                onClick={() => handleApproveStatus(adv.id, 'Rejected')}
+                                                                onClick={() => setRejectionAdvance(adv)}
                                                                 className="bg-white border border-[#A63228] text-[#A63228] px-1.5 py-0.5 rounded text-[11px] font-bold hover:bg-red-50 cursor-pointer"
                                                             >
                                                                 Reject
@@ -1130,6 +1139,16 @@ export default function CashAdvance() {
                         </button>
                     </div>
                 </div>
+            )}
+
+            {rejectionAdvance && (
+                <RejectionReasonModal
+                    title="Reject cash advance request"
+                    subject={`${rejectionAdvance.workerName || 'Worker'} · ₱${Number(rejectionAdvance.amount || 0).toLocaleString()}`}
+                    onCancel={() => setRejectionAdvance(null)}
+                    onSubmit={reason => handleApproveStatus(rejectionAdvance.id, 'Rejected', reason)
+                        .then(() => setRejectionAdvance(null))}
+                />
             )}
 
             {/* ── DELETE CONFIRMATION MODAL ── */}

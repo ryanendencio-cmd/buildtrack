@@ -101,6 +101,12 @@ function classifyTimeIn(timeStr, session, settings = {}) {
 function resolveRfidAttendanceAction(minutes, record, settings = {}) {
   const normalized = normalizeAttendanceSettings(settings)
   const hasTime = value => Boolean(value && value !== '—' && value !== '--:--')
+  const firstShiftClosed = normalized.first_shift_closed === true
+  const secondShiftClosed = normalized.second_shift_closed === true
+  const closedShiftError = shift => ({
+    error: `${shift} Shift is closed for today. Time In and Time Out are disabled.`,
+    action: 'SHIFT_CLOSED'
+  })
   const within = (startKey, closeKey) => {
     const start = parseTimeToMinutes(normalized[startKey])
     const close = parseTimeToMinutes(normalized[closeKey])
@@ -111,10 +117,12 @@ function resolveRfidAttendanceAction(minutes, record, settings = {}) {
   const hasMorningOut = hasTime(record?.morning_out)
   const hasAfternoonIn = hasTime(record?.afternoon_in)
   const hasAfternoonOut = hasTime(record?.afternoon_out)
+  const afternoonStartsNow = minutes === parseTimeToMinutes(normalized.morning_time_out_close) &&
+    within('afternoon_time_in_start', 'afternoon_time_in_close')
 
-  if (within('morning_time_out_start', 'morning_time_out_close')) {
-    const afternoonStartsNow = minutes === parseTimeToMinutes(normalized.morning_time_out_close) &&
-      within('afternoon_time_in_start', 'afternoon_time_in_close')
+  if (within('morning_time_out_start', 'morning_time_out_close') &&
+      !(firstShiftClosed && afternoonStartsNow)) {
+    if (firstShiftClosed) return closedShiftError('1st')
     if (!hasMorningIn && !afternoonStartsNow) {
       return { error: 'Cannot record morning Time Out without a morning Time In.', action: 'NO_TIME_IN' }
     }
@@ -122,11 +130,13 @@ function resolveRfidAttendanceAction(minutes, record, settings = {}) {
   }
 
   if (within('morning_time_in_start', 'morning_time_in_close')) {
+    if (firstShiftClosed) return closedShiftError('1st')
     return hasMorningIn
       ? { error: 'Morning Time In has already been recorded.', action: 'ALREADY_COMPLETED' }
       : { action: 'MORNING TIME IN' }
   }
   if (within('afternoon_time_out_start', 'afternoon_time_out_close')) {
+    if (secondShiftClosed) return closedShiftError('2nd')
     if (!hasAfternoonIn) {
       return { error: 'Cannot record afternoon Time Out without an afternoon Time In.', action: 'NO_TIME_IN' }
     }
@@ -135,11 +145,27 @@ function resolveRfidAttendanceAction(minutes, record, settings = {}) {
       : { action: 'AFTERNOON TIME OUT (5 PM)' }
   }
   if (within('afternoon_time_in_start', 'afternoon_time_in_close')) {
+    if (secondShiftClosed) return closedShiftError('2nd')
     return hasAfternoonIn
       ? { error: 'Afternoon Time In has already been recorded.', action: 'ALREADY_COMPLETED' }
       : { action: 'AFTERNOON TIME IN (1 PM)' }
   }
   return { error: 'Attendance is closed at this time.', action: 'ATTENDANCE_WINDOW_CLOSED' }
+}
+
+function validateClosedShiftTimeChanges(morningIn, morningOut, afternoonIn, afternoonOut, settings = {}, previous = {}) {
+  const hasTimeChanged = (value, previousValue) =>
+    Boolean(value && value !== '—' && value !== '--:--') && value !== previousValue
+
+  if (settings.first_shift_closed === true &&
+      (hasTimeChanged(morningIn, previous.morning_in) || hasTimeChanged(morningOut, previous.morning_out))) {
+    return '1st Shift is closed for today. Time In and Time Out are disabled.'
+  }
+  if (settings.second_shift_closed === true &&
+      (hasTimeChanged(afternoonIn, previous.afternoon_in) || hasTimeChanged(afternoonOut, previous.afternoon_out))) {
+    return '2nd Shift is closed for today. Time In and Time Out are disabled.'
+  }
+  return null
 }
 
 function evaluateTwoSessions(morningIn, afternoonIn, baseRate, rules = {}) {
@@ -228,6 +254,7 @@ module.exports = {
   validateAttendanceSettings,
   classifyTimeIn,
   resolveRfidAttendanceAction,
+  validateClosedShiftTimeChanges,
   evaluateTwoSessions,
   calculateOvertimePay,
   calculateDailyEarnings

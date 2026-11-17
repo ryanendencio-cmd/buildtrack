@@ -5,12 +5,15 @@ const nodemailer = require('nodemailer')
 const crypto = require('crypto')
 const jwt = require('jsonwebtoken')
 const { MySQLFirestoreAdapter, FieldValue } = require('./mysql-adapter')
+const { validateRejectionReason } = require('./rejection-reason')
+const { getProjectExpenseLimit } = require('./expense-limit')
 const {
   normalizeAttendanceSettings,
   parseTimeToMinutes,
   validateAttendanceSettings,
   classifyTimeIn,
   resolveRfidAttendanceAction,
+  validateClosedShiftTimeChanges,
   evaluateTwoSessions,
   calculateOvertimePay,
   calculateDailyEarnings
@@ -19,7 +22,7 @@ const {
 const db = new MySQLFirestoreAdapter({
   host: process.env.DB_HOST || '127.0.0.1',
   user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD !== undefined ? process.env.DB_PASSWORD : 'root',
+  password: process.env.DB_PASSWORD !== undefined ? process.env.DB_PASSWORD : '',
   database: process.env.DB_NAME || 'buildtrack_db',
   port: Number(process.env.DB_PORT) || 3306
 })
@@ -29,12 +32,7 @@ const PUBLIC_EMAIL_DOMAINS = new Set([
   'yahoo.com',
   'outlook.com',
   'hotmail.com',
-  'icloud.com',
-  'proton.me',
-  'zohomail.com',
-  'gmx.com',
-  'aol.com',
-  'yandex.com'
+  'icloud.com'
 ])
 const EMAIL_OTP_LIFETIME_MS = 5 * 60 * 1000
 const EMAIL_OTP_RESEND_DELAY_MS = 60 * 1000
@@ -196,9 +194,8 @@ function isAttendancePresent(status) {
 }
 
 async function assignWorkerCode(workerRef, year, minimumSequence = 0) {
-  const firestore = db.firestore
-  const counterRef = firestore.collection('worker_counters').doc(String(year))
-  return firestore.runTransaction(async transaction => {
+  const counterRef = db.collection('worker_counters').doc(String(year))
+  return db.runTransaction(async transaction => {
     const workerSnapshot = await transaction.get(workerRef)
     if (!workerSnapshot.exists) return null
     const existingCode = workerSnapshot.data().worker_code
@@ -208,12 +205,12 @@ async function assignWorkerCode(workerRef, year, minimumSequence = 0) {
     const storedSequence = Number(counterSnapshot.exists ? counterSnapshot.data().sequence : 0) || 0
     const nextSequence = Math.max(storedSequence, minimumSequence) + 1
     const workerCode = `Worker_${year}_${String(nextSequence).padStart(4, '0')}`
-    transaction.set(counterRef, {
+    await transaction.set(counterRef, {
       year,
       sequence: nextSequence,
       updated_at: new Date()
     }, { merge: true })
-    transaction.update(workerRef, { worker_code: workerCode })
+    await transaction.update(workerRef, { worker_code: workerCode })
     return workerCode
   })
 }
@@ -222,7 +219,7 @@ let workerCodeBackfillPromise
 async function ensureWorkerCodes() {
   if (!workerCodeBackfillPromise) {
     workerCodeBackfillPromise = (async () => {
-      const snapshot = await db.firestore.collection('workers').get()
+      const snapshot = await db.collection('workers').get()
       const maximumByYear = new Map()
       const missingByYear = new Map()
 
@@ -266,11 +263,11 @@ async function ensureWorkerCodes() {
 }
 
 async function createWorkerCode(year) {
-  const counterRef = db.firestore.collection('worker_counters').doc(String(year))
-  return db.firestore.runTransaction(async transaction => {
+  const counterRef = db.collection('worker_counters').doc(String(year))
+  return db.runTransaction(async transaction => {
     const counterSnapshot = await transaction.get(counterRef)
     const sequence = (Number(counterSnapshot.exists ? counterSnapshot.data().sequence : 0) || 0) + 1
-    transaction.set(counterRef, {
+    await transaction.set(counterRef, {
       year,
       sequence,
       updated_at: new Date()
@@ -311,7 +308,8 @@ async function resolveProjectId(pid) {
   return null
 }
 
-function startServer() {
+async function startServer() {
+  await db.ready
 
   // ── HEALTH CHECK (for Railway deployment) ──
   app.get('/api/health', (req, res) => {
@@ -454,12 +452,44 @@ function startServer() {
 
   // Rule: Only 1 active project at a time. A new project cannot be created unless existing ones are COMPLETED.
   app.post('/api/projects', async (req, res) => {
-    const { name, location, budget, progress, start_date, end_date, status, address_obj } = req.body
+    const {
+      name, location, budget, contract_amount, progress, start_date, end_date, status, address_obj,
+      project_type, building_type, number_of_floors, lot_area, floor_area, project_description
+    } = req.body
     const targetStatus = status || 'Active'
     const MAX_AMOUNT = 999999999999
+    const expenseBudget = Number(budget)
+    const contractAmount = Number(contract_amount ?? budget)
 
-    if (budget !== undefined && Number(budget) > MAX_AMOUNT) {
-      return res.status(400).json({ error: 'Budget allocated cannot exceed ₱999,999,999,999.' })
+    if (!Number.isFinite(contractAmount) || contractAmount <= 0 || contractAmount > MAX_AMOUNT) {
+      return res.status(400).json({ error: 'Contract amount must be greater than 0 and cannot exceed ₱999,999,999,999.' })
+    }
+    if (!Number.isFinite(expenseBudget) || expenseBudget <= 0 || expenseBudget > MAX_AMOUNT) {
+      return res.status(400).json({ error: 'Expense budget must be greater than 0 and cannot exceed ₱999,999,999,999.' })
+    }
+    if (typeof project_type !== 'string' || !project_type.trim()) {
+      return res.status(400).json({ error: 'Project Type is required.' })
+    }
+    if (typeof building_type !== 'string' || !building_type.trim()) {
+      return res.status(400).json({ error: 'Building Type is required.' })
+    }
+    const floorCount = Number(number_of_floors)
+    if (!Number.isInteger(floorCount) || floorCount < 1) {
+      return res.status(400).json({ error: 'Number of floors must be a whole number greater than 0.' })
+    }
+    const lotAreaValue = Number(lot_area)
+    if (!Number.isFinite(lotAreaValue) || lotAreaValue <= 0) {
+      return res.status(400).json({ error: 'Lot Area must be greater than 0.' })
+    }
+    const floorAreaValue = Number(floor_area)
+    if (!Number.isFinite(floorAreaValue) || floorAreaValue <= 0) {
+      return res.status(400).json({ error: 'Floor Area must be greater than 0.' })
+    }
+    if (project_description !== undefined && typeof project_description !== 'string') {
+      return res.status(400).json({ error: 'Project Description must be text.' })
+    }
+    if (project_description && project_description.length > 250) {
+      return res.status(400).json({ error: 'Project Description cannot exceed 250 characters.' })
     }
 
     try {
@@ -482,7 +512,13 @@ function startServer() {
       }
 
       const newProject = {
-        name, location, budget, progress: progress || 0, start_date, end_date, status: targetStatus,
+        name, location, budget: expenseBudget, contract_amount: contractAmount, progress: progress || 0, start_date, end_date, status: targetStatus,
+        project_type: project_type.trim(),
+        building_type: building_type.trim(),
+        number_of_floors: floorCount,
+        lot_area: lotAreaValue,
+        floor_area: floorAreaValue,
+        project_description: (project_description || '').trim(),
         address_obj: address_obj || null,
         created_at: FieldValue.serverTimestamp()
       }
@@ -490,10 +526,10 @@ function startServer() {
       recordAuditLog({
         action: 'PROJECT_CREATED',
         module: 'Projects',
-        description: `Created new project "${name}" with budget ₱${Number(budget || 0).toLocaleString()} (Status: ${targetStatus}).`,
+        description: `Created new project "${name}" with contract amount ₱${contractAmount.toLocaleString()} and expense budget ₱${expenseBudget.toLocaleString()} (Status: ${targetStatus}).`,
         target_id: docRef.id,
         target_name: name,
-        details: { budget, status: targetStatus, location, start_date, end_date },
+        details: { budget: expenseBudget, contract_amount: contractAmount, status: targetStatus, location, start_date, end_date },
         req
       }).catch(() => {})
       res.json({ id: docRef.id, ...newProject })
@@ -503,11 +539,39 @@ function startServer() {
   })
 
   app.put('/api/projects/:id', async (req, res) => {
-    const { name, location, budget, progress, start_date, end_date, status, address_obj } = req.body
+    const {
+      name, location, budget, contract_amount, progress, start_date, end_date, status, address_obj,
+      project_type, building_type, number_of_floors, lot_area, floor_area, project_description
+    } = req.body
     const MAX_AMOUNT = 999999999999
 
     if (budget !== undefined && Number(budget) > MAX_AMOUNT) {
-      return res.status(400).json({ error: 'Budget allocated cannot exceed ₱999,999,999,999.' })
+      return res.status(400).json({ error: 'Expense budget cannot exceed ₱999,999,999,999.' })
+    }
+    if (contract_amount !== undefined && (!Number.isFinite(Number(contract_amount)) || Number(contract_amount) <= 0 || Number(contract_amount) > MAX_AMOUNT)) {
+      return res.status(400).json({ error: 'Contract amount must be greater than 0 and cannot exceed ₱999,999,999,999.' })
+    }
+    const hasValue = value => value !== undefined && value !== null && String(value).trim() !== ''
+    if (project_type !== undefined && hasValue(project_type) && typeof project_type !== 'string') {
+      return res.status(400).json({ error: 'Project Type must be text.' })
+    }
+    if (building_type !== undefined && hasValue(building_type) && typeof building_type !== 'string') {
+      return res.status(400).json({ error: 'Building Type must be text.' })
+    }
+    if (hasValue(number_of_floors) && (!Number.isInteger(Number(number_of_floors)) || Number(number_of_floors) < 1)) {
+      return res.status(400).json({ error: 'Number of floors must be a whole number greater than 0.' })
+    }
+    if (hasValue(lot_area) && (!Number.isFinite(Number(lot_area)) || Number(lot_area) <= 0)) {
+      return res.status(400).json({ error: 'Lot Area must be greater than 0.' })
+    }
+    if (hasValue(floor_area) && (!Number.isFinite(Number(floor_area)) || Number(floor_area) <= 0)) {
+      return res.status(400).json({ error: 'Floor Area must be greater than 0.' })
+    }
+    if (project_description !== undefined && project_description !== null && typeof project_description !== 'string') {
+      return res.status(400).json({ error: 'Project Description must be text.' })
+    }
+    if (typeof project_description === 'string' && project_description.length > 250) {
+      return res.status(400).json({ error: 'Project Description cannot exceed 250 characters.' })
     }
 
     try {
@@ -531,7 +595,31 @@ function startServer() {
       }
 
       const updateData = {
-        name, location, budget, progress, start_date, end_date, status
+        name, location, progress, start_date, end_date, status
+      }
+      if (budget !== undefined) {
+        updateData.budget = budget
+      }
+      if (contract_amount !== undefined) {
+        updateData.contract_amount = Number(contract_amount)
+      }
+      if (project_type !== undefined) {
+        updateData.project_type = typeof project_type === 'string' ? project_type.trim() : null
+      }
+      if (building_type !== undefined) {
+        updateData.building_type = typeof building_type === 'string' ? building_type.trim() : null
+      }
+      if (number_of_floors !== undefined) {
+        updateData.number_of_floors = hasValue(number_of_floors) ? Number(number_of_floors) : null
+      }
+      if (lot_area !== undefined) {
+        updateData.lot_area = hasValue(lot_area) ? Number(lot_area) : null
+      }
+      if (floor_area !== undefined) {
+        updateData.floor_area = hasValue(floor_area) ? Number(floor_area) : null
+      }
+      if (project_description !== undefined) {
+        updateData.project_description = typeof project_description === 'string' ? project_description.trim() : ''
       }
       if (address_obj !== undefined) {
         updateData.address_obj = address_obj
@@ -648,6 +736,101 @@ function startServer() {
     }
   })
 
+  // ── CLIENT PAYMENTS ──
+  app.get('/api/projects/:id/client-payments', async (req, res) => {
+    try {
+      const projectDoc = await db.collection('projects').doc(req.params.id).get()
+      if (!projectDoc.exists) return res.status(404).json({ error: 'Project not found.' })
+
+      const snapshot = await db.collection('client_payments')
+        .where('project_id', '==', req.params.id)
+        .get()
+      const payments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+      payments.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
+      res.json(payments)
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  app.post('/api/projects/:id/client-payments', async (req, res) => {
+    const MAX_AMOUNT = 999999999999
+    const amount = Number(req.body.amount)
+    const date = String(req.body.date || new Date().toISOString().slice(0, 10))
+    const paymentType = String(req.body.payment_type || '')
+    const paymentMethod = String(req.body.payment_method || '')
+    const reference = String(req.body.reference || '').trim()
+    const note = String(req.body.note || '').trim()
+    const paymentTypes = ['Downpayment', 'Progress Payment', 'Final Payment', 'Other']
+    const paymentMethods = ['Cash', 'Bank Transfer', 'Check', 'E-wallet', 'Other']
+    const validDate = /^\d{4}-\d{2}-\d{2}$/.test(date) &&
+      !Number.isNaN(Date.parse(`${date}T00:00:00Z`)) &&
+      new Date(`${date}T00:00:00Z`).toISOString().slice(0, 10) === date
+
+    if (!Number.isFinite(amount) || amount <= 0 || amount > MAX_AMOUNT) {
+      return res.status(400).json({ error: 'Payment amount must be greater than 0 and cannot exceed ₱999,999,999,999.' })
+    }
+    if (!validDate) return res.status(400).json({ error: 'Enter a valid payment date.' })
+    if (!paymentTypes.includes(paymentType)) return res.status(400).json({ error: 'Select a valid payment type.' })
+    if (!paymentMethods.includes(paymentMethod)) return res.status(400).json({ error: 'Select a valid payment method.' })
+    if (reference.length > 100) return res.status(400).json({ error: 'Payment reference cannot exceed 100 characters.' })
+    if (note.length > 250) return res.status(400).json({ error: 'Payment note cannot exceed 250 characters.' })
+
+    try {
+      const projectDoc = await db.collection('projects').doc(req.params.id).get()
+      if (!projectDoc.exists) return res.status(404).json({ error: 'Project not found.' })
+
+      const payment = {
+        project_id: req.params.id,
+        amount,
+        date,
+        payment_type: paymentType,
+        payment_method: paymentMethod,
+        reference,
+        note,
+        created_at: FieldValue.serverTimestamp()
+      }
+      const docRef = await db.collection('client_payments').add(payment)
+      recordAuditLog({
+        action: 'CLIENT_PAYMENT_RECORDED',
+        module: 'Client Payments',
+        description: `Recorded a ${paymentType.toLowerCase()} of ₱${amount.toLocaleString()} for project "${projectDoc.data().name}".`,
+        target_id: docRef.id,
+        target_name: projectDoc.data().name,
+        details: payment,
+        req
+      }).catch(() => {})
+      res.json({ id: docRef.id, ...payment })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  app.delete('/api/projects/:id/client-payments/:paymentId', async (req, res) => {
+    try {
+      const paymentRef = db.collection('client_payments').doc(req.params.paymentId)
+      const paymentDoc = await paymentRef.get()
+      if (!paymentDoc.exists || String(paymentDoc.data().project_id) !== String(req.params.id)) {
+        return res.status(404).json({ error: 'Client payment not found.' })
+      }
+
+      const projectDoc = await db.collection('projects').doc(req.params.id).get()
+      await paymentRef.delete()
+      recordAuditLog({
+        action: 'CLIENT_PAYMENT_DELETED',
+        module: 'Client Payments',
+        description: `Deleted a recorded client payment of ₱${Number(paymentDoc.data().amount || 0).toLocaleString()} for project "${projectDoc.data()?.name || 'Project'}".`,
+        target_id: req.params.paymentId,
+        target_name: projectDoc.data()?.name || 'Project',
+        details: paymentDoc.data(),
+        req
+      }).catch(() => {})
+      res.json({ success: true })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
   // ── EXPENSES ──
   app.get('/api/expenses', async (req, res) => {
     try {
@@ -696,10 +879,16 @@ function startServer() {
       let totalBudget = 0
       if (pid) {
         const pDoc = await db.collection('projects').doc(pid).get()
-        if (pDoc.exists) totalBudget = Number(pDoc.data().budget || 0)
+        if (pDoc.exists) {
+          const project = pDoc.data()
+          totalBudget = getProjectExpenseLimit(project) ?? Number(project.budget || 0)
+        }
       } else {
         const pSnap = await db.collection('projects').get()
-        totalBudget = pSnap.docs.reduce((sum, doc) => sum + Number(doc.data().budget || 0), 0)
+        totalBudget = pSnap.docs.reduce((sum, doc) => {
+          const project = doc.data()
+          return sum + (getProjectExpenseLimit(project) ?? Number(project.budget || 0))
+        }, 0)
       }
       
       let eQuery = db.collection('expenses')
@@ -821,6 +1010,11 @@ function startServer() {
   app.post('/api/expenses', async (req, res) => {
     const { project_id, project, category, amount, receipt_no, date, time, items, cash_tendered, change, image } = req.body
     try {
+      const expenseAmount = Number(amount)
+      if (!Number.isFinite(expenseAmount) || expenseAmount <= 0 || expenseAmount > 999999999999) {
+        return res.status(400).json({ error: 'Please enter a valid expense amount up to ₱999,999,999,999.' })
+      }
+
       const pid = await resolveProjectId(project_id)
 
       // Prevent adding expenses to projects that are not ONGOING (e.g. Completed, Upcoming, Standby)
@@ -833,6 +1027,7 @@ function startServer() {
         const pSnap = await db.collection('projects').where('name', '==', project).limit(1).get()
         if (!pSnap.empty) targetProjectDoc = pSnap.docs[0]
       }
+      const resolvedProjectId = targetProjectDoc?.id || pid || project_id || null
       if (targetProjectDoc) {
         const pStatus = (targetProjectDoc.data().status || '').toUpperCase()
         const isOngoing = pStatus === 'ONGOING' || pStatus === 'ACTIVE'
@@ -841,6 +1036,21 @@ function startServer() {
           return res.status(400).json({
             error: `Bawal mag-add ng expenses sa proyektong hindi Ongoing ("${targetProjectDoc.data().name}"). Ang kasalukuyang status nito ay "${displayStatus}". Dapat ay ONGOING ang status ng proyekto.`
           })
+        }
+
+        const expenseLimit = getProjectExpenseLimit(targetProjectDoc.data())
+        if (expenseLimit !== null) {
+          const projectId = targetProjectDoc.id
+          const existingExpenses = await db.collection('expenses')
+            .where('project_id', '==', projectId)
+            .get()
+          const currentSpent = existingExpenses.docs.reduce((sum, doc) => sum + Number(doc.data().amount || 0), 0)
+          const remaining = expenseLimit - currentSpent
+          if (expenseAmount > remaining) {
+            return res.status(400).json({
+              error: `This expense exceeds the project's remaining limit of ₱${Math.max(remaining, 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}. The expense limit is the lower of the contract amount and expense budget.`
+            })
+          }
         }
       }
 
@@ -852,7 +1062,7 @@ function startServer() {
       }
 
       const newExpense = {
-        project_id: pid || project_id || null, project, category, amount, receipt_no, date, time, 
+        project_id: resolvedProjectId, project, category, amount: expenseAmount, receipt_no, date, time,
         items: typeof items === 'string' ? JSON.parse(items) : (items || []), 
         cash_tendered, change, image: image || null,
         created_at: FieldValue.serverTimestamp()
@@ -874,7 +1084,7 @@ function startServer() {
         details: { amount, category, project, receipt_no, date, items },
         req
       }).catch(() => {})
-      res.json({ id: docRef.id, ...req.body, project_id: pid || project_id || null })
+      res.json({ id: docRef.id, ...req.body, amount: expenseAmount, project_id: resolvedProjectId })
     } catch (err) {
       res.status(500).json({ error: err.message })
     }
@@ -883,14 +1093,59 @@ function startServer() {
   app.put('/api/expenses/:id', async (req, res) => {
     const { category, amount, receipt_no, date, time, items, cash_tendered, change, image } = req.body
     try {
+      const expenseRef = db.collection('expenses').doc(req.params.id)
+      const currentExpenseDoc = await expenseRef.get()
+      if (!currentExpenseDoc.exists) {
+        return res.status(404).json({ error: 'Expense record not found.' })
+      }
+
+      const expenseAmount = Number(amount)
+      if (!Number.isFinite(expenseAmount) || expenseAmount <= 0 || expenseAmount > 999999999999) {
+        return res.status(400).json({ error: 'Please enter a valid expense amount up to ₱999,999,999,999.' })
+      }
+
+      const currentExpense = currentExpenseDoc.data()
+      let projectDoc = null
+      if (currentExpense.project_id) {
+        const foundProject = await db.collection('projects').doc(currentExpense.project_id).get()
+        if (foundProject.exists) projectDoc = foundProject
+      }
+      if (!projectDoc && currentExpense.project) {
+        const projectSnapshot = await db.collection('projects')
+          .where('name', '==', currentExpense.project)
+          .limit(1)
+          .get()
+        if (!projectSnapshot.empty) projectDoc = projectSnapshot.docs[0]
+      }
+
+      const expenseProjectId = projectDoc?.id || currentExpense.project_id
+      if (projectDoc) {
+        const expenseLimit = getProjectExpenseLimit(projectDoc.data())
+        if (expenseLimit !== null) {
+          const existingExpenses = await db.collection('expenses')
+            .where('project_id', '==', expenseProjectId)
+            .get()
+          const spentWithoutCurrent = existingExpenses.docs
+            .filter(doc => doc.id !== req.params.id)
+            .reduce((sum, doc) => sum + Number(doc.data().amount || 0), 0)
+          const remaining = expenseLimit - spentWithoutCurrent
+          if (expenseAmount > remaining) {
+            return res.status(400).json({
+              error: `This update exceeds the project's remaining limit of ₱${Math.max(remaining, 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}. The expense limit is the lower of the contract amount and expense budget.`
+            })
+          }
+        }
+      }
+
       const updateData = {
-        category, amount, receipt_no, date, time, 
+        category, amount: expenseAmount, receipt_no, date, time,
         items: typeof items === 'string' ? JSON.parse(items) : (items || []), 
         cash_tendered, change
       }
+      if (expenseProjectId) updateData.project_id = expenseProjectId
       if (image) updateData.image = image
       
-      await db.collection('expenses').doc(req.params.id).update(updateData)
+      await expenseRef.update(updateData)
       recordAuditLog({
         action: 'EXPENSE_UPDATED',
         module: 'Expenses',
@@ -2131,31 +2386,67 @@ function startServer() {
   // Payroll applies the configured session evaluator once per worker per date.
 
   // ── ATTENDANCE SETTINGS & NON-WORKING DAYS ──
-  const isTodayInManila = date => {
-    const now = new Date()
+  const getTodayInManila = () => {
     const parts = new Intl.DateTimeFormat('en-CA', {
       timeZone: 'Asia/Manila',
       year: 'numeric',
       month: '2-digit',
       day: '2-digit'
-    }).formatToParts(now)
+    }).formatToParts(new Date())
     const value = type => parts.find(part => part.type === type)?.value
-    return date === `${value('year')}-${value('month')}-${value('day')}`
+    return `${value('year')}-${value('month')}-${value('day')}`
   }
+  const isTodayInManila = date => date === getTodayInManila()
 
   const hasRecordedTime = value =>
     Boolean(value && value !== '—' && value !== '--:--')
 
-  const requireWebAdmin = (req, res) => {
-    const role = String(req.get('x-actor-role') || '').toLowerCase()
-    if (req.get('x-client-platform') !== 'web' || !role.includes('admin')) {
-      res.status(403).json({ error: 'Attendance settings can only be changed by an Admin on the web app.' })
+  const requireAttendanceAdmin = async (req, res) => {
+    const platform = String(req.get('x-client-platform') || '').toLowerCase()
+    if (platform !== 'web' && platform !== 'mobile') {
+      res.status(403).json({ error: 'Attendance settings can only be changed by an Admin.' })
       return false
     }
+
+    const authorization = String(req.get('authorization') || '')
+    const token = /^Bearer\s+(.+)$/i.exec(authorization)?.[1]
+    if (!token) {
+      res.status(401).json({ error: 'An Admin login is required to change attendance settings.' })
+      return false
+    }
+
+    let claims
+    try {
+      claims = jwt.verify(token, process.env.JWT_SECRET || 'scon_super_secret_key_2026')
+    } catch {
+      res.status(401).json({ error: 'The Admin login is invalid or has expired.' })
+      return false
+    }
+    if (!claims || claims.type !== 'admin' || !claims.id) {
+      res.status(403).json({ error: 'Only authenticated Admin accounts can change attendance settings.' })
+      return false
+    }
+
+    try {
+      const adminSnapshot = await db.collection('admins').doc(String(claims.id)).get()
+      if (!adminSnapshot.exists) {
+        res.status(403).json({ error: 'This Admin account is no longer available.' })
+        return false
+      }
+      const role = String(adminSnapshot.data()?.role || 'admin').toLowerCase()
+      if (!role.includes('admin')) {
+        res.status(403).json({ error: 'Only Admin accounts can change attendance settings.' })
+        return false
+      }
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+      return false
+    }
+
     return true
   }
 
-  const validateAttendanceTimeWindow = (date, morningIn, morningOut, afternoonIn, afternoonOut, settings) => {
+  const validateAttendanceTimeWindow = (date, morningIn, morningOut, afternoonIn, afternoonOut, settings, previous = {}) => {
     if (hasRecordedTime(morningOut) && !hasRecordedTime(morningIn)) {
       return 'Morning Time Out requires a recorded Morning Time In.'
     }
@@ -2163,6 +2454,15 @@ function startServer() {
       return 'Afternoon Time Out requires a recorded Afternoon Time In.'
     }
     if (!isTodayInManila(date)) return null
+    const closedShiftError = validateClosedShiftTimeChanges(
+      morningIn,
+      morningOut,
+      afternoonIn,
+      afternoonOut,
+      settings,
+      previous
+    )
+    if (closedShiftError) return closedShiftError
     const rules = normalizeAttendanceSettings(settings)
     if (hasRecordedTime(morningIn) && classifyTimeIn(morningIn, 'morning', rules).status === 'Absent') {
       return `Morning Time In is only open from ${rules.morning_time_in_start} to ${rules.morning_time_in_close}.`
@@ -2187,6 +2487,8 @@ function startServer() {
     try {
       const doc = await db.collection('settings').doc('attendance').get()
       const current = doc.exists ? doc.data() : {}
+      const today = getTodayInManila()
+      const shiftClosuresAreCurrent = current.shift_closure_date === today
       res.json({
         ...normalizeAttendanceSettings(current),
         auto_schedule: true,
@@ -2198,7 +2500,10 @@ function startServer() {
         grace_period_minutes: 10,
         auto_sundays_off: true,
         manual_override: null,
-        ...current
+        ...current,
+        shift_closure_date: today,
+        first_shift_closed: shiftClosuresAreCurrent && current.first_shift_closed === true,
+        second_shift_closed: shiftClosuresAreCurrent && current.second_shift_closed === true
       })
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -2206,11 +2511,25 @@ function startServer() {
   })
 
   app.post('/api/attendance-settings', async (req, res) => {
-    if (!requireWebAdmin(req, res)) return
+    if (!(await requireAttendanceAdmin(req, res))) return
     try {
       const settingsRef = db.collection('settings').doc('attendance')
       const settingsSnapshot = await settingsRef.get()
       const previousSettings = settingsSnapshot.exists ? settingsSnapshot.data() : {}
+      for (const key of ['first_shift_closed', 'second_shift_closed']) {
+        if (req.body[key] !== undefined && typeof req.body[key] !== 'boolean') {
+          return res.status(400).json({ error: `${key} must be a boolean.` })
+        }
+      }
+      const today = getTodayInManila()
+      const closureReferenceDate = req.body.shift_closure_date ?? previousSettings.shift_closure_date
+      const closureDateIsCurrent = closureReferenceDate === today
+      const firstShiftClosed = closureDateIsCurrent
+        ? (req.body.first_shift_closed ?? (previousSettings.shift_closure_date === today && previousSettings.first_shift_closed === true))
+        : false
+      const secondShiftClosed = closureDateIsCurrent
+        ? (req.body.second_shift_closed ?? (previousSettings.shift_closure_date === today && previousSettings.second_shift_closed === true))
+        : false
       const requestedSettings = { ...previousSettings, ...req.body }
       const validation = validateAttendanceSettings(requestedSettings)
       if (typeof validation === 'string') {
@@ -2239,6 +2558,9 @@ function startServer() {
         grace_period_minutes: graceMinutes,
         auto_sundays_off: auto_sundays_off !== undefined ? Boolean(auto_sundays_off) : true,
         manual_override: manual_override !== undefined ? manual_override : null,
+        shift_closure_date: today,
+        first_shift_closed: firstShiftClosed,
+        second_shift_closed: secondShiftClosed,
         updated_by: updated_by || 'Admin / Attendance Monitoring Officer',
         updated_at: FieldValue.serverTimestamp()
       }
@@ -2246,7 +2568,7 @@ function startServer() {
       recordAuditLog({
         action: 'ATTENDANCE_SETTINGS_UPDATED',
         module: 'Settings',
-        description: `Updated shift schedule settings: Open ${open_time}, Close ${close_time}, Auto-Sundays: ${updateData.auto_sundays_off ? 'Active' : 'Disabled'}${manual_override ? ` (Override: ${manual_override})` : ''}.`,
+        description: `Updated shift schedule settings: Open ${open_time}, Close ${close_time}, Auto-Sundays: ${updateData.auto_sundays_off ? 'Active' : 'Disabled'}${manual_override ? ` (Override: ${manual_override})` : ''}. 1st Shift: ${firstShiftClosed ? 'Closed' : 'Open'}, 2nd Shift: ${secondShiftClosed ? 'Closed' : 'Open'}.`,
         actor_name: updated_by || 'Admin / Attendance Monitoring Officer',
         details: updateData,
         req
@@ -2273,7 +2595,7 @@ function startServer() {
   })
 
   app.put('/api/attendance-overtime-days/:date', async (req, res) => {
-    if (!requireWebAdmin(req, res)) return
+    if (!(await requireAttendanceAdmin(req, res))) return
     const date = req.params.date
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || typeof req.body.required !== 'boolean') {
       return res.status(400).json({ error: 'A valid date and required boolean are required.' })
@@ -2293,7 +2615,7 @@ function startServer() {
   })
 
   app.put('/api/attendance/:id/overtime', async (req, res) => {
-    if (!requireWebAdmin(req, res)) return
+    if (!(await requireAttendanceAdmin(req, res))) return
     const minutes = Number(req.body.overtime_minutes)
     if (!Number.isInteger(minutes) || minutes < 0 || minutes > 1440 ||
         typeof req.body.approved !== 'boolean') {
@@ -2443,8 +2765,11 @@ function startServer() {
   const getAttendanceEvaluationRules = async schedule => {
     const settingsDoc = await db.collection('settings').doc('attendance').get()
     const settings = settingsDoc.exists ? settingsDoc.data() : {}
+    const shiftClosuresAreCurrent = settings.shift_closure_date === getTodayInManila()
     return {
       ...normalizeAttendanceSettings(settings),
+      first_shift_closed: shiftClosuresAreCurrent && settings.first_shift_closed === true,
+      second_shift_closed: shiftClosuresAreCurrent && settings.second_shift_closed === true,
       morningStartTime: schedule?.start_time || schedule?.scheduled_time_in ||
         settings.default_time_in || '08:00',
       gracePeriodMinutes: Number(settings.grace_period_minutes ?? 10)
@@ -2459,7 +2784,7 @@ function startServer() {
   }) : {}
 
   app.post('/api/attendance-schedules', async (req, res) => {
-    if (!requireWebAdmin(req, res)) return
+    if (!(await requireAttendanceAdmin(req, res))) return
     const { date, worker_id, worker_name, start_time, end_time, working_hours, notes } = req.body
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || '')) ||
         !/^\d{2}:\d{2}$/.test(String(start_time || '')) ||
@@ -2505,7 +2830,7 @@ function startServer() {
   })
 
   app.delete('/api/attendance-schedules/:id', async (req, res) => {
-    if (!requireWebAdmin(req, res)) return
+    if (!(await requireAttendanceAdmin(req, res))) return
     try {
       await db.collection('attendance_schedules').doc(req.params.id).delete()
       res.json({ success: true })
@@ -2573,6 +2898,8 @@ function startServer() {
     if (!['Approved', 'Rejected'].includes(status)) {
       return res.status(400).json({ error: 'Review status must be Approved or Rejected.' })
     }
+    const rejection = status === 'Rejected' ? validateRejectionReason(rejection_reason) : { reason: null }
+    if (rejection.error) return res.status(400).json({ error: rejection.error })
     try {
       const requestRef = db.collection('early_out_requests').doc(req.params.id)
       const requestDoc = await requestRef.get()
@@ -2599,8 +2926,19 @@ function startServer() {
           return res.status(409).json({ error: 'The worker already has a recorded time out for this date.' })
         }
         const requestedTime = request.requested_out_time
-        const rate = Number(current.rate || 0)
         const rules = await getAttendanceEvaluationRules(current)
+        const closedShiftError = isTodayInManila(request.date)
+          ? validateClosedShiftTimeChanges(
+            current.morning_in,
+            current.morning_out,
+            current.afternoon_in,
+            requestedTime,
+            rules,
+            current
+          )
+          : null
+        if (closedShiftError) return res.status(409).json({ error: closedShiftError })
+        const rate = Number(current.rate || 0)
         const evaluation = evaluateTwoSessions(
           current.morning_in && current.morning_in !== '—' ? current.morning_in : current.time_in,
           current.afternoon_in,
@@ -2623,7 +2961,7 @@ function startServer() {
         status,
         reviewed_by: reviewed_by || req.get('x-actor-name') || 'Attendance Administrator',
         reviewed_at: FieldValue.serverTimestamp(),
-        rejection_reason: status === 'Rejected' ? (rejection_reason || '') : null,
+        rejection_reason: rejection.reason,
         applied_to_attendance: status === 'Approved'
       })
       res.json({ success: true, status, attendance_updated: status === 'Approved' })
@@ -2704,6 +3042,8 @@ function startServer() {
     if (!['Approved', 'Rejected'].includes(status)) {
       return res.status(400).json({ error: 'Review status must be Approved or Rejected.' })
     }
+    const rejection = status === 'Rejected' ? validateRejectionReason(rejection_reason) : { reason: null }
+    if (rejection.error) return res.status(400).json({ error: rejection.error })
     try {
       const requestRef = db.collection('attendance_correction_requests').doc(req.params.id)
       const requestDoc = await requestRef.get()
@@ -2731,6 +3071,17 @@ function startServer() {
           ? { time_in: request.requested_time, morning_in: request.requested_time }
           : { time_out: request.requested_time, afternoon_out: request.requested_time }
         const rules = await getAttendanceEvaluationRules(current)
+        const closedShiftError = isTodayInManila(request.date)
+          ? validateClosedShiftTimeChanges(
+            isTimeIn ? request.requested_time : current.morning_in,
+            current.morning_out,
+            current.afternoon_in,
+            isTimeIn ? current.afternoon_out : request.requested_time,
+            rules,
+            current
+          )
+          : null
+        if (closedShiftError) return res.status(409).json({ error: closedShiftError })
         const evaluation = evaluateTwoSessions(
           isTimeIn ? request.requested_time : (current.morning_in || current.time_in),
           current.afternoon_in,
@@ -2750,7 +3101,7 @@ function startServer() {
         status,
         reviewed_by: reviewed_by || req.get('x-actor-name') || 'Attendance Administrator',
         reviewed_at: FieldValue.serverTimestamp(),
-        rejection_reason: status === 'Rejected' ? (rejection_reason || '') : null,
+        rejection_reason: rejection.reason,
         applied_to_attendance: status === 'Approved'
       })
       res.json({ success: true, status, attendance_updated: status === 'Approved' })
@@ -3318,7 +3669,7 @@ function startServer() {
       }
 
       const rules = await getAttendanceEvaluationRules(existing)
-      const timeWindowError = validateAttendanceTimeWindow(existing.date, mIn, mOut, aIn, aOut, rules)
+      const timeWindowError = validateAttendanceTimeWindow(existing.date, mIn, mOut, aIn, aOut, rules, existing)
       if (timeWindowError) return res.status(400).json({ error: timeWindowError })
       const evaluated = evaluateTwoSessions(mIn, aIn, baseRate, rules)
       const finalStatus = status === 'Absent' ? 'Absent' : evaluated.status
@@ -3826,10 +4177,12 @@ function startServer() {
   }
 
   app.put('/api/cash-advances/:id/approve', async (req, res) => {
-    const { status } = req.body // 'Approved' or 'Rejected'
+    const { status, rejection_reason } = req.body // 'Approved' or 'Rejected'
     if (!['Approved', 'Rejected'].includes(status)) {
       return res.status(400).json({ error: 'Invalid status.' })
     }
+    const rejection = status === 'Rejected' ? validateRejectionReason(rejection_reason) : { reason: null }
+    if (rejection.error) return res.status(400).json({ error: rejection.error })
     try {
       const caDoc = await db.collection('cash_advances').doc(req.params.id).get()
       if (!caDoc.exists) return res.status(404).json({ error: 'Cash advance not found.' })
@@ -3841,17 +4194,38 @@ function startServer() {
         if (pid) {
           const pDoc = await db.collection('projects').doc(pid).get()
           if (pDoc.exists) {
-            const pStatus = (pDoc.data().status || '').toUpperCase()
+            const project = pDoc.data()
+            const pStatus = (project.status || '').toUpperCase()
             if (pStatus !== 'ONGOING' && pStatus !== 'ACTIVE') {
               return res.status(400).json({
-                error: `Bawal mag-approve ng vale sa proyektong hindi Ongoing ("${pDoc.data().name}"). Ang status nito ay "${pDoc.data().status || pStatus}". Bawal bawasan ang budget ng Upcoming o Completed na proyekto.`
+                error: `Bawal mag-approve ng vale sa proyektong hindi Ongoing ("${project.name}"). Ang status nito ay "${project.status || pStatus}". Bawal bawasan ang budget ng Upcoming o Completed na proyekto.`
               })
+            }
+
+            const expenseLimit = getProjectExpenseLimit(project)
+            if (expenseLimit !== null) {
+              const expenses = await db.collection('expenses')
+                .where('project_id', '==', pid)
+                .get()
+              const spentWithoutAdvance = expenses.docs
+                .filter(doc => doc.data().cash_advance_id !== req.params.id)
+                .reduce((sum, doc) => sum + Number(doc.data().amount || 0), 0)
+              const remaining = expenseLimit - spentWithoutAdvance
+              const advanceAmount = Number(caData.amount || 0)
+              if (advanceAmount > remaining) {
+                return res.status(400).json({
+                  error: `Approving this cash advance exceeds the project's remaining expense limit of ₱${Math.max(remaining, 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}.`
+                })
+              }
             }
           }
         }
       }
 
-      await db.collection('cash_advances').doc(req.params.id).update({ status })
+      await db.collection('cash_advances').doc(req.params.id).update({
+        status,
+        rejection_reason: rejection.reason
+      })
 
       // Deduct from or restore project budget in expenses
       await syncCashAdvanceExpense(req.params.id, { ...caData, status }, status === 'Approved')
@@ -3926,14 +4300,14 @@ function startServer() {
             })
           }
 
-          const pBudget = Number(pDoc.data().budget || 0)
-          if (pBudget > 0) {
+          const expenseLimit = getProjectExpenseLimit(pDoc.data())
+          if (expenseLimit !== null) {
             const expSnap = await db.collection('expenses').where('project_id', '==', pid).get()
             const currentSpent = expSnap.docs.reduce((s, d) => s + Number(d.data().amount || 0), 0)
-            const remainingBudget = pBudget - currentSpent
+            const remainingBudget = expenseLimit - currentSpent
             if (numAmount > remainingBudget) {
               return res.status(400).json({
-                error: `Requested advance (₱${numAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}) exceeds remaining project budget (₱${remainingBudget.toLocaleString('en-PH', { minimumFractionDigits: 2 })}).`
+                error: `Requested advance (₱${numAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}) exceeds the remaining project expense limit (₱${Math.max(remainingBudget, 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}).`
               })
             }
           }
@@ -5164,12 +5538,18 @@ function startServer() {
 
   // ── APPROVE/REJECT REGISTRATION (for Admin) ──
   app.put('/api/workers/:id/approve', async (req, res) => {
-    const { status } = req.body // 'Approved' or 'Rejected'
+    const { status, rejection_reason } = req.body // 'Approved' or 'Rejected'
+    if (!['Approved', 'Rejected'].includes(status)) {
+      return res.status(400).json({ error: 'Review status must be Approved or Rejected.' })
+    }
+    const rejection = status === 'Rejected' ? validateRejectionReason(rejection_reason) : { reason: null }
+    if (rejection.error) return res.status(400).json({ error: rejection.error })
     try {
-      const cleanStatus = status === 'Approved' ? 'Approved' : 'Rejected'
+      const cleanStatus = status
       const updateData = {
         approval_status: cleanStatus,
-        status: cleanStatus === 'Approved' ? 'Active' : 'Inactive'
+        status: cleanStatus === 'Approved' ? 'Active' : 'Inactive',
+        rejection_reason: rejection.reason
       }
       const wDoc = await db.collection('workers').doc(req.params.id).get()
       const wName = wDoc.exists ? (wDoc.data().full_name || `Worker #${req.params.id}`) : `Worker #${req.params.id}`
@@ -5594,4 +5974,7 @@ function startServer() {
   app.listen(PORT, () => console.log('Server running on port ' + PORT))
 }
 
-startServer()
+startServer().catch(error => {
+  console.error('Server failed to start:', error)
+  process.exitCode = 1
+})

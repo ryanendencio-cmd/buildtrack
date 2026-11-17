@@ -7,6 +7,7 @@ import { api } from '../api'
 import { QRCodeSVG } from 'qrcode.react'
 import Pagination from '../components/Pagination'
 import { usePagination } from '../components/usePagination'
+import RejectionReasonModal from '../components/RejectionReasonModal'
 
 const POSITION_OPTIONS = [
     'Worker',
@@ -421,25 +422,39 @@ export default function Workers() {
     };
 
     const [approvalRoles, setApprovalRoles] = useState({}) // { [workerId]: { role, position } }
+    const [rejectionWorker, setRejectionWorker] = useState(null)
 
     // ── ACCOUNT APPROVAL ──
-    const handleApproval = (worker, decision) => {
+    const updateApproval = async (worker, decision, rejectionReason = null) => {
         const roleOverride = approvalRoles[worker.id] || {}
-        const role = roleOverride.role || worker.role || 'Worker'
-        const position = roleOverride.position || worker.position || 'Worker'
-
-        const doApprove = () => api.put(`/workers/${worker.id}/approve`, { status: decision }).then(() => {
-            setWorkers(prev => prev.map(w => w.id === worker.id ? { ...w, approval_status: decision, role, position } : w))
-            setSuccessMsg(`${worker.full_name}'s account has been ${decision.toLowerCase()}.`)
-            setModalState('SUCCESS')
-        }).catch(console.error)
+        const role = decision === 'Approved' ? (roleOverride.role || worker.role || 'Worker') : (worker.role || 'Worker')
+        const position = decision === 'Approved'
+            ? (roleOverride.position || worker.position || 'Worker')
+            : (worker.position || 'Worker')
 
         if (decision === 'Approved' && (role !== worker.role || position !== (worker.position || ''))) {
             const { password, ...workerWithoutPassword } = worker
-            api.put(`/workers/${worker.id}`, { ...workerWithoutPassword, role, position }).then(doApprove).catch(console.error)
-        } else {
-            doApprove()
+            await api.put(`/workers/${worker.id}`, { ...workerWithoutPassword, role, position })
         }
+
+        await api.put(`/workers/${worker.id}/approve`, {
+            status: decision,
+            ...(decision === 'Rejected' ? { rejection_reason: rejectionReason } : {})
+        })
+        setWorkers(prev => prev.map(w => w.id === worker.id
+            ? { ...w, approval_status: decision, role, position, rejection_reason: rejectionReason }
+            : w))
+        setRejectionWorker(null)
+        setSuccessMsg(`${worker.full_name}'s account has been ${decision.toLowerCase()}.`)
+        setModalState('SUCCESS')
+    }
+
+    const handleApproval = (worker, decision) => {
+        if (decision === 'Rejected') {
+            setRejectionWorker(worker)
+            return
+        }
+        updateApproval(worker, decision).catch(console.error)
     };
 
     const pendingWorkers = workers.filter(w => (w.approval_status || 'Pending') === 'Pending');
@@ -1135,6 +1150,15 @@ export default function Workers() {
                         </button>
                     </div>
                 </div>
+            )}
+
+            {rejectionWorker && (
+                <RejectionReasonModal
+                    title="Reject worker account"
+                    subject={`Request from ${rejectionWorker.full_name || 'this worker'}`}
+                    onCancel={() => setRejectionWorker(null)}
+                    onSubmit={reason => updateApproval(rejectionWorker, 'Rejected', reason)}
+                />
             )}
 
             {/* ═════════ FULL WORKER PROFILE MODAL ═════════ */}

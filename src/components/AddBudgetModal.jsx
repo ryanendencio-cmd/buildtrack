@@ -64,14 +64,14 @@ export default function AddBudgetModal({ project, onClose, onSaved }) {
             <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                 <div className="bg-white rounded-xl p-5 w-full max-w-[320px] shadow-2xl text-center">
                     <h3 className="text-sm font-extrabold text-[#1a1a1a] mb-1">Confirm Added Budget</h3>
-                    <p className="text-[11px] text-gray-500 mb-4 font-medium">This amount will be added to the current project budget.</p>
+                    <p className="text-[11px] text-gray-500 mb-4 font-medium">This amount will be added to the current project expense budget.</p>
                     <div className="bg-[#f4f1ee] rounded-lg p-3 text-left mb-5 border border-[#e5dfd8]">
                         <p className="text-[10px] font-extrabold text-gray-900 mb-2 leading-snug">{project.name}</p>
-                        <p className="text-[11px] text-gray-600 mb-1">Current budget: <span className="font-bold text-gray-900">{money(current)}</span></p>
+                        <p className="text-[11px] text-gray-600 mb-1">Current expense budget: <span className="font-bold text-gray-900">{money(current)}</span></p>
                         <p className="text-[11px] text-gray-600 mb-1">Amount to add: <span className="font-bold text-[#A63228]">{money(addNum)}</span></p>
                         <p className="text-[11px] text-gray-600 mb-1">Date: <span className="font-bold text-gray-900">{date}</span></p>
                         {note.trim() && <p className="text-[11px] text-gray-600 mb-2">Note: <span className="font-bold text-gray-900">{note.trim()}</span></p>}
-                        <p className="text-[11px] font-extrabold text-[#A63228] mt-1">New total: {money(nextTotal)}</p>
+                        <p className="text-[11px] font-extrabold text-[#A63228] mt-1">New expense budget: {money(nextTotal)}</p>
                     </div>
                     <div className="flex gap-2">
                         <button type="button" onClick={() => setStep('FORM')} disabled={saving} className="flex-1 py-1.5 bg-white border border-[#A63228] text-[#A63228] rounded-lg text-[11px] font-bold hover:bg-red-50 transition-colors">Back</button>
@@ -93,8 +93,8 @@ export default function AddBudgetModal({ project, onClose, onSaved }) {
                             <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                         </svg>
                     </div>
-                    <h3 className="text-[11px] font-extrabold text-gray-900 mb-1">Budget Added!</h3>
-                    <p className="text-[11px] text-gray-500">{money(saved?.amount)} added. New budget is {money(saved?.budget)}.</p>
+                    <h3 className="text-[11px] font-extrabold text-gray-900 mb-1">Expense Budget Increased!</h3>
+                    <p className="text-[11px] text-gray-500">{money(saved?.amount)} added. New expense budget is {money(saved?.budget)}.</p>
                     <button type="button" onClick={onClose} className="mt-4 w-full py-2 bg-[#8B1A10] text-white rounded-lg text-[10px] font-bold hover:bg-[#72150d] transition-colors">Done</button>
                 </div>
             </div>
@@ -106,8 +106,8 @@ export default function AddBudgetModal({ project, onClose, onSaved }) {
             <div className="bg-white rounded-2xl w-full max-w-[400px] shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
                 <div className="flex justify-between items-center p-4 border-b border-gray-100 shrink-0">
                     <div>
-                        <h3 className="text-xs font-extrabold text-[#1a1a1a]">Add Budget</h3>
-                        <p className="text-[11px] text-gray-500 font-medium mt-0.5">Add funds on top of the current project budget.</p>
+                        <h3 className="text-xs font-extrabold text-[#1a1a1a]">Add Expense Budget</h3>
+                        <p className="text-[11px] text-gray-500 font-medium mt-0.5">Increase the project's expense limit.</p>
                     </div>
                     <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-700 bg-gray-50 p-1 rounded-full hover:bg-gray-100 transition-colors">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
@@ -118,7 +118,7 @@ export default function AddBudgetModal({ project, onClose, onSaved }) {
                         <div className="bg-[#f9fafb] border border-gray-200 rounded-lg px-3 py-2">
                             <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Project</p>
                             <p className="text-[10px] font-extrabold text-gray-900 leading-snug">{project.name}</p>
-                            <p className="text-[11px] text-gray-500 mt-1">Current budget: <span className="font-extrabold text-[#A63228]">{money(current)}</span></p>
+                            <p className="text-[11px] text-gray-500 mt-1">Current expense budget: <span className="font-extrabold text-[#A63228]">{money(current)}</span></p>
                         </div>
                         <div>
                             <label className="block text-[11px] font-bold text-gray-700 mb-1 uppercase">Amount to Add (₱) <span className="text-[#A63228]">*</span></label>

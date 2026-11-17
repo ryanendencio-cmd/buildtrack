@@ -1,24 +1,136 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { api } from '../api'
 import Pagination from '../components/Pagination'
 import { usePagination } from '../components/usePagination'
+import RejectionReasonModal from '../components/RejectionReasonModal'
 
-const attendanceTimeFields = [
-    { key: 'morning_time_in_start', label: 'Morning Time In Opens' },
-    { key: 'morning_time_in_on_time_end', label: 'Morning On-Time Ends' },
-    { key: 'morning_time_in_late_1_end', label: 'Morning ₱100 Tier Ends' },
-    { key: 'morning_time_in_close', label: 'Morning Time In Closes' },
-    { key: 'morning_time_out_start', label: 'Morning Time Out Opens' },
-    { key: 'morning_time_out_close', label: 'Morning Time Out Closes' },
-    { key: 'afternoon_time_in_start', label: 'Afternoon Time In Opens' },
-    { key: 'afternoon_time_in_on_time_end', label: 'Afternoon On-Time Ends' },
-    { key: 'afternoon_time_in_late_1_end', label: 'Afternoon ₱100 Tier Ends' },
-    { key: 'afternoon_time_in_close', label: 'Afternoon Time In Closes' },
-    { key: 'afternoon_time_out_start', label: 'Afternoon Time Out Opens' },
-    { key: 'afternoon_time_out_close', label: 'Afternoon Time Out Closes' }
+const attendanceShiftGroups = [
+    {
+        title: '1st Shift',
+        timeInFields: [
+            { key: 'morning_time_in_start', label: 'Opens' },
+            { key: 'morning_time_in_on_time_end', label: 'On-Time Ends' },
+            { key: 'morning_time_in_late_1_end', label: 'Late Tier 1 Ends' },
+            { key: 'morning_time_in_close', label: 'Closes' }
+        ],
+        timeOutFields: [
+            { key: 'morning_time_out_start', label: 'Opens' },
+            { key: 'morning_time_out_close', label: 'Closes' }
+        ]
+    },
+    {
+        title: '2nd Shift',
+        timeInFields: [
+            { key: 'afternoon_time_in_start', label: 'Opens' },
+            { key: 'afternoon_time_in_on_time_end', label: 'On-Time Ends' },
+            { key: 'afternoon_time_in_late_1_end', label: 'Late Tier 1 Ends' },
+            { key: 'afternoon_time_in_close', label: 'Closes' }
+        ],
+        timeOutFields: [
+            { key: 'afternoon_time_out_start', label: 'Opens' },
+            { key: 'afternoon_time_out_close', label: 'Closes' }
+        ]
+    }
 ];
+
+const attendanceTimeInSequences = [
+    ['morning_time_in_start', 'morning_time_in_on_time_end', 'morning_time_in_late_1_end', 'morning_time_in_close'],
+    ['afternoon_time_in_start', 'afternoon_time_in_on_time_end', 'afternoon_time_in_late_1_end', 'afternoon_time_in_close']
+];
+
+const timeInFieldLabels = Object.fromEntries(
+    attendanceShiftGroups.flatMap(shift => shift.timeInFields.map(field => [field.key, field.label]))
+);
+
+const getScheduleTimeErrors = form => {
+    const errors = {};
+    const toMinutes = value => {
+        if (!/^\d{2}:\d{2}$/.test(String(value || ''))) return null;
+        const [hours, minutes] = value.split(':').map(Number);
+        return hours * 60 + minutes;
+    };
+
+    for (const sequence of attendanceTimeInSequences) {
+        for (let index = 1; index < sequence.length; index += 1) {
+            const currentKey = sequence[index];
+            const previousKey = sequence[index - 1];
+            const current = toMinutes(form[currentKey]);
+            const previous = toMinutes(form[previousKey]);
+            if (current !== null && previous !== null && current < previous) {
+                errors[currentKey] = `${timeInFieldLabels[currentKey]} must not be earlier than ${timeInFieldLabels[previousKey]}.`;
+                break;
+            }
+        }
+    }
+
+    for (const [startKey, closeKey, label] of [
+        ['morning_time_out_start', 'morning_time_out_close', '1st Shift Time Out'],
+        ['afternoon_time_out_start', 'afternoon_time_out_close', '2nd Shift Time Out']
+    ]) {
+        const start = toMinutes(form[startKey]);
+        const close = toMinutes(form[closeKey]);
+        if (start !== null && close !== null && close <= start) {
+            errors[closeKey] = `${label} closing time must be later than its opening time.`;
+        }
+    }
+    return errors;
+};
+
+const getSettingsErrorFields = (message, form) => {
+    const fieldKeys = [
+        'open_time',
+        'close_time',
+        'morning_time_out_start',
+        'morning_time_out_close',
+        'afternoon_time_out_start',
+        'afternoon_time_out_close',
+        'late_tier_1_deduction',
+        'late_tier_2_deduction',
+        'overtime_rate_per_interval',
+        'overtime_interval_minutes',
+        ...attendanceTimeInSequences.flat()
+    ];
+    const matchingField = fieldKeys.find(key => message.includes(key));
+    if (matchingField) return { [matchingField]: message };
+
+    const toMinutes = value => {
+        if (!/^\d{2}:\d{2}$/.test(String(value || ''))) return null;
+        const [hours, minutes] = value.split(':').map(Number);
+        return hours * 60 + minutes;
+    };
+
+    if (message.includes('Time-in schedules must be ordered')) {
+        for (const sequence of attendanceTimeInSequences) {
+            for (let index = 1; index < sequence.length; index += 1) {
+                const current = toMinutes(form[sequence[index]]);
+                const previous = toMinutes(form[sequence[index - 1]]);
+                if (current !== null && previous !== null && current < previous) {
+                    return { [sequence[index]]: message };
+                }
+            }
+        }
+    }
+
+    if (message.includes('Time-out closing times must be later')) {
+        for (const [startKey, closeKey] of [
+            ['morning_time_out_start', 'morning_time_out_close'],
+            ['afternoon_time_out_start', 'afternoon_time_out_close']
+        ]) {
+            const start = toMinutes(form[startKey]);
+            const close = toMinutes(form[closeKey]);
+            if (start !== null && close !== null && close <= start) {
+                return { [closeKey]: message };
+            }
+        }
+    }
+
+    if (message.includes('Overtime interval must be')) {
+        return { overtime_interval_minutes: message };
+    }
+    return {};
+};
 
 export default function Attendance() {
     const { id } = useParams();
@@ -62,6 +174,9 @@ export default function Attendance() {
         close_time: '17:30',
         auto_sundays_off: true,
         manual_override: null,
+        shift_closure_date: '',
+        first_shift_closed: false,
+        second_shift_closed: false,
         morning_time_in_start: '07:00',
         morning_time_in_on_time_end: '08:00',
         morning_time_in_late_1_end: '08:10',
@@ -83,6 +198,10 @@ export default function Attendance() {
     const [currentTime, setCurrentTime] = useState(new Date());
     const [overtimeDayRequired, setOvertimeDayRequired] = useState(false);
     const [overtimeMinutesInputs, setOvertimeMinutesInputs] = useState({});
+    const [attendanceRequests, setAttendanceRequests] = useState([]);
+    const [attendanceRequestsLoading, setAttendanceRequestsLoading] = useState(false);
+    const [attendanceRequestsError, setAttendanceRequestsError] = useState('');
+    const [requestToReject, setRequestToReject] = useState(null);
 
     // Non-Working Day form state
     const [nonWorkingForm, setNonWorkingForm] = useState({
@@ -99,6 +218,9 @@ export default function Attendance() {
         close_time: '17:30',
         auto_sundays_off: true,
         manual_override: '',
+        shift_closure_date: '',
+        first_shift_closed: false,
+        second_shift_closed: false,
         morning_time_in_start: '07:00',
         morning_time_in_on_time_end: '08:00',
         morning_time_in_late_1_end: '08:10',
@@ -128,7 +250,10 @@ export default function Attendance() {
                     open_time: data.open_time || '07:00',
                     close_time: data.close_time || '17:30',
                     auto_sundays_off: data.auto_sundays_off !== false,
-                    manual_override: data.manual_override || ''
+                    manual_override: data.manual_override || '',
+                    shift_closure_date: data.shift_closure_date || '',
+                    first_shift_closed: data.first_shift_closed === true,
+                    second_shift_closed: data.second_shift_closed === true
                 }));
             }
         }).catch(console.error);
@@ -138,9 +263,41 @@ export default function Attendance() {
         }).catch(console.error);
     };
 
+    const fetchAttendanceRequests = useCallback(async () => {
+        setAttendanceRequestsLoading(true);
+        setAttendanceRequestsError('');
+        try {
+            const [earlyOutRequests, correctionRequests] = await Promise.all([
+                api.get('/early-out-requests'),
+                api.get('/attendance-correction-requests')
+            ]);
+            const requests = [
+                ...(Array.isArray(earlyOutRequests) ? earlyOutRequests : []).map(request => ({
+                    ...request,
+                    requestType: 'Early-out',
+                    endpoint: '/early-out-requests'
+                })),
+                ...(Array.isArray(correctionRequests) ? correctionRequests : []).map(request => ({
+                    ...request,
+                    requestType: 'Attendance correction',
+                    endpoint: '/attendance-correction-requests'
+                }))
+            ];
+            requests.sort((first, second) =>
+                (second.created_at?._seconds || 0) - (first.created_at?._seconds || 0)
+            );
+            setAttendanceRequests(requests.filter(request => request.status === 'Pending'));
+        } catch (error) {
+            setAttendanceRequestsError(error.message || 'Could not load attendance requests.');
+        } finally {
+            setAttendanceRequestsLoading(false);
+        }
+    }, []);
+
     useEffect(() => {
         fetchSettingsAndNonWorking();
-    }, []);
+        fetchAttendanceRequests();
+    }, [fetchAttendanceRequests]);
 
     useEffect(() => {
         api.get(`/attendance-overtime-days/${selectedDate}`)
@@ -162,6 +319,24 @@ export default function Attendance() {
         }
     })();
     const currentOfficerName = adminProfile?.fullName || adminProfile?.name || 'Attendance Monitoring Officer / Admin';
+
+    const reviewAttendanceRequest = async (request, status, rejectionReason = null) => {
+        await api.put(`${request.endpoint}/${request.id}/review`, {
+            status,
+            reviewed_by: currentOfficerName,
+            ...(status === 'Rejected' ? { rejection_reason: rejectionReason } : {})
+        });
+        setRequestToReject(null);
+        await fetchAttendanceRequests();
+    };
+
+    const approveAttendanceRequest = async (request) => {
+        try {
+            await reviewAttendanceRequest(request, 'Approved');
+        } catch (error) {
+            alert(error.message || 'Failed to approve attendance request.');
+        }
+    };
 
     const format12Hour = (time24) => {
         if (!time24) return '';
@@ -283,8 +458,31 @@ export default function Attendance() {
         }
     };
 
+    const updateSettingsFormField = (key, value) => {
+        setSettingsForm(prev => ({ ...prev, [key]: value }));
+        setSettingsFieldErrors({});
+    };
+
+    const focusSettingsInput = key => {
+        if (!key) return;
+        requestAnimationFrame(() => {
+            const input = document.getElementById(`attendance-setting-${key}`);
+            if (!input) return;
+            input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            input.focus({ preventScroll: true });
+        });
+    };
+
     const handleSaveSettings = async (e) => {
         e.preventDefault();
+        const timeErrors = getScheduleTimeErrors(settingsForm);
+        const firstErrorField = Object.keys(timeErrors)[0];
+        if (firstErrorField) {
+            setSettingsFieldErrors(timeErrors);
+            focusSettingsInput(firstErrorField);
+            return;
+        }
+        setSettingsFieldErrors({});
         try {
             await api.post('/attendance-settings', {
                 ...settingsForm,
@@ -293,10 +491,18 @@ export default function Attendance() {
             });
             fetchSettingsAndNonWorking();
             setModalState('NONE');
-            alert('Attendance schedule settings updated successfully!');
+            setAttendanceSettingsFeedback({
+                type: 'SUCCESS',
+                message: 'Attendance schedule settings updated successfully.'
+            });
         } catch (err) {
             console.error(err);
-            alert('Failed to update attendance settings.');
+            const message = err.message || 'Failed to update attendance settings.';
+            setSettingsFieldErrors(getSettingsErrorFields(message, settingsForm));
+            setAttendanceSettingsFeedback({
+                type: 'ERROR',
+                message
+            });
         }
     };
 
@@ -339,6 +545,10 @@ export default function Attendance() {
     const isPastDate = selectedDate < todayISO;
 
     const [modalState, setModalState] = useState('NONE');
+    const [attendanceSettingsFeedback, setAttendanceSettingsFeedback] = useState(null);
+    const [settingsFieldErrors, setSettingsFieldErrors] = useState({});
+    const scheduleTimeErrors = getScheduleTimeErrors(settingsForm);
+    const getSettingsFieldError = key => settingsFieldErrors[key] || scheduleTimeErrors[key];
     const [formData, setFormData] = useState({
         date: selectedDate, name: '', role: 'Laborer / Helper', status: 'Present', timeIn: '07:00 AM', timeOut: '05:00 PM', advance: ''
     });
@@ -379,26 +589,41 @@ export default function Attendance() {
         const mOut = record.morningOut || record.morning_out || '—';
         const aIn = record.afternoonIn || record.afternoon_in || '—';
         const aOut = record.afternoonOut || record.afternoon_out || '—';
+        const shiftClosuresAreActive = attendanceSettings.shift_closure_date === selectedDate;
+        const firstShiftClosed = shiftClosuresAreActive && attendanceSettings.first_shift_closed;
+        const secondShiftClosed = shiftClosuresAreActive && attendanceSettings.second_shift_closed;
         const morningOutWindow = within('morning_time_out_start', 'morning_time_out_close');
+        const afternoonStartsNow = minutes === parseTimeToMinutes(attendanceSettings.morning_time_out_close) &&
+            within('afternoon_time_in_start', 'afternoon_time_in_close');
 
-        if (morningOutWindow) {
-            const afternoonStartsNow = minutes === parseTimeToMinutes(attendanceSettings.morning_time_out_close) &&
-                within('afternoon_time_in_start', 'afternoon_time_in_close');
+        if (morningOutWindow && !(firstShiftClosed && afternoonStartsNow)) {
+            if (firstShiftClosed) {
+                return { error: '1st Shift is closed for today. Time In and Time Out are disabled.' };
+            }
             if (!hasTime(mIn) && !afternoonStartsNow) return { error: 'Cannot record morning Time Out without a morning Time In.' };
             if (hasTime(mIn) && !hasTime(mOut)) return { action: 'MORNING TIME OUT (12 PM)' };
         }
         if (within('morning_time_in_start', 'morning_time_in_close')) {
+            if (firstShiftClosed) {
+                return { error: '1st Shift is closed for today. Time In and Time Out are disabled.' };
+            }
             return hasTime(mIn)
                 ? { error: 'Morning Time In has already been recorded.' }
                 : { action: 'MORNING TIME IN' };
         }
         if (within('afternoon_time_out_start', 'afternoon_time_out_close')) {
+            if (secondShiftClosed) {
+                return { error: '2nd Shift is closed for today. Time In and Time Out are disabled.' };
+            }
             if (!hasTime(aIn)) return { error: 'Cannot record afternoon Time Out without an afternoon Time In.' };
             return hasTime(aOut)
                 ? { error: 'Afternoon shift is already completed.' }
                 : { action: 'AFTERNOON TIME OUT (5 PM)' };
         }
         if (within('afternoon_time_in_start', 'afternoon_time_in_close')) {
+            if (secondShiftClosed) {
+                return { error: '2nd Shift is closed for today. Time In and Time Out are disabled.' };
+            }
             return hasTime(aIn)
                 ? { error: 'Afternoon Time In has already been recorded.' }
                 : { action: 'AFTERNOON TIME IN (1 PM)' };
@@ -479,7 +704,10 @@ export default function Attendance() {
         api.post('/attendance', payload).then(newWorker => {
             setAllWorkers(prev => [newWorker, ...prev]);
             setModalState('SUCCESS');
-        }).catch(console.error);
+        }).catch(error => {
+            console.error(error);
+            alert(error.message || 'Failed to record attendance.');
+        });
     };
 
     const resetAndClose = () => {
@@ -731,6 +959,83 @@ export default function Attendance() {
                 <h1 className="text-xl font-extrabold text-gray-900 mt-0.5 tracking-tight">Attendance Management</h1>
                 <p className="text-[10px] text-gray-500 mt-0.5">Automated attendance system with schedule tracking and non-working day management.</p>
             </div>
+
+            <section className="mb-4 rounded-xl border border-gray-200 bg-white p-3.5 shadow-sm">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                    <div>
+                        <h2 className="text-sm font-extrabold text-gray-900">Pending Attendance Requests</h2>
+                        <p className="text-[10px] text-gray-500">Review early-out and attendance correction requests.</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-bold text-amber-800">
+                            {attendanceRequests.length} pending
+                        </span>
+                        <button
+                            type="button"
+                            onClick={fetchAttendanceRequests}
+                            disabled={attendanceRequestsLoading}
+                            className="rounded-lg border border-gray-200 px-2.5 py-1 text-[10px] font-bold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                        >
+                            Refresh
+                        </button>
+                    </div>
+                </div>
+                {attendanceRequestsError && (
+                    <p role="alert" className="mb-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
+                        {attendanceRequestsError}
+                    </p>
+                )}
+                {attendanceRequestsLoading ? (
+                    <p className="py-3 text-center text-xs text-gray-500">Loading requests...</p>
+                ) : attendanceRequests.length === 0 ? (
+                    <p className="rounded-lg bg-gray-50 px-3 py-4 text-center text-xs text-gray-500">
+                        No pending attendance requests.
+                    </p>
+                ) : (
+                    <div className="space-y-2">
+                        {attendanceRequests.map(request => (
+                            <article
+                                key={`${request.endpoint}/${request.id}`}
+                                className="flex flex-col gap-3 rounded-lg border border-gray-100 p-3 md:flex-row md:items-center md:justify-between"
+                            >
+                                <div className="min-w-0">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <span className="text-xs font-bold text-gray-900">{request.worker_name}</span>
+                                        <span className="rounded bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-700">
+                                            {request.requestType}
+                                        </span>
+                                        <span className="text-[10px] text-gray-500">{request.date}</span>
+                                    </div>
+                                    <p className="mt-1 text-xs text-gray-700">
+                                        {request.requestType === 'Early-out'
+                                            ? `Requested time out: ${request.requested_out_time}`
+                                            : `${request.field === 'time_in' ? 'Time in' : 'Time out'}: ${request.original_time || '—'} → ${request.requested_time}`}
+                                    </p>
+                                    <p className="mt-1 break-words text-[11px] text-gray-500">
+                                        Worker reason: {request.reason || 'No reason provided'}
+                                    </p>
+                                </div>
+                                <div className="flex shrink-0 items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => approveAttendanceRequest(request)}
+                                        className="rounded-lg border border-green-700 bg-green-50 px-3 py-1.5 text-[11px] font-bold text-green-800 hover:bg-green-100"
+                                    >
+                                        Approve
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setRequestToReject(request)}
+                                        className="rounded-lg border border-[#A63228] bg-white px-3 py-1.5 text-[11px] font-bold text-[#A63228] hover:bg-red-50"
+                                    >
+                                        Reject
+                                    </button>
+                                </div>
+                            </article>
+                        ))}
+                    </div>
+                )}
+            </section>
 
             {/* ── ATTENDANCE TERMINAL AUTO-SCHEDULE STATUS CARD ── */}
             <div className={`p-3.5 rounded-xl border mb-3 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 transition-all ${
@@ -1455,6 +1760,7 @@ export default function Attendance() {
                         <div className="overflow-y-auto p-5 flex flex-col gap-4">
                             <form onSubmit={handleSaveSettings} className="flex flex-col gap-4">
                                 <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 flex flex-col gap-3">
+                                    <h4 className="text-[10px] font-bold text-gray-900 uppercase">Attendance Schedule</h4>
                                     <div className="flex items-center justify-between">
                                         <div>
                                             <span className="block text-[10px] font-bold text-gray-900 uppercase">Automatic Schedule Mode</span>
@@ -1464,7 +1770,7 @@ export default function Attendance() {
                                             <input
                                                 type="checkbox"
                                                 checked={settingsForm.auto_schedule}
-                                                onChange={(e) => setSettingsForm(prev => ({ ...prev, auto_schedule: e.target.checked }))}
+                                                onChange={(e) => updateSettingsFormField('auto_schedule', e.target.checked)}
                                                 className="sr-only peer"
                                             />
                                             <div className="w-9 h-5 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#2e7d32]"></div>
@@ -1477,10 +1783,14 @@ export default function Attendance() {
                                             <input
                                                 type="time"
                                                 value={settingsForm.open_time}
-                                                onChange={(e) => setSettingsForm(prev => ({ ...prev, open_time: e.target.value }))}
+                                                name="open_time"
+                                                id="attendance-setting-open_time"
+                                                aria-invalid={Boolean(settingsFieldErrors.open_time)}
+                                                onChange={(e) => updateSettingsFormField('open_time', e.target.value)}
                                                 required
-                                                className="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-2 text-xs font-semibold focus:border-[#A63228] outline-none"
+                                                className={`w-full bg-white border rounded-lg px-2.5 py-2 text-xs font-semibold focus:border-[#A63228] outline-none ${settingsFieldErrors.open_time ? 'border-red-500' : 'border-gray-200'}`}
                                             />
+                                            {settingsFieldErrors.open_time && <p className="text-[10px] text-red-600 mt-1">{settingsFieldErrors.open_time}</p>}
                                             <span className="text-[11px] text-gray-400 mt-0.5 block">Default: 07:00 AM (before 8:00 AM)</span>
                                         </div>
                                         <div>
@@ -1488,42 +1798,82 @@ export default function Attendance() {
                                             <input
                                                 type="time"
                                                 value={settingsForm.close_time}
-                                                onChange={(e) => setSettingsForm(prev => ({ ...prev, close_time: e.target.value }))}
+                                                name="close_time"
+                                                id="attendance-setting-close_time"
+                                                aria-invalid={Boolean(settingsFieldErrors.close_time)}
+                                                onChange={(e) => updateSettingsFormField('close_time', e.target.value)}
                                                 required
-                                                className="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-2 text-xs font-semibold focus:border-[#A63228] outline-none"
+                                                className={`w-full bg-white border rounded-lg px-2.5 py-2 text-xs font-semibold focus:border-[#A63228] outline-none ${settingsFieldErrors.close_time ? 'border-red-500' : 'border-gray-200'}`}
                                             />
+                                            {settingsFieldErrors.close_time && <p className="text-[10px] text-red-600 mt-1">{settingsFieldErrors.close_time}</p>}
                                             <span className="text-[11px] text-gray-400 mt-0.5 block">Default: 05:30 PM (after 5:00 PM)</span>
                                         </div>
                                     </div>
                                 </div>
 
-                                <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
-                                    <h4 className="text-[10px] font-bold text-gray-900 uppercase mb-2">Time In / Time Out Windows</h4>
-                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                                        {attendanceTimeFields.map(field => (
-                                            <div key={field.key}>
-                                                <label className="block text-[11px] font-bold text-gray-600 mb-1 uppercase">{field.label}</label>
-                                                <input
-                                                    type="time"
-                                                    value={settingsForm[field.key]}
-                                                    onChange={(e) => setSettingsForm(prev => ({ ...prev, [field.key]: e.target.value }))}
-                                                    required
-                                                    className="w-full bg-white border border-gray-200 rounded-lg px-2 py-2 text-xs font-semibold focus:border-[#A63228] outline-none"
-                                                />
+                                {attendanceShiftGroups.map(shift => (
+                                    <div key={shift.title} className="p-3 bg-gray-50 rounded-xl border border-gray-100 flex flex-col gap-3">
+                                        <h4 className="text-[10px] font-bold text-gray-900 uppercase">{shift.title}</h4>
+                                        {[
+                                            { title: 'Time In Window', fields: shift.timeInFields },
+                                            { title: 'Time Out Window', fields: shift.timeOutFields }
+                                        ].map(group => (
+                                            <div key={group.title}>
+                                                <h5 className="text-[10px] font-bold text-gray-600 uppercase mb-2">{group.title}</h5>
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    {group.fields.map(field => (
+                                                        <div key={field.key}>
+                                                            <label className="block text-[11px] font-bold text-gray-600 mb-1 uppercase">{field.label}</label>
+                                                            <input
+                                                                type="time"
+                                                                value={settingsForm[field.key]}
+                                                                name={field.key}
+                                                                id={`attendance-setting-${field.key}`}
+                                                                aria-invalid={Boolean(getSettingsFieldError(field.key))}
+                                                                onChange={(e) => updateSettingsFormField(field.key, e.target.value)}
+                                                                required
+                                                                className={`w-full bg-white border rounded-lg px-2 py-2 text-xs font-semibold focus:border-[#A63228] outline-none ${getSettingsFieldError(field.key) ? 'border-red-500' : 'border-gray-200'}`}
+                                                            />
+                                                            {getSettingsFieldError(field.key) && <p className="text-[10px] text-red-600 mt-1">{getSettingsFieldError(field.key)}</p>}
+                                                        </div>
+                                                    ))}
+                                                </div>
                                             </div>
                                         ))}
                                     </div>
-                                    <p className="text-[11px] text-gray-500 mt-2">Time In is rejected after its closing time. Time Out is accepted only during its configured window.</p>
+                                ))}
+                                <p className="text-[11px] text-gray-500 -mt-2">Time In is rejected after its closing time. Time Out is accepted only during its configured window.</p>
+
+                                <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                                    <h4 className="text-[10px] font-bold text-gray-900 uppercase">Shift Availability (Today)</h4>
+                                    <p className="text-[11px] text-gray-500 mt-1 mb-3">Closed shifts reject all new Time In and Time Out records. They reopen automatically tomorrow.</p>
+                                    <div className="flex flex-col gap-3">
+                                        {[
+                                            { key: 'first_shift_closed', label: '1st Shift' },
+                                            { key: 'second_shift_closed', label: '2nd Shift' }
+                                        ].map(shift => (
+                                            <label key={shift.key} className="flex items-center justify-between gap-3">
+                                                <span className="text-[11px] font-bold text-gray-700">Close {shift.label} for today</span>
+                                                <span className="relative inline-flex items-center cursor-pointer shrink-0">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={settingsForm[shift.key]}
+                                                        onChange={(e) => updateSettingsFormField(shift.key, e.target.checked)}
+                                                        className="sr-only peer"
+                                                    />
+                                                    <span className="w-9 h-5 bg-gray-300 rounded-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full peer-checked:bg-[#A63228]"></span>
+                                                </span>
+                                            </label>
+                                        ))}
+                                    </div>
                                 </div>
 
                                 <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
-                                    <h4 className="text-[10px] font-bold text-gray-900 uppercase mb-2">Deductions & Overtime</h4>
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                    <h4 className="text-[10px] font-bold text-gray-900 uppercase mb-2">Late Deductions</h4>
+                                    <div className="grid grid-cols-2 gap-3">
                                         {[
                                             ['late_tier_1_deduction', 'Late Tier 1 (₱)'],
-                                            ['late_tier_2_deduction', 'Late Tier 2 (₱)'],
-                                            ['overtime_rate_per_interval', 'Overtime per interval (₱)'],
-                                            ['overtime_interval_minutes', 'Overtime interval (minutes)']
+                                            ['late_tier_2_deduction', 'Late Tier 2 (₱)']
                                         ].map(([key, label]) => (
                                             <div key={key}>
                                                 <label className="block text-[11px] font-bold text-gray-600 mb-1 uppercase">{label}</label>
@@ -1532,10 +1882,41 @@ export default function Attendance() {
                                                     min="0"
                                                     step={key === 'overtime_interval_minutes' ? '1' : '0.01'}
                                                     value={settingsForm[key]}
-                                                    onChange={(e) => setSettingsForm(prev => ({ ...prev, [key]: e.target.value }))}
+                                                    name={key}
+                                                    id={`attendance-setting-${key}`}
+                                                    aria-invalid={Boolean(getSettingsFieldError(key))}
+                                                    onChange={(e) => updateSettingsFormField(key, e.target.value)}
                                                     required
-                                                    className="w-full bg-white border border-gray-200 rounded-lg px-2 py-2 text-xs font-semibold focus:border-[#A63228] outline-none"
+                                                    className={`w-full bg-white border rounded-lg px-2 py-2 text-xs font-semibold focus:border-[#A63228] outline-none ${getSettingsFieldError(key) ? 'border-red-500' : 'border-gray-200'}`}
                                                 />
+                                                {getSettingsFieldError(key) && <p className="text-[10px] text-red-600 mt-1">{getSettingsFieldError(key)}</p>}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                                    <h4 className="text-[10px] font-bold text-gray-900 uppercase mb-2">Overtime Pay</h4>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        {[
+                                            ['overtime_rate_per_interval', 'Pay per interval (₱)'],
+                                            ['overtime_interval_minutes', 'Interval length (minutes)']
+                                        ].map(([key, label]) => (
+                                            <div key={key}>
+                                                <label className="block text-[11px] font-bold text-gray-600 mb-1 uppercase">{label}</label>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    step={key === 'overtime_interval_minutes' ? '1' : '0.01'}
+                                                    value={settingsForm[key]}
+                                                    name={key}
+                                                    id={`attendance-setting-${key}`}
+                                                    aria-invalid={Boolean(getSettingsFieldError(key))}
+                                                    onChange={(e) => updateSettingsFormField(key, e.target.value)}
+                                                    required
+                                                    className={`w-full bg-white border rounded-lg px-2 py-2 text-xs font-semibold focus:border-[#A63228] outline-none ${getSettingsFieldError(key) ? 'border-red-500' : 'border-gray-200'}`}
+                                                />
+                                                {getSettingsFieldError(key) && <p className="text-[10px] text-red-600 mt-1">{getSettingsFieldError(key)}</p>}
                                             </div>
                                         ))}
                                     </div>
@@ -1544,25 +1925,25 @@ export default function Attendance() {
 
                                 <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 flex items-center justify-between">
                                     <div>
-                                        <span className="block text-[10px] font-bold text-gray-900 uppercase">Auto Sundays Off (Rest Day)</span>
+                                        <span className="block text-[10px] font-bold text-gray-900 uppercase">Rest Day Policy: Sundays Off</span>
                                         <span className="block text-[11px] text-gray-500">Automatically treat all Sundays as Rest Days (0 Absences).</span>
                                     </div>
                                     <label className="relative inline-flex items-center cursor-pointer">
                                         <input
                                             type="checkbox"
                                             checked={settingsForm.auto_sundays_off}
-                                            onChange={(e) => setSettingsForm(prev => ({ ...prev, auto_sundays_off: e.target.checked }))}
+                                            onChange={(e) => updateSettingsFormField('auto_sundays_off', e.target.checked)}
                                             className="sr-only peer"
                                         />
                                         <div className="w-9 h-5 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#2e7d32]"></div>
                                     </label>
                                 </div>
 
-                                <div>
-                                    <label className="block text-[10px] font-bold text-gray-700 mb-1.5 uppercase tracking-wider">Manual Override (Emergency)</label>
+                                <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                                    <label className="block text-[10px] font-bold text-gray-700 mb-1.5 uppercase tracking-wider">Terminal Control: Manual Override</label>
                                     <select
                                         value={settingsForm.manual_override || ''}
-                                        onChange={(e) => setSettingsForm(prev => ({ ...prev, manual_override: e.target.value }))}
+                                        onChange={(e) => updateSettingsFormField('manual_override', e.target.value)}
                                         className="w-full bg-[#f4f1ee] border border-transparent rounded-lg pl-3 pr-8 py-2.5 text-xs font-semibold focus:border-[#A63228] outline-none appearance-none text-gray-800"
                                         style={selectStyles}
                                     >
@@ -1574,7 +1955,8 @@ export default function Attendance() {
 
                                 <button
                                     type="submit"
-                                    className="w-full py-2.5 bg-[#A63228] text-white rounded-xl text-xs font-bold hover:bg-[#8B1A10] transition-colors shadow-sm"
+                                    disabled={Object.keys(scheduleTimeErrors).length > 0}
+                                    className="w-full py-2.5 bg-[#A63228] text-white rounded-xl text-xs font-bold hover:bg-[#8B1A10] transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     Save Schedule Settings
                                 </button>
@@ -1612,6 +1994,56 @@ export default function Attendance() {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {attendanceSettingsFeedback && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
+                    <div
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="attendance-settings-feedback-title"
+                        className="bg-white rounded-2xl p-6 w-full max-w-[320px] shadow-2xl text-center"
+                    >
+                        <div className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4 ${attendanceSettingsFeedback.type === 'SUCCESS' ? 'bg-[#e6f4ea] text-[#2e7d32]' : 'bg-red-50 text-red-600'}`}>
+                            {attendanceSettingsFeedback.type === 'SUCCESS' ? (
+                                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                </svg>
+                            ) : (
+                                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                                    <circle cx="12" cy="12" r="9" />
+                                    <path strokeLinecap="round" d="M12 8v4m0 4h.01" />
+                                </svg>
+                            )}
+                        </div>
+                        <h3 id="attendance-settings-feedback-title" className="text-sm font-extrabold text-gray-900 mb-2">
+                            {attendanceSettingsFeedback.type === 'SUCCESS' ? 'Settings Saved' : 'Unable to Save Settings'}
+                        </h3>
+                        <p className="text-xs text-gray-600 mb-5" style={{ overflowWrap: 'anywhere' }}>
+                            {attendanceSettingsFeedback.message}
+                        </p>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                const errorField = Object.keys(settingsFieldErrors)[0];
+                                setAttendanceSettingsFeedback(null);
+                                focusSettingsInput(errorField);
+                            }}
+                            className={`w-full py-2.5 text-white rounded-xl text-xs font-bold transition-colors ${attendanceSettingsFeedback.type === 'SUCCESS' ? 'bg-[#2e7d32] hover:bg-[#1b5e20]' : 'bg-[#A63228] hover:bg-[#8B1A10]'}`}
+                        >
+                            {attendanceSettingsFeedback.type === 'SUCCESS' ? 'Done' : 'Back to Settings'}
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {requestToReject && (
+                <RejectionReasonModal
+                    title="Reject attendance request"
+                    subject={`${requestToReject.requestType} · ${requestToReject.worker_name || 'Worker'} · ${requestToReject.date}`}
+                    onCancel={() => setRequestToReject(null)}
+                    onSubmit={reason => reviewAttendanceRequest(requestToReject, 'Rejected', reason)}
+                />
             )}
         </AdminLayout>
     )

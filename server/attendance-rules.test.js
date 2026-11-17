@@ -5,6 +5,7 @@ const {
   validateAttendanceSettings,
   classifyTimeIn,
   resolveRfidAttendanceAction,
+  validateClosedShiftTimeChanges,
   evaluateTwoSessions,
   calculateOvertimePay,
   calculateDailyEarnings
@@ -91,6 +92,47 @@ test('RFID actions enforce configured time-in and time-out windows', () => {
     'AFTERNOON TIME OUT (5 PM)'
   )
   assert.equal(resolveRfidAttendanceAction(17 * 60 + 31, { afternoon_in: '01:00 PM' }, rules).action, 'ATTENDANCE_WINDOW_CLOSED')
+})
+
+test('closing a shift blocks only that shift and keeps the other shift available', () => {
+  const firstShiftClosed = { ...DEFAULT_ATTENDANCE_SETTINGS, first_shift_closed: true }
+  const secondShiftClosed = { ...DEFAULT_ATTENDANCE_SETTINGS, second_shift_closed: true }
+
+  assert.equal(
+    resolveRfidAttendanceAction(7 * 60 + 30, null, firstShiftClosed).error,
+    '1st Shift is closed for today. Time In and Time Out are disabled.'
+  )
+  assert.equal(
+    resolveRfidAttendanceAction(12 * 60 + 30, null, firstShiftClosed).action,
+    'AFTERNOON TIME IN (1 PM)'
+  )
+  assert.equal(
+    resolveRfidAttendanceAction(13 * 60, null, secondShiftClosed).error,
+    '2nd Shift is closed for today. Time In and Time Out are disabled.'
+  )
+  assert.equal(
+    resolveRfidAttendanceAction(7 * 60 + 30, null, secondShiftClosed).action,
+    'MORNING TIME IN'
+  )
+})
+
+test('closed shifts reject new time changes but allow unchanged existing records', () => {
+  const firstShiftClosed = { first_shift_closed: true }
+  const error = '1st Shift is closed for today. Time In and Time Out are disabled.'
+
+  assert.equal(validateClosedShiftTimeChanges('08:00 AM', '—', '—', '—', firstShiftClosed), error)
+  assert.equal(
+    validateClosedShiftTimeChanges(
+      '08:00 AM',
+      '—',
+      '—',
+      '—',
+      firstShiftClosed,
+      { morning_in: '08:00 AM', morning_out: '—' }
+    ),
+    null
+  )
+  assert.equal(validateClosedShiftTimeChanges('—', '—', '01:00 PM', '—', firstShiftClosed), null)
 })
 
 test('settings validation rejects unordered or malformed time windows', () => {
