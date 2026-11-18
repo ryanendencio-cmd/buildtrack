@@ -4,7 +4,13 @@ const bcrypt = require('bcrypt')
 const nodemailer = require('nodemailer')
 const crypto = require('crypto')
 const jwt = require('jsonwebtoken')
-const { MySQLFirestoreAdapter, FieldValue } = require('./mysql-adapter')
+const { createApiAuthMiddleware, resolveJwtSecret } = require('./api-auth')
+const {
+  MySQLFirestoreAdapter,
+  FieldValue,
+  getDatabaseType
+} = require('./mysql-adapter')
+const JWT_SECRET = resolveJwtSecret()
 const { validateRejectionReason } = require('./rejection-reason')
 const { getProjectExpenseLimit } = require('./expense-limit')
 const {
@@ -20,6 +26,7 @@ const {
 } = require('./attendance-rules')
 
 const db = new MySQLFirestoreAdapter({
+  type: getDatabaseType(),
   host: process.env.DB_HOST || '127.0.0.1',
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD !== undefined ? process.env.DB_PASSWORD : '',
@@ -280,6 +287,11 @@ const app = express()
 app.use(cors())
 app.use(express.json({ limit: '50mb' }))
 app.use(express.urlencoded({ limit: '50mb', extended: true }))
+app.use('/api', createApiAuthMiddleware({
+  db,
+  jwtSecret: JWT_SECRET,
+  rfidApiKey: process.env.RFID_API_KEY
+}))
 
 function scheduleLink(body) {
   const type = body.link_type === 'Project' || body.link_type === 'Transaction' ? body.link_type : 'General'
@@ -2417,7 +2429,7 @@ async function startServer() {
 
     let claims
     try {
-      claims = jwt.verify(token, process.env.JWT_SECRET || 'scon_super_secret_key_2026')
+      claims = jwt.verify(token, JWT_SECRET)
     } catch {
       res.status(401).json({ error: 'The Admin login is invalid or has expired.' })
       return false
@@ -5606,7 +5618,7 @@ async function startServer() {
         return res.status(401).json({ error: 'Invalid username or password.' })
       }
 
-      const token = jwt.sign({ id: adminDoc.id, type: 'admin' }, process.env.JWT_SECRET || 'scon_super_secret_key_2026', { expiresIn: '8h' })
+      const token = jwt.sign({ id: adminDoc.id, type: 'admin' }, JWT_SECRET, { expiresIn: '8h' })
 
       recordAuditLog({
         action: 'LOGIN_SUCCESS',
@@ -5687,7 +5699,7 @@ async function startServer() {
         return res.status(400).json({ error: 'No email associated with this account.' })
       }
 
-      const token = jwt.sign({ id: adminDoc.id, type: 'admin' }, process.env.JWT_SECRET || 'scon_super_secret_key_2026', { expiresIn: '15m' })
+      const token = jwt.sign({ id: adminDoc.id, type: 'admin' }, JWT_SECRET, { expiresIn: '15m' })
       const frontendURL = process.env.FRONTEND_URL || 'https://buildtrack-sotalbo-system.vercel.app'
       const resetLink = `${frontendURL}/reset-password/${token}`
 
@@ -5732,7 +5744,7 @@ async function startServer() {
   app.post('/api/admin/reset-password', async (req, res) => {
     const { token, newPassword } = req.body
     try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'scon_super_secret_key_2026')
+      const decoded = jwt.verify(token, JWT_SECRET)
       if (decoded.type !== 'admin') return res.status(400).json({ error: 'Invalid token type' })
 
       const hashed = await bcrypt.hash(newPassword, 10)

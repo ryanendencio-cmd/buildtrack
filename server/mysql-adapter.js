@@ -1,5 +1,9 @@
 const admin = require('firebase-admin');
-const { getFirestore: getAdminFirestore, Timestamp } = require('firebase-admin/firestore');
+const {
+  getFirestore: getAdminFirestore,
+  FieldValue: FirebaseFieldValue,
+  Timestamp
+} = require('firebase-admin/firestore');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
@@ -32,47 +36,53 @@ const TIMESTAMP_MARKER = '__buildtrack_timestamp_iso__';
 const DOCUMENTS_TABLE = 'buildtrack_documents';
 const OUTBOX_TABLE = 'buildtrack_firestore_outbox';
 
-function getFirestore() {
+function getDatabaseType(type = process.env.DB_TYPE, nodeEnv = process.env.NODE_ENV) {
+  const selectedType = String(type || (nodeEnv === 'production' ? 'firebase' : 'mysql'))
+    .trim()
+    .toLowerCase();
+  if (selectedType !== 'mysql' && selectedType !== 'firebase') {
+    throw new Error(`Unsupported DB_TYPE "${selectedType}". Use "mysql" or "firebase".`);
+  }
+  return selectedType;
+}
+
+function getFirestore(required = false) {
   try {
     if (!admin.getApps().length) {
       const projectId = process.env.FIREBASE_PROJECT_ID || process.env.GCLOUD_PROJECT;
       const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
       const credentialsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
 
+      if (!projectId) {
+        if (required) throw new Error('Set FIREBASE_PROJECT_ID or GCLOUD_PROJECT.');
+        return null;
+      }
+
       if (projectId && serviceAccountJson) {
-        try {
-          admin.initializeApp({
-            credential: admin.cert(JSON.parse(serviceAccountJson)),
-            projectId
-          });
-        } catch (error) {
-          console.warn('Could not initialize Firebase from FIREBASE_SERVICE_ACCOUNT_JSON:', error.message);
-          return null;
-        }
+        admin.initializeApp({
+          credential: admin.cert(JSON.parse(serviceAccountJson)),
+          projectId
+        });
       } else if (projectId && credentialsPath) {
         const resolvedPath = path.isAbsolute(credentialsPath)
           ? credentialsPath
           : path.resolve(__dirname, credentialsPath);
 
-        try {
-          if (!fs.existsSync(resolvedPath)) {
-            throw new Error(`Credential file not found: ${resolvedPath}`);
-          }
-          process.env.GOOGLE_APPLICATION_CREDENTIALS = resolvedPath;
-          admin.initializeApp({ credential: admin.applicationDefault(), projectId });
-        } catch (error) {
-          console.warn('Could not load Firebase service account credentials:', error.message);
-          return null;
+        if (!fs.existsSync(resolvedPath)) {
+          throw new Error(`Credential file not found: ${resolvedPath}`);
         }
+        process.env.GOOGLE_APPLICATION_CREDENTIALS = resolvedPath;
+        admin.initializeApp({ credential: admin.applicationDefault(), projectId });
       } else if (projectId) {
         admin.initializeApp({ projectId });
-      } else {
-        return null;
       }
     }
 
     return getAdminFirestore(admin.getApp());
   } catch (error) {
+    if (required) {
+      throw new Error(`Firebase initialization failed: ${error.message}`);
+    }
     console.warn('Firestore initialization failed:', error.message);
     return null;
   }
@@ -238,13 +248,14 @@ function mergeObjects(current, update) {
   return merged;
 }
 
-const FieldValue = {
+const MySQLFieldValue = {
   serverTimestamp: () => SERVER_TIMESTAMP_SENTINEL,
   delete: () => DELETE_SENTINEL,
   increment: value => ({ __op: 'increment', value }),
   arrayUnion: (...elements) => ({ __op: 'arrayUnion', elements }),
   arrayRemove: (...elements) => ({ __op: 'arrayRemove', elements })
 };
+const FieldValue = getDatabaseType() === 'firebase' ? FirebaseFieldValue : MySQLFieldValue;
 
 function generateId() {
   return crypto.randomBytes(10).toString('hex');
@@ -428,8 +439,42 @@ class WriteBatch {
   }
 }
 
+class FirebaseDatabaseAdapter {
+  constructor(firestore) {
+    this.firestore = firestore;
+    this.ready = Promise.resolve();
+  }
+
+  settings(options) {
+    return this.firestore.settings(options);
+  }
+
+  collection(name) {
+    return this.firestore.collection(name);
+  }
+
+  batch() {
+    return this.firestore.batch();
+  }
+
+  runTransaction(callback, options) {
+    return this.firestore.runTransaction(callback, options);
+  }
+
+  close() {
+    return this.firestore.terminate();
+  }
+}
+
 class MySQLFirestoreAdapter {
   constructor(config = {}) {
+    const type = getDatabaseType(config.type);
+    if (type === 'firebase') {
+      return new FirebaseDatabaseAdapter(
+        config.firestore || getFirestore(true)
+      );
+    }
+
     this.pool = config.pool || mysql.createPool({
       host: config.host || '127.0.0.1',
       user: config.user || 'root',
@@ -730,5 +775,8 @@ class MySQLFirestoreAdapter {
 
 module.exports = {
   MySQLFirestoreAdapter,
-  FieldValue
+  FieldValue,
+  getDatabaseType,
+  getFirestore,
+  toFirestoreValue
 };

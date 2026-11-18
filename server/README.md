@@ -20,28 +20,80 @@ Rejecting worker accounts, cash advances, early-out requests, or attendance
 correction requests requires a reason of 1–100 characters. Rejection reasons are
 stored with the reviewed record.
 
-## Local MySQL and Firestore mirror
+## Creating an administrator account
 
-The backend uses Laragon/MySQL as its primary store and mirrors committed
-changes to Firestore through a MySQL outbox. The current Firestore-style
-collections are stored as JSON documents in the `buildtrack_documents` table;
-`buildtrack_firestore_outbox` records pending mirror operations.
+`create-admin.js` no longer contains a preset account or prints passwords. To
+create a new account, provide `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `ADMIN_EMAIL`,
+`ADMIN_FIRST_NAME`, and `ADMIN_LAST_NAME` as private environment variables,
+then run `node create-admin.js` from the `server` directory. The initial
+password must be 12–72 UTF-8 bytes. Optional profile variables are
+`ADMIN_MIDDLE_NAME`, `ADMIN_PHONE`, `ADMIN_HOME_ADDRESS`, `ADMIN_EMP_ID`, and
+`ADMIN_DEPT`. The script refuses to overwrite an existing username.
 
-1. Start MySQL in Laragon and confirm that `buildtrack_db` exists.
-2. Set `DB_HOST=127.0.0.1`, `DB_PORT=3306`, `DB_USER`, `DB_PASSWORD`, and
-   `DB_NAME=buildtrack_db` in `server/.env`. The adapter creates its two
-   application tables automatically. Do not commit `server/.env`.
-3. Keep the Firebase project ID and service-account credentials configured in
-   `server/.env` if Firestore should remain a mirror.
-4. Before starting the updated backend, back up Firestore and run
-   `npm run migrate:firestore` from the `server` directory to preview the
-   top-level collection/document counts. Review the counts, then run
-   `npm run migrate:firestore -- --apply` to import documents. Existing MySQL
-   documents are preserved and skipped, so the import can be safely resumed.
-5. Start the backend with `npm start`. MySQL commits are authoritative;
-   Firestore mirror failures are logged and retried from the outbox.
+## Database selection
 
-The MySQL adapter preserves the current document-style data model for this
-initial migration; it does not create normalized relational tables. This setup
-is for local development: a remotely deployed backend cannot connect to
-`127.0.0.1` on your PC.
+The backend selects its database using `DB_TYPE`. If `DB_TYPE` is omitted, it
+defaults to MySQL unless `NODE_ENV=production`, in which case it defaults to
+Firebase. Explicitly set `DB_TYPE` in each environment to avoid ambiguity.
+
+The existing MySQL mode remains the local default and uses the existing
+Firestore-style document tables (`buildtrack_documents` and
+`buildtrack_firestore_outbox`). Existing tables and records are not deleted or
+reset. Firebase mode accesses Cloud Firestore directly through the Firebase
+Admin SDK; it does not connect to MySQL or automatically copy records.
+
+### Local development (Laragon/XAMPP)
+
+1. Copy `server/.env.example` to `server/.env` if you do not already have one.
+   If `server/.env` already exists, add or update settings without overwriting
+   existing mail or Firebase credentials. Start MySQL in Laragon or XAMPP.
+2. Set `DB_TYPE=mysql`, `DB_HOST=127.0.0.1`, `DB_PORT=3306`, `DB_USER`,
+   `DB_PASSWORD`, and `DB_NAME=buildtrack_db` in `server/.env`.
+   `DB_PASSWORD` must match the password configured for that MySQL user. The
+   adapter loads this file when the backend starts.
+3. Optionally configure Firebase credentials to keep Firestore mirroring
+   enabled. Do not commit `.env` or service-account credentials.
+
+### API authentication
+
+Sensitive API routes require a valid Admin JWT and an active Admin record.
+Health, login, registration, email verification, and password reset routes
+remain public as required for those flows. In development, an ephemeral JWT
+secret is generated when `JWT_SECRET` is omitted, so tokens expire when the
+backend restarts. Production must set a stable random `JWT_SECRET` of at least
+32 bytes.
+
+The physical attendance scan endpoint requires `RFID_API_KEY` in the
+`x-rfid-api-key` request header. Use a random key of at least 32 bytes and
+configure the same private key on the RFID terminal. If it is not configured,
+hardware scans are rejected.
+
+### Production (Firebase Cloud Firestore)
+
+1. Set `NODE_ENV=production` and `DB_TYPE=firebase` in the backend deployment.
+2. Set `FIREBASE_PROJECT_ID` and provide backend credentials using
+   `FIREBASE_SERVICE_ACCOUNT_JSON`, `GOOGLE_APPLICATION_CREDENTIALS`, or the
+   deployment platform's Application Default Credentials. Never put these
+   credentials in frontend variables or source control.
+3. Existing JWT authentication and API routes remain in the backend. Firestore
+   must contain the collections/documents the application uses; selecting
+   Firebase does not migrate MySQL records.
+4. Some multi-field Firestore queries require composite indexes. Create and
+   deploy any indexes requested by Firestore before using the affected
+   endpoints.
+
+### Optional data migration
+
+Data transfer is not run automatically. To import MySQL documents into
+Firestore, configure credentials and run the new dry run from the `server`
+directory:
+
+1. Back up both databases, then run `npm run migrate:mysql-to-firestore`.
+2. Review the collection/document counts. Only after confirming the target
+   Firebase project and counts, run
+   `npm run migrate:mysql-to-firestore -- --apply`.
+
+The importer preserves the MySQL source and skips document IDs that already
+exist in Firestore. It can be rerun after an interrupted import. To import in
+the other direction, the existing `npm run migrate:firestore` command remains
+available; it also defaults to a dry run and skips existing MySQL documents.
