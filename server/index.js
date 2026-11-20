@@ -1593,7 +1593,7 @@ async function startServer() {
 
   // POST /api/notifications (Explicitly record action notification)
   app.post('/api/notifications', async (req, res) => {
-    const { type, title, message, severity, actor_name, actor_role, action, link } = req.body
+    const { type, title, message, severity, actor_name, actor_role, action, link, worker_id, target_id } = req.body
     if (!title || !message) {
       return res.status(400).json({ error: 'Title and message are required.' })
     }
@@ -1605,7 +1605,9 @@ async function startServer() {
       actor_name,
       actor_role,
       action,
-      link
+      link,
+      worker_id: worker_id || target_id,
+      target_id: target_id || worker_id
     })
     if (result) {
       res.json({ success: true, notification: result })
@@ -2898,7 +2900,10 @@ async function startServer() {
     if (!['Approved', 'Rejected'].includes(status)) {
       return res.status(400).json({ error: 'Review status must be Approved or Rejected.' })
     }
-    const rejection = status === 'Rejected' ? validateRejectionReason(rejection_reason) : { reason: null }
+    const effectiveRejectionReason = (typeof rejection_reason === 'string' && rejection_reason.trim())
+      ? rejection_reason.trim()
+      : 'Rejected by Administrator'
+    const rejection = status === 'Rejected' ? validateRejectionReason(effectiveRejectionReason) : { reason: null }
     if (rejection.error) return res.status(400).json({ error: rejection.error })
     try {
       const requestRef = db.collection('early_out_requests').doc(req.params.id)
@@ -3042,7 +3047,10 @@ async function startServer() {
     if (!['Approved', 'Rejected'].includes(status)) {
       return res.status(400).json({ error: 'Review status must be Approved or Rejected.' })
     }
-    const rejection = status === 'Rejected' ? validateRejectionReason(rejection_reason) : { reason: null }
+    const effectiveRejectionReason = (typeof rejection_reason === 'string' && rejection_reason.trim())
+      ? rejection_reason.trim()
+      : 'Rejected by Administrator'
+    const rejection = status === 'Rejected' ? validateRejectionReason(effectiveRejectionReason) : { reason: null }
     if (rejection.error) return res.status(400).json({ error: rejection.error })
     try {
       const requestRef = db.collection('attendance_correction_requests').doc(req.params.id)
@@ -4181,7 +4189,10 @@ async function startServer() {
     if (!['Approved', 'Rejected'].includes(status)) {
       return res.status(400).json({ error: 'Invalid status.' })
     }
-    const rejection = status === 'Rejected' ? validateRejectionReason(rejection_reason) : { reason: null }
+    const effectiveRejectionReason = (typeof rejection_reason === 'string' && rejection_reason.trim())
+      ? rejection_reason.trim()
+      : 'Rejected by Administrator'
+    const rejection = status === 'Rejected' ? validateRejectionReason(effectiveRejectionReason) : { reason: null }
     if (rejection.error) return res.status(400).json({ error: rejection.error })
     try {
       const caDoc = await db.collection('cash_advances').doc(req.params.id).get()
@@ -5542,7 +5553,10 @@ async function startServer() {
     if (!['Approved', 'Rejected'].includes(status)) {
       return res.status(400).json({ error: 'Review status must be Approved or Rejected.' })
     }
-    const rejection = status === 'Rejected' ? validateRejectionReason(rejection_reason) : { reason: null }
+    const effectiveRejectionReason = (typeof rejection_reason === 'string' && rejection_reason.trim())
+      ? rejection_reason.trim()
+      : 'Rejected by Administrator'
+    const rejection = status === 'Rejected' ? validateRejectionReason(effectiveRejectionReason) : { reason: null }
     if (rejection.error) return res.status(400).json({ error: rejection.error })
     try {
       const cleanStatus = status
@@ -5971,7 +5985,14 @@ async function startServer() {
   })
 
   const PORT = process.env.PORT || 5000
-  app.listen(PORT, () => console.log('Server running on port ' + PORT))
+  const server = app.listen(PORT, () => console.log('Server running on port ' + PORT))
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`Port ${PORT} is already in use! May isa pang server na tumatakbo sa background.`)
+    } else {
+      console.error('Server error:', err)
+    }
+  })
 }
 
 startServer().catch(error => {
