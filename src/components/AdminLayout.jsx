@@ -115,6 +115,10 @@ export default function AdminLayout({ children }) {
           icon: (<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><text x="12" y="17.5" fontSize="17" fontWeight="bold" textAnchor="middle" stroke="none" fill="currentColor">₱</text></svg>)
         },
         {
+          name: 'Materials Management', path: '/materials',
+          icon: (<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2 3 7l9 5 9-5-9-5Z"></path><path d="m3 12 9 5 9-5"></path><path d="m3 17 9 5 9-5"></path></svg>)
+        },
+        {
           name: 'Cash Advance', path: '/cash-advance',
           icon: (<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>)
         },

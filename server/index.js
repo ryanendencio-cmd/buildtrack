@@ -12,6 +12,12 @@ const {
 } = require('./mysql-adapter')
 const JWT_SECRET = resolveJwtSecret()
 const { validateRejectionReason } = require('./rejection-reason')
+const {
+  getMinimumDownPayment,
+  validateDownPaymentPolicy,
+  validateClientPaymentReceipt,
+  validateReceiptRequirement
+} = require('./client-payment-rules')
 const { getProjectExpenseLimit } = require('./expense-limit')
 const {
   normalizeAttendanceSettings,
@@ -773,6 +779,7 @@ async function startServer() {
     const paymentMethod = String(req.body.payment_method || '')
     const reference = String(req.body.reference || '').trim()
     const note = String(req.body.note || '').trim()
+    const receiptValidation = validateClientPaymentReceipt(req.body.receipt_image)
     const paymentTypes = ['Downpayment', 'Progress Payment', 'Final Payment', 'Other']
     const paymentMethods = ['Cash', 'Bank Transfer', 'Check', 'E-wallet', 'Other']
     const validDate = /^\d{4}-\d{2}-\d{2}$/.test(date) &&
@@ -785,12 +792,34 @@ async function startServer() {
     if (!validDate) return res.status(400).json({ error: 'Enter a valid payment date.' })
     if (!paymentTypes.includes(paymentType)) return res.status(400).json({ error: 'Select a valid payment type.' })
     if (!paymentMethods.includes(paymentMethod)) return res.status(400).json({ error: 'Select a valid payment method.' })
+    if (receiptValidation.error) return res.status(400).json({ error: receiptValidation.error })
+    const receiptRequirementError = validateReceiptRequirement(paymentMethod, receiptValidation.receiptImage)
+    if (receiptRequirementError) return res.status(400).json({ error: receiptRequirementError })
     if (reference.length > 100) return res.status(400).json({ error: 'Payment reference cannot exceed 100 characters.' })
     if (note.length > 250) return res.status(400).json({ error: 'Payment note cannot exceed 250 characters.' })
 
     try {
       const projectDoc = await db.collection('projects').doc(req.params.id).get()
       if (!projectDoc.exists) return res.status(404).json({ error: 'Project not found.' })
+
+      const project = projectDoc.data() || {}
+      const contractAmount = Number(project.contract_amount ?? project.budget ?? 0)
+      const existingPayments = await db.collection('client_payments')
+        .where('project_id', '==', req.params.id)
+        .get()
+      const downPaymentReceived = existingPayments.docs.reduce((total, doc) => {
+        const existingPayment = doc.data()
+        return String(existingPayment.payment_type || '').toLowerCase() === 'downpayment'
+          ? total + Number(existingPayment.amount || 0)
+          : total
+      }, 0)
+      const paymentPolicyError = validateDownPaymentPolicy({
+        amount,
+        paymentType,
+        contractAmount,
+        downPaymentReceived
+      })
+      if (paymentPolicyError) return res.status(400).json({ error: paymentPolicyError })
 
       const payment = {
         project_id: req.params.id,
@@ -800,6 +829,7 @@ async function startServer() {
         payment_method: paymentMethod,
         reference,
         note,
+        receipt_image: receiptValidation.receiptImage,
         created_at: FieldValue.serverTimestamp()
       }
       const docRef = await db.collection('client_payments').add(payment)
@@ -809,7 +839,15 @@ async function startServer() {
         description: `Recorded a ${paymentType.toLowerCase()} of ₱${amount.toLocaleString()} for project "${projectDoc.data().name}".`,
         target_id: docRef.id,
         target_name: projectDoc.data().name,
-        details: payment,
+        details: {
+          amount,
+          date,
+          payment_type: paymentType,
+          payment_method: paymentMethod,
+          reference,
+          note,
+          receipt_uploaded: Boolean(receiptValidation.receiptImage)
+        },
         req
       }).catch(() => {})
       res.json({ id: docRef.id, ...payment })
@@ -827,14 +865,43 @@ async function startServer() {
       }
 
       const projectDoc = await db.collection('projects').doc(req.params.id).get()
+      if (!projectDoc.exists) return res.status(404).json({ error: 'Project not found.' })
+      const deletedPayment = paymentDoc.data()
+      if (String(deletedPayment.payment_type || '').toLowerCase() === 'downpayment') {
+        const project = projectDoc.data() || {}
+        const existingPayments = await db.collection('client_payments')
+          .where('project_id', '==', req.params.id)
+          .get()
+        const otherPayments = existingPayments.docs
+          .filter(doc => doc.id !== req.params.paymentId)
+          .map(doc => doc.data())
+        const downPaymentReceived = otherPayments.reduce((total, payment) => (
+          String(payment.payment_type || '').toLowerCase() === 'downpayment'
+            ? total + Number(payment.amount || 0)
+            : total
+        ), 0)
+        const hasLaterPayments = otherPayments.some(payment =>
+          String(payment.payment_type || '').toLowerCase() !== 'downpayment'
+        )
+        const minimumDownPayment = getMinimumDownPayment(project.contract_amount ?? project.budget)
+        if (hasLaterPayments && downPaymentReceived < minimumDownPayment) {
+          return res.status(400).json({
+            error: 'Cannot delete this downpayment because it would leave recorded progress or final payments below the 20% minimum.'
+          })
+        }
+      }
       await paymentRef.delete()
+      const { receipt_image: deletedReceiptImage, ...deletedPaymentDetails } = deletedPayment
       recordAuditLog({
         action: 'CLIENT_PAYMENT_DELETED',
         module: 'Client Payments',
         description: `Deleted a recorded client payment of ₱${Number(paymentDoc.data().amount || 0).toLocaleString()} for project "${projectDoc.data()?.name || 'Project'}".`,
         target_id: req.params.paymentId,
         target_name: projectDoc.data()?.name || 'Project',
-        details: paymentDoc.data(),
+        details: {
+          ...deletedPaymentDetails,
+          receipt_uploaded: Boolean(deletedReceiptImage)
+        },
         req
       }).catch(() => {})
       res.json({ success: true })
