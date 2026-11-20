@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { api } from '../api'
@@ -12,6 +12,26 @@ const getTodayISO = () => {
     const month = String(date.getMonth() + 1).padStart(2, '0')
     const day = String(date.getDate()).padStart(2, '0')
     return `${year}-${month}-${day}`
+}
+
+const MAX_CLIENT_PAYMENT_AMOUNT = 999999999999
+const MAX_CLIENT_PAYMENT_NOTE_LENGTH = 250
+
+const formatPaymentAmount = (value) => {
+    if (String(value ?? '').trim() === '') return ''
+    const amount = Number(value)
+    return Number.isFinite(amount)
+        ? amount.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+        : String(value)
+}
+
+const formatEditingPaymentAmount = (value) => {
+    if (String(value ?? '').trim() === '') return ''
+    const [integerPart, ...fractionParts] = String(value).split('.')
+    const integer = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',') || '0'
+    return fractionParts.length
+        ? `${integer}.${fractionParts.join('')}`
+        : integer
 }
 
 export default function ProjectDetails() {
@@ -32,6 +52,8 @@ export default function ProjectDetails() {
     const [showAddPayment, setShowAddPayment] = useState(false)
     const [paymentSaving, setPaymentSaving] = useState(false)
     const [paymentError, setPaymentError] = useState('')
+    const [paymentAmountFocused, setPaymentAmountFocused] = useState(false)
+    const paymentAmountInputRef = useRef(null)
     const [paymentForm, setPaymentForm] = useState({
         amount: '',
         date: getTodayISO(),
@@ -40,7 +62,40 @@ export default function ProjectDetails() {
         reference: '',
         note: ''
     })
+    const [receiptImage, setReceiptImage] = useState(null)
+    const [receiptFileName, setReceiptFileName] = useState('')
     const [showUnreceiptedList, setShowUnreceiptedList] = useState(false)
+
+    const handlePaymentAmountChange = (event) => {
+        const input = event.target
+        const charactersBeforeCursor = input.value
+            .slice(0, input.selectionStart ?? input.value.length)
+            .replace(/[^\d.]/g, '').length
+        let value = input.value.replace(/[^\d.]/g, '')
+        const decimalIndex = value.indexOf('.')
+        if (decimalIndex !== -1) {
+            value = `${value.slice(0, decimalIndex + 1)}${value
+                .slice(decimalIndex + 1)
+                .replace(/\./g, '')
+                .slice(0, 2)}`
+        }
+        const [integerPart, ...fractionParts] = value.split('.')
+        value = `${integerPart.slice(0, String(MAX_CLIENT_PAYMENT_AMOUNT).length)}${fractionParts.length ? `.${fractionParts[0]}` : ''}`
+        setPaymentForm(prev => ({ ...prev, amount: value }))
+
+        const formatted = formatEditingPaymentAmount(value)
+        requestAnimationFrame(() => {
+            const field = paymentAmountInputRef.current
+            if (!field) return
+            let cursor = 0
+            let countedCharacters = 0
+            while (cursor < formatted.length && countedCharacters < charactersBeforeCursor) {
+                if (/[\d.]/.test(formatted[cursor])) countedCharacters += 1
+                cursor += 1
+            }
+            field.setSelectionRange(cursor, cursor)
+        })
+    }
 
     useEffect(() => {
         if (!id) return
@@ -97,9 +152,12 @@ export default function ProjectDetails() {
     const expenseLimit = Math.min(budget, contractAmount)
     const addedTotal = additions.reduce((s, a) => s + Number(a.amount || 0), 0)
     const totalPaymentsReceived = clientPayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0)
+    const downPaymentReceived = clientPayments
+        .filter(payment => String(payment.payment_type || '').toLowerCase() === 'downpayment')
+        .reduce((sum, payment) => sum + Number(payment.amount || 0), 0)
     const balanceDue = contractAmount - totalPaymentsReceived
     const downPaymentTarget = Math.round(contractAmount * 0.2 * 100) / 100
-    const suggestedDownPayment = Math.max(0, downPaymentTarget - totalPaymentsReceived)
+    const suggestedDownPayment = Math.max(0, downPaymentTarget - downPaymentReceived)
     const remaining = expenseLimit - totalSpent
     const percent = expenseLimit > 0 ? Math.min(Math.round((totalSpent / expenseLimit) * 100), 100) : 0
 
@@ -150,19 +208,71 @@ export default function ProjectDetails() {
         setPaymentForm({
             amount: '',
             date: getTodayISO(),
-            paymentType: totalPaymentsReceived < downPaymentTarget ? 'Downpayment' : 'Progress Payment',
+            paymentType: downPaymentReceived < downPaymentTarget ? 'Downpayment' : 'Progress Payment',
             paymentMethod: 'Cash',
             reference: '',
             note: ''
         })
+        setPaymentAmountFocused(false)
+        setReceiptImage(null)
+        setReceiptFileName('')
         setShowAddPayment(true)
+    }
+
+    const handleReceiptUpload = (event) => {
+        const file = event.target.files?.[0]
+        if (!file) {
+            setReceiptImage(null)
+            setReceiptFileName('')
+            return
+        }
+
+        if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+            setReceiptImage(null)
+            setReceiptFileName('')
+            setPaymentError('Upload a JPG, PNG, or WebP receipt image.')
+            event.target.value = ''
+            return
+        }
+        if (file.size > 512 * 1024) {
+            setReceiptImage(null)
+            setReceiptFileName('')
+            setPaymentError('Receipt image must be 512 KB or smaller.')
+            event.target.value = ''
+            return
+        }
+
+        const reader = new FileReader()
+        reader.onload = () => {
+            if (typeof reader.result !== 'string') {
+                setPaymentError('Could not read the selected receipt image.')
+                return
+            }
+            setReceiptImage(reader.result)
+            setReceiptFileName(file.name)
+            setPaymentError('')
+        }
+        reader.onerror = () => setPaymentError('Could not read the selected receipt image.')
+        reader.readAsDataURL(file)
     }
 
     const handleAddClientPayment = async (e) => {
         e.preventDefault()
         const amount = Number(paymentForm.amount)
-        if (!Number.isFinite(amount) || amount <= 0 || amount > 999999999999) {
+        if (!Number.isFinite(amount) || amount <= 0 || amount > MAX_CLIENT_PAYMENT_AMOUNT) {
             setPaymentError('Enter a payment amount greater than 0 and no more than ₱999,999,999,999.')
+            return
+        }
+        if (paymentForm.paymentType === 'Downpayment' && downPaymentReceived + amount < downPaymentTarget) {
+            setPaymentError(`Downpayment must reach at least 20% of the contract amount. Add at least ₱${suggestedDownPayment.toLocaleString()}.`)
+            return
+        }
+        if (paymentForm.paymentType !== 'Downpayment' && downPaymentReceived < downPaymentTarget) {
+            setPaymentError(`Record the minimum 20% downpayment first. Remaining downpayment: ₱${suggestedDownPayment.toLocaleString()}.`)
+            return
+        }
+        if (paymentForm.paymentMethod !== 'Cash' && !receiptImage) {
+            setPaymentError('Upload the receipt image for non-cash payments.')
             return
         }
 
@@ -175,9 +285,13 @@ export default function ProjectDetails() {
                 payment_type: paymentForm.paymentType,
                 payment_method: paymentForm.paymentMethod,
                 reference: paymentForm.reference.trim(),
-                note: paymentForm.note.trim()
+                note: paymentForm.note.trim(),
+                receipt_image: receiptImage
             })
             setClientPayments(prev => [payment, ...prev])
+            setReceiptImage(null)
+            setReceiptFileName('')
+            setPaymentAmountFocused(false)
             setShowAddPayment(false)
         } catch (err) {
             setPaymentError(err.message || 'Failed to record client payment.')
@@ -281,7 +395,8 @@ export default function ProjectDetails() {
                     <div className="rounded-lg bg-gray-50 border border-gray-100 p-3">
                         <p className="text-[10px] font-bold text-gray-400 uppercase">Contract Amount</p>
                         <p className="text-sm font-extrabold text-gray-900">₱{contractAmount.toLocaleString()}</p>
-                        <p className="text-[10px] text-gray-500 mt-1">20% downpayment target: ₱{downPaymentTarget.toLocaleString()}</p>
+                        <p className="text-[10px] text-gray-500 mt-1">Minimum downpayment (20%): ₱{downPaymentTarget.toLocaleString()}</p>
+                        <p className="text-[10px] text-gray-500 mt-0.5">Downpayment received: ₱{downPaymentReceived.toLocaleString()}</p>
                     </div>
                     <div className="rounded-lg bg-green-50 border border-green-100 p-3">
                         <p className="text-[10px] font-bold text-green-700 uppercase">Payments Received</p>
@@ -321,6 +436,11 @@ export default function ProjectDetails() {
                                             <p className="text-[11px] text-gray-700">{payment.payment_method}</p>
                                             {payment.reference && <p className="text-[10px] text-gray-400">Ref: {payment.reference}</p>}
                                             {payment.note && <p className="text-[10px] text-gray-400">{payment.note}</p>}
+                                            {payment.receipt_image && (
+                                                <a href={payment.receipt_image} target="_blank" rel="noreferrer" className="text-[10px] font-bold text-[#2e7d32] hover:underline">
+                                                    View Receipt
+                                                </a>
+                                            )}
                                         </td>
                                         <td className="py-2 text-right text-[11px] font-extrabold text-green-700">₱{Number(payment.amount || 0).toLocaleString()}</td>
                                         <td className="py-2 text-right">
@@ -514,28 +634,34 @@ export default function ProjectDetails() {
 
                             <div>
                                 <div className="flex justify-between items-center mb-1">
-                                    <label className="text-[11px] font-bold text-gray-700 uppercase">Payment Amount (₱) *</label>
+                                    <label className="text-[11px] font-bold text-gray-700 uppercase">Payment Amount *</label>
                                     <button
                                         type="button"
                                         onClick={() => setPaymentForm(prev => ({ ...prev, amount: suggestedDownPayment.toFixed(2) }))}
                                         disabled={suggestedDownPayment <= 0}
                                         className="text-[10px] font-bold text-[#2e7d32] hover:underline disabled:text-gray-400 disabled:no-underline"
                                     >
-                                        Use 20% downpayment ({`₱${suggestedDownPayment.toLocaleString()}`})
+                                        Use minimum downpayment ({`₱${suggestedDownPayment.toLocaleString()}`})
                                     </button>
                                 </div>
-                                <input
-                                    type="number"
-                                    min="0.01"
-                                    max="999999999999"
-                                    step="0.01"
-                                    value={paymentForm.amount}
-                                    onChange={e => setPaymentForm(prev => ({ ...prev, amount: e.target.value }))}
-                                    required
-                                    className="w-full bg-[#f4f1ee] rounded-md px-2.5 py-2 text-xs font-bold outline-none focus:border-[#2e7d32] border border-transparent"
-                                    placeholder="0.00"
-                                />
-                                <p className="text-[10px] text-gray-400 mt-1">Suggested amount is the remaining balance toward 20% of the contract amount.</p>
+                                <div className="relative">
+                                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-extrabold text-gray-500">₱</span>
+                                    <input
+                                        ref={paymentAmountInputRef}
+                                        type="text"
+                                        inputMode="decimal"
+                                        value={paymentAmountFocused
+                                            ? formatEditingPaymentAmount(paymentForm.amount)
+                                            : formatPaymentAmount(paymentForm.amount)}
+                                        onFocus={() => setPaymentAmountFocused(true)}
+                                        onBlur={() => setPaymentAmountFocused(false)}
+                                        onChange={handlePaymentAmountChange}
+                                        required
+                                        className="w-full bg-[#f4f1ee] rounded-md pl-6 pr-2.5 py-2 text-xs font-bold outline-none focus:border-[#2e7d32] border border-transparent"
+                                        placeholder="0.00"
+                                    />
+                                </div>
+                                <p className="text-[10px] text-gray-400 mt-1">A total downpayment of at least 20% of the contract amount is required before other payment types.</p>
                             </div>
 
                             <div className="grid grid-cols-2 gap-2">
@@ -548,9 +674,9 @@ export default function ProjectDetails() {
                                         className="w-full bg-[#f4f1ee] rounded-md px-2.5 py-2 text-[11px] outline-none"
                                     >
                                         <option value="Downpayment">Downpayment</option>
-                                        <option value="Progress Payment">Progress Payment</option>
-                                        <option value="Final Payment">Final Payment</option>
-                                        <option value="Other">Other</option>
+                                        <option value="Progress Payment" disabled={downPaymentReceived < downPaymentTarget}>Progress Payment</option>
+                                        <option value="Final Payment" disabled={downPaymentReceived < downPaymentTarget}>Final Payment</option>
+                                        <option value="Other" disabled={downPaymentReceived < downPaymentTarget}>Other</option>
                                     </select>
                                 </div>
                                 <div>
@@ -567,6 +693,20 @@ export default function ProjectDetails() {
                                         <option value="E-wallet">E-wallet</option>
                                         <option value="Other">Other</option>
                                     </select>
+                                </div>
+                                <div className="col-span-2">
+                                    <label className="block text-[11px] font-bold text-gray-700 uppercase mb-1">
+                                        Receipt Upload {paymentForm.paymentMethod !== 'Cash' ? '*' : <span className="font-normal text-gray-400">(Optional for cash)</span>}
+                                    </label>
+                                    <input
+                                        type="file"
+                                        accept="image/jpeg,image/png,image/webp"
+                                        onChange={handleReceiptUpload}
+                                        required={paymentForm.paymentMethod !== 'Cash'}
+                                        className="w-full bg-[#f4f1ee] rounded-md px-2.5 py-2 text-[11px] outline-none file:mr-2 file:rounded file:border-0 file:bg-white file:px-2 file:py-1 file:text-[10px] file:font-bold"
+                                    />
+                                    {receiptFileName && <p className="mt-1 text-[10px] text-green-700">Attached: {receiptFileName}</p>}
+                                    <p className="mt-1 text-[10px] text-gray-400">Required for bank transfer, check, e-wallet, and other non-cash payments. JPG, PNG, or WebP; up to 512 KB.</p>
                                 </div>
                                 <div className="col-span-2">
                                     <label className="block text-[11px] font-bold text-gray-700 uppercase mb-1">Date Received *</label>
@@ -590,10 +730,17 @@ export default function ProjectDetails() {
                                     />
                                 </div>
                                 <div className="col-span-2">
-                                    <label className="block text-[11px] font-bold text-gray-700 uppercase mb-1">Note <span className="font-normal text-gray-400">(Optional)</span></label>
+                                    <div className="mb-1 flex items-center justify-between gap-3">
+                                        <label className="text-[11px] font-bold text-gray-700 uppercase">Note <span className="font-normal text-gray-400">(Optional)</span></label>
+                                        <span className={paymentForm.note.length === MAX_CLIENT_PAYMENT_NOTE_LENGTH
+                                            ? 'text-[10px] font-semibold text-red-600'
+                                            : 'text-[10px] text-gray-500'}>
+                                            {paymentForm.note.length}/{MAX_CLIENT_PAYMENT_NOTE_LENGTH}
+                                        </span>
+                                    </div>
                                     <textarea
                                         rows="2"
-                                        maxLength={250}
+                                        maxLength={MAX_CLIENT_PAYMENT_NOTE_LENGTH}
                                         value={paymentForm.note}
                                         onChange={e => setPaymentForm(prev => ({ ...prev, note: e.target.value }))}
                                         className="w-full resize-y bg-[#f4f1ee] rounded-md px-2.5 py-2 text-[11px] outline-none"

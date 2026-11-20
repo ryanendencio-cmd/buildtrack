@@ -1,6 +1,10 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { MySQLFirestoreAdapter, FieldValue } = require('./mysql-adapter');
+const {
+  MySQLFirestoreAdapter,
+  FieldValue,
+  getDatabaseType
+} = require('./mysql-adapter');
 
 class FakePool {
   constructor() {
@@ -189,4 +193,50 @@ test('Firestore mirror applies outbox events after MySQL commits', async t => {
 
   assert.equal(mirrored.get('records/mirror-me').value, 'primary first');
   assert.ok(pool.outbox[0].synced_at);
+});
+
+test('database selection defaults by environment and rejects unknown types', () => {
+  assert.equal(getDatabaseType('', 'development'), 'mysql');
+  assert.equal(getDatabaseType('', 'production'), 'firebase');
+  assert.equal(getDatabaseType('MYSQL', 'production'), 'mysql');
+  assert.throws(() => getDatabaseType('postgres', 'production'), /Unsupported DB_TYPE/);
+});
+
+test('Firebase mode delegates database operations without creating a MySQL pool', async () => {
+  const collection = { name: 'workers' };
+  const batch = {};
+  const transactionResult = { committed: true };
+  let transactionCallback;
+  const firestore = {
+    collection: name => {
+      assert.equal(name, 'workers');
+      return collection;
+    },
+    batch: () => batch,
+    runTransaction: async callback => {
+      transactionCallback = callback;
+      return callback({ native: true });
+    },
+    settings: () => {},
+    terminate: async () => {}
+  };
+  const db = new MySQLFirestoreAdapter({
+    type: 'firebase',
+    firestore,
+    pool: {
+      query: () => {
+        throw new Error('Firebase mode must not initialize MySQL.');
+      }
+    }
+  });
+
+  assert.equal(db.collection('workers'), collection);
+  assert.equal(db.batch(), batch);
+  assert.deepEqual(await db.runTransaction(async transaction => {
+    assert.equal(transaction.native, true);
+    return transactionResult;
+  }), transactionResult);
+  assert.equal(typeof transactionCallback, 'function');
+  await db.ready;
+  await db.close();
 });

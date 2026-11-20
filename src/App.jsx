@@ -41,6 +41,7 @@ import CashAdvance from './pages/CashAdvance'
 import Schedules from './pages/Schedules'
 import AuditLogs from './pages/AuditLogs'
 import WorkersSalary from './pages/WorkersSalary'
+import Materials from './pages/Materials'
 
 function LandingPage() {
   return (
@@ -75,9 +76,8 @@ export default function App() {
         <Route path="/assets" element={<PrivateRoute><Assets /></PrivateRoute>} />
         <Route path="/assets/:id" element={<PrivateRoute><Assets /></PrivateRoute>} />
 
-        {/* Materials redirects to Expenses & Receipts */}
-        <Route path="/materials" element={<Navigate to="/expenses" replace />} />
-        <Route path="/materials/:id" element={<Navigate to="/expenses" replace />} />
+        <Route path="/materials" element={<PrivateRoute><Materials /></PrivateRoute>} />
+        <Route path="/materials/:id" element={<PrivateRoute><Materials /></PrivateRoute>} />
 
         <Route path="/workers" element={<PrivateRoute><Workers /></PrivateRoute>} />
         <Route path="/cash-advance" element={<PrivateRoute><CashAdvance /></PrivateRoute>} />
