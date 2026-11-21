@@ -63,10 +63,29 @@ secret is generated when `JWT_SECRET` is omitted, so tokens expire when the
 backend restarts. Production must set a stable random `JWT_SECRET` of at least
 32 bytes.
 
-The physical attendance scan endpoint requires `RFID_API_KEY` in the
-`x-rfid-api-key` request header. Use a random key of at least 32 bytes and
-configure the same private key on the RFID terminal. If it is not configured,
-hardware scans are rejected.
+Worker login also returns a short-lived Worker JWT. Worker tokens can read the
+authenticated worker's attendance, schedules, requests, payroll, cash advances,
+profile, shared project list, and tool inventory, plus worker announcements.
+Attendance and request lists are scoped to that worker, and ID-based profile
+and payroll routes require the token's worker ID. Worker cash advances remain
+pending for Admin review, and profile updates cannot change roles, rates, or
+account status.
+
+Workers whose saved role or position includes `Attendance Monitoring` or
+`Timekeeper` can use the attendance-management APIs. Workers whose saved role
+or position includes `Tools Monitoring` or `Custodian` can use the tools
+management APIs. Those capabilities are derived from the worker record on each
+request; the client cannot grant itself access by changing request headers.
+Specialist workers still cannot access Admin APIs or the broader Admin
+notification feed. The attendance scan endpoint accepts an authorized
+attendance worker JWT for mobile scans; dedicated RFID terminals continue to
+use the private `RFID_API_KEY`.
+
+The RFID terminal path to the attendance scan endpoint requires `RFID_API_KEY`
+in the `x-rfid-api-key` request header. Use a random key of at least 32 bytes
+and configure the same private key on the terminal. Authorized attendance-role
+mobile users use their Worker JWT instead; they do not need the RFID key.
+Without either credential, scans are rejected.
 
 ### Production (Firebase Cloud Firestore)
 

@@ -7,6 +7,11 @@ import { parseLocationToAddress } from '../services/psgc'
 import AddBudgetModal from '../components/AddBudgetModal'
 import Pagination from '../components/Pagination'
 import { usePagination } from '../components/usePagination'
+import {
+    formatCurrencyDisplay,
+    formatCurrencyEditing,
+    normalizeCurrencyInput
+} from '../utils/currencyFormatting'
 
 const isOngoingStatus = (statusStr) => {
     const s = (statusStr || '').toUpperCase();
@@ -124,21 +129,6 @@ export default function Projects() {
     const contractAmountInputRef = useRef(null);
 
     const MAX_AMOUNT = 999999999999;
-    const formatCurrency = (value) => {
-        if (String(value ?? '').trim() === '') return '';
-        const amount = Number(value);
-        return Number.isFinite(amount)
-            ? amount.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-            : '';
-    };
-    const formatEditingCurrency = (value) => {
-        if (String(value ?? '').trim() === '') return '';
-        const [integerPart, ...fractionParts] = value.split('.');
-        const integer = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',') || '0';
-        return fractionParts.length
-            ? `${integer}.${fractionParts.join('')}`
-            : integer;
-    };
 
     const getTodayISO = () => {
         const d = new Date();
@@ -177,14 +167,7 @@ export default function Projects() {
         const charactersBeforeCursor = input.value
             .slice(0, input.selectionStart ?? input.value.length)
             .replace(/[^\d.]/g, '').length;
-        let value = input.value.replace(/[^\d.]/g, '');
-        const decimalIndex = value.indexOf('.');
-        if (decimalIndex !== -1) {
-            value = `${value.slice(0, decimalIndex + 1)}${value
-                .slice(decimalIndex + 1)
-                .replace(/\./g, '')
-                .slice(0, 2)}`;
-        }
+        let value = normalizeCurrencyInput(input.value);
         const [integerPart, ...fractionParts] = value.split('.');
         value = `${integerPart.slice(0, String(MAX_AMOUNT).length)}${fractionParts.length ? `.${fractionParts[0]}` : ''}`;
 
@@ -196,7 +179,7 @@ export default function Projects() {
         }
         setFormData(prev => ({ ...prev, [fieldName]: value }));
 
-        const formatted = formatEditingCurrency(value);
+        const formatted = formatCurrencyEditing(value);
         requestAnimationFrame(() => {
             const field = inputRef.current;
             if (!field) return;
@@ -828,7 +811,7 @@ export default function Projects() {
                                                 type="text"
                                                 inputMode="decimal"
                                                 name="contractAmount"
-                                                value={contractAmountFocused ? formatEditingCurrency(formData.contractAmount) : formatCurrency(formData.contractAmount)}
+                                                value={contractAmountFocused ? formatCurrencyEditing(formData.contractAmount) : formatCurrencyDisplay(formData.contractAmount)}
                                                 onFocus={() => setContractAmountFocused(true)}
                                                 onBlur={() => setContractAmountFocused(false)}
                                                 onChange={handleContractAmountChange}

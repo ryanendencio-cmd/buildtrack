@@ -1,4 +1,4 @@
-const MAX_REJECTION_REASON_LENGTH = 100;
+const MAX_REJECTION_REASON_LENGTH = 250;
 
 function validateRejectionReason(value) {
   if (typeof value !== 'string' || !value.trim()) {

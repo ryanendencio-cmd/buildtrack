@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
+import CurrencyInput from '../components/CurrencyInput'
 import { api } from '../api'
 import { CONSTRUCTION_MATERIALS, getUnitsForMaterial, getDefaultUnitForMaterial, resolveStandardMaterial } from '../constants/materials'
 import Pagination from '../components/Pagination'
@@ -388,11 +389,9 @@ export default function Materials() {
                                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                                             <div>
                                                 <label className="block text-[11px] font-bold text-gray-600 mb-1 uppercase">UNIT COST (₱)</label>
-                                                <input
-                                                    type="number"
-                                                    min="0"
+                                                <CurrencyInput
                                                     value={row.cost}
-                                                    onChange={(e) => handleRowChange(idx, 'cost', e.target.value)}
+                                                    onValueChange={(value) => handleRowChange(idx, 'cost', value)}
                                                     required
                                                     placeholder="0.00"
                                                     className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-xs font-extrabold text-[#A63228] focus:border-[#A63228] outline-none"

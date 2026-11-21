@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
+import CurrencyInput from '../components/CurrencyInput'
 import { api } from '../api'
 import Pagination from '../components/Pagination'
 import { usePagination } from '../components/usePagination'
@@ -1618,8 +1619,16 @@ export default function Attendance() {
                                 )}
 
                                 <div>
-                                    <label className="block text-[10px] font-bold text-gray-700 mb-1.5 uppercase">CASH ADVANCE (OPTIONAL)</label>
-                                    <input type="number" name="advance" value={formData.advance} onChange={handleInputChange} className="w-full bg-[#f4f1ee] border border-transparent rounded-lg px-3 py-2.5 text-xs font-medium focus:border-[#A63228] outline-none" placeholder="₱ 0.00" />
+                                    <label className="block text-[10px] font-bold text-gray-700 mb-1.5 uppercase">CASH ADVANCE (OPTIONAL, ₱)</label>
+                                    <CurrencyInput
+                                        name="advance"
+                                        value={formData.advance}
+                                        onValueChange={(value) => handleInputChange({
+                                            target: { name: 'advance', value }
+                                        })}
+                                        className="w-full bg-[#f4f1ee] border border-transparent rounded-lg px-3 py-2.5 text-xs font-medium focus:border-[#A63228] outline-none"
+                                        placeholder="0.00"
+                                    />
                                 </div>
 
                                 <button type="submit" className="w-full mt-2 py-3 bg-[#E8C547] text-gray-900 rounded-xl text-xs font-bold hover:bg-[#d4b33d] transition-colors shadow-sm">
@@ -1877,15 +1886,12 @@ export default function Attendance() {
                                         ].map(([key, label]) => (
                                             <div key={key}>
                                                 <label className="block text-[11px] font-bold text-gray-600 mb-1 uppercase">{label}</label>
-                                                <input
-                                                    type="number"
-                                                    min="0"
-                                                    step={key === 'overtime_interval_minutes' ? '1' : '0.01'}
+                                                <CurrencyInput
                                                     value={settingsForm[key]}
                                                     name={key}
                                                     id={`attendance-setting-${key}`}
                                                     aria-invalid={Boolean(getSettingsFieldError(key))}
-                                                    onChange={(e) => updateSettingsFormField(key, e.target.value)}
+                                                    onValueChange={(value) => updateSettingsFormField(key, value)}
                                                     required
                                                     className={`w-full bg-white border rounded-lg px-2 py-2 text-xs font-semibold focus:border-[#A63228] outline-none ${getSettingsFieldError(key) ? 'border-red-500' : 'border-gray-200'}`}
                                                 />
@@ -1904,18 +1910,30 @@ export default function Attendance() {
                                         ].map(([key, label]) => (
                                             <div key={key}>
                                                 <label className="block text-[11px] font-bold text-gray-600 mb-1 uppercase">{label}</label>
-                                                <input
-                                                    type="number"
-                                                    min="0"
-                                                    step={key === 'overtime_interval_minutes' ? '1' : '0.01'}
-                                                    value={settingsForm[key]}
-                                                    name={key}
-                                                    id={`attendance-setting-${key}`}
-                                                    aria-invalid={Boolean(getSettingsFieldError(key))}
-                                                    onChange={(e) => updateSettingsFormField(key, e.target.value)}
-                                                    required
-                                                    className={`w-full bg-white border rounded-lg px-2 py-2 text-xs font-semibold focus:border-[#A63228] outline-none ${getSettingsFieldError(key) ? 'border-red-500' : 'border-gray-200'}`}
-                                                />
+                                                {key === 'overtime_interval_minutes' ? (
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        step="1"
+                                                        value={settingsForm[key]}
+                                                        name={key}
+                                                        id={`attendance-setting-${key}`}
+                                                        aria-invalid={Boolean(getSettingsFieldError(key))}
+                                                        onChange={(e) => updateSettingsFormField(key, e.target.value)}
+                                                        required
+                                                        className={`w-full bg-white border rounded-lg px-2 py-2 text-xs font-semibold focus:border-[#A63228] outline-none ${getSettingsFieldError(key) ? 'border-red-500' : 'border-gray-200'}`}
+                                                    />
+                                                ) : (
+                                                    <CurrencyInput
+                                                        value={settingsForm[key]}
+                                                        name={key}
+                                                        id={`attendance-setting-${key}`}
+                                                        aria-invalid={Boolean(getSettingsFieldError(key))}
+                                                        onValueChange={(value) => updateSettingsFormField(key, value)}
+                                                        required
+                                                        className={`w-full bg-white border rounded-lg px-2 py-2 text-xs font-semibold focus:border-[#A63228] outline-none ${getSettingsFieldError(key) ? 'border-red-500' : 'border-gray-200'}`}
+                                                    />
+                                                )}
                                                 {getSettingsFieldError(key) && <p className="text-[10px] text-red-600 mt-1">{getSettingsFieldError(key)}</p>}
                                             </div>
                                         ))}

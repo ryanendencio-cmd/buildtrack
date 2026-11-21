@@ -19,6 +19,7 @@ const {
   validateReceiptRequirement
 } = require('./client-payment-rules')
 const { getProjectExpenseLimit } = require('./expense-limit')
+const { loadProjectFunding } = require('./project-funds')
 const {
   normalizeAttendanceSettings,
   parseTimeToMinutes,
@@ -50,6 +51,7 @@ const PUBLIC_EMAIL_DOMAINS = new Set([
 const EMAIL_OTP_LIFETIME_MS = 5 * 60 * 1000
 const EMAIL_OTP_RESEND_DELAY_MS = 60 * 1000
 const EMAIL_OTP_MAX_ATTEMPTS = 5
+const MAX_NOTE_LENGTH = 250
 const emailOtpChallenges = new Map()
 const emailOtpSendTimes = new Map()
 const emailVerificationTokens = new Map()
@@ -119,6 +121,19 @@ function emailOtpKey(purpose, email) {
 
 function notificationReadStateId(notificationId) {
   return crypto.createHash('sha256').update(notificationId).digest('hex')
+}
+
+function workerNotificationReadStateId(workerId, notificationId) {
+  return crypto.createHash('sha256')
+    .update(`${workerId}:${notificationId}`)
+    .digest('hex')
+}
+
+function isWorkerNotification(notification, workerId) {
+  const type = String(notification.type || '').trim().toLowerCase()
+  const targetId = String(notification.worker_id || notification.target_id || '')
+  if (targetId) return targetId === workerId
+  return ['announcement', 'broadcast', 'general'].includes(type)
 }
 
 function consumeEmailVerificationToken(token, purpose, email) {
@@ -373,11 +388,15 @@ async function startServer() {
   })
   app.post('/api/schedules', async (req, res) => {
     const { title, schedule_date, assigned_to, status, notes, category, schedule_time, supplier_name, check_no, amount } = req.body
+    const cleanNotes = typeof notes === 'string' ? notes : ''
+    if (cleanNotes.length > MAX_NOTE_LENGTH) {
+      return res.status(400).json({ error: `Notes cannot exceed ${MAX_NOTE_LENGTH} characters.` })
+    }
     const link = scheduleLink(req.body)
     try {
       const newSchedule = {
         project_id: link.projectId, expense_id: link.expenseId, link_type: link.type,
-        title, schedule_date, assigned_to: assigned_to || null, status: status || 'Scheduled', notes: notes || null,
+        title, schedule_date, assigned_to: assigned_to || null, status: status || 'Scheduled', notes: cleanNotes || null,
         category: category || 'General',
         schedule_time: schedule_time || '09:00',
         supplier_name: supplier_name || null,
@@ -409,11 +428,15 @@ async function startServer() {
   })
   app.put('/api/schedules/:id', async (req, res) => {
     const { title, schedule_date, assigned_to, status, notes, category, schedule_time, supplier_name, check_no, amount } = req.body
+    const cleanNotes = typeof notes === 'string' ? notes : ''
+    if (cleanNotes.length > MAX_NOTE_LENGTH) {
+      return res.status(400).json({ error: `Notes cannot exceed ${MAX_NOTE_LENGTH} characters.` })
+    }
     const link = scheduleLink(req.body)
     try {
       await db.collection('schedules').doc(req.params.id).update({
         project_id: link.projectId, expense_id: link.expenseId, link_type: link.type,
-        title, schedule_date, assigned_to: assigned_to || null, status, notes: notes || null,
+        title, schedule_date, assigned_to: assigned_to || null, status, notes: cleanNotes || null,
         category: category || 'General',
         schedule_time: schedule_time || '09:00',
         supplier_name: supplier_name || null,
@@ -461,7 +484,18 @@ async function startServer() {
   app.get('/api/projects', async (req, res) => {
     try {
       const snapshot = await db.collection('projects').get()
-      const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+      const results = snapshot.docs.map(doc => {
+        const project = doc.data()
+        return req.worker
+          ? {
+              id: doc.id,
+              name: project.name,
+              status: project.status,
+              start_date: project.start_date,
+              end_date: project.end_date
+            }
+          : { id: doc.id, ...project }
+      })
       res.json(results)
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -711,11 +745,14 @@ async function startServer() {
   app.post('/api/projects/:id/budget-additions', async (req, res) => {
     const MAX_AMOUNT = 999999999999
     const amount = Number(req.body.amount)
-    const note = String(req.body.note || '').trim().slice(0, 255)
+    const note = String(req.body.note || '').trim()
     const date = req.body.date || new Date().toISOString().slice(0, 10)
 
     if (!Number.isFinite(amount) || amount <= 0) {
       return res.status(400).json({ error: 'Please enter a valid budget amount.' })
+    }
+    if (note.length > MAX_NOTE_LENGTH) {
+      return res.status(400).json({ error: `Note cannot exceed ${MAX_NOTE_LENGTH} characters.` })
     }
 
     try {
@@ -796,7 +833,7 @@ async function startServer() {
     const receiptRequirementError = validateReceiptRequirement(paymentMethod, receiptValidation.receiptImage)
     if (receiptRequirementError) return res.status(400).json({ error: receiptRequirementError })
     if (reference.length > 100) return res.status(400).json({ error: 'Payment reference cannot exceed 100 characters.' })
-    if (note.length > 250) return res.status(400).json({ error: 'Payment note cannot exceed 250 characters.' })
+    if (note.length > MAX_NOTE_LENGTH) return res.status(400).json({ error: `Payment note cannot exceed ${MAX_NOTE_LENGTH} characters.` })
 
     try {
       const projectDoc = await db.collection('projects').doc(req.params.id).get()
@@ -1117,19 +1154,11 @@ async function startServer() {
           })
         }
 
-        const expenseLimit = getProjectExpenseLimit(targetProjectDoc.data())
-        if (expenseLimit !== null) {
-          const projectId = targetProjectDoc.id
-          const existingExpenses = await db.collection('expenses')
-            .where('project_id', '==', projectId)
-            .get()
-          const currentSpent = existingExpenses.docs.reduce((sum, doc) => sum + Number(doc.data().amount || 0), 0)
-          const remaining = expenseLimit - currentSpent
-          if (expenseAmount > remaining) {
-            return res.status(400).json({
-              error: `This expense exceeds the project's remaining limit of ₱${Math.max(remaining, 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}. The expense limit is the lower of the contract amount and expense budget.`
-            })
-          }
+        const funding = await loadProjectFunding(db, targetProjectDoc.data(), targetProjectDoc.id)
+        if (expenseAmount > funding.remaining) {
+          return res.status(400).json({
+            error: `This expense exceeds the remaining funded expense limit of ₱${Math.max(funding.remaining, 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}. The cap is the lower of client payments and the project expense limit, less recorded expenses and paid salaries.`
+          })
         }
       }
 
@@ -1199,20 +1228,17 @@ async function startServer() {
 
       const expenseProjectId = projectDoc?.id || currentExpense.project_id
       if (projectDoc) {
-        const expenseLimit = getProjectExpenseLimit(projectDoc.data())
-        if (expenseLimit !== null) {
-          const existingExpenses = await db.collection('expenses')
-            .where('project_id', '==', expenseProjectId)
-            .get()
-          const spentWithoutCurrent = existingExpenses.docs
-            .filter(doc => doc.id !== req.params.id)
-            .reduce((sum, doc) => sum + Number(doc.data().amount || 0), 0)
-          const remaining = expenseLimit - spentWithoutCurrent
-          if (expenseAmount > remaining) {
-            return res.status(400).json({
-              error: `This update exceeds the project's remaining limit of ₱${Math.max(remaining, 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}. The expense limit is the lower of the contract amount and expense budget.`
-            })
-          }
+        const funding = await loadProjectFunding(
+          db,
+          projectDoc.data(),
+          expenseProjectId,
+          null,
+          req.params.id
+        )
+        if (expenseAmount > funding.remaining) {
+          return res.status(400).json({
+            error: `This update exceeds the remaining funded expense limit of ₱${Math.max(funding.remaining, 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}. The cap is the lower of client payments and the project expense limit, less recorded expenses and paid salaries.`
+          })
         }
       }
 
@@ -1467,7 +1493,170 @@ async function startServer() {
     }
   }
 
-  // ── NOTIFICATIONS ENDPOINT ──
+  app.get('/api/worker/notifications', async (req, res) => {
+    const workerId = req.worker?.id
+    if (!workerId) {
+      return res.status(403).json({ error: 'Worker authentication is required.' })
+    }
+
+    try {
+      const [notificationsSnapshot, readStatesSnapshot, dismissedSnapshot] = await Promise.all([
+        db.collection('notifications').get(),
+        db.collection('worker_notification_read_states')
+          .where('worker_id', '==', workerId)
+          .get(),
+        db.collection('worker_notification_dismissals')
+          .where('worker_id', '==', workerId)
+          .get()
+      ])
+      const readNotificationIds = new Set(
+        readStatesSnapshot.docs
+          .map(doc => doc.data().notification_id)
+          .filter(id => typeof id === 'string')
+      )
+      const dismissedNotificationIds = new Set(
+        dismissedSnapshot.docs
+          .map(doc => doc.data().notification_id)
+          .filter(id => typeof id === 'string')
+      )
+
+      const notifications = notificationsSnapshot.docs
+        .filter(doc =>
+          isWorkerNotification(doc.data(), workerId) &&
+          !dismissedNotificationIds.has(doc.id)
+        )
+        .map(doc => {
+          const data = doc.data()
+          const createdAt = typeof data.created_at?.toDate === 'function'
+            ? data.created_at.toDate()
+            : typeof data.created_at?._seconds === 'number'
+              ? new Date(data.created_at._seconds * 1000)
+              : null
+          const timestamp = Number(data.timestamp) || createdAt?.getTime() || 0
+
+          return {
+            id: doc.id,
+            type: data.type || 'Announcement',
+            title: data.title || '',
+            message: data.message || '',
+            date: data.date || (createdAt
+              ? createdAt.toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric'
+                })
+              : ''),
+            time: data.time || (createdAt
+              ? createdAt.toLocaleTimeString('en-US', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: true
+                })
+              : ''),
+            read: readNotificationIds.has(doc.id),
+            severity: data.severity || 'Medium',
+            worker_id: data.worker_id || data.target_id || null,
+            target_id: data.target_id || data.worker_id || null,
+            link: data.link || null,
+            timestamp
+          }
+        })
+        .sort((a, b) => b.timestamp - a.timestamp)
+
+      res.json(notifications)
+    } catch (error) {
+      console.error('Failed to load worker announcements:', error.message)
+      res.status(500).json({ error: 'Unable to load announcements.' })
+    }
+  })
+
+  app.put('/api/worker/notifications/:id/read', async (req, res) => {
+    const workerId = req.worker?.id
+    if (!workerId) {
+      return res.status(403).json({ error: 'Worker authentication is required.' })
+    }
+
+    try {
+      const notificationId = req.params.id
+      const notificationSnapshot = await db.collection('notifications')
+        .doc(notificationId)
+        .get()
+      if (
+        !notificationSnapshot.exists ||
+        !isWorkerNotification(notificationSnapshot.data(), workerId)
+      ) {
+        return res.status(404).json({ error: 'Announcement not found.' })
+      }
+
+      await db.collection('worker_notification_read_states')
+        .doc(workerNotificationReadStateId(workerId, notificationId))
+        .set({
+          worker_id: workerId,
+          notification_id: notificationId,
+          read: true,
+          updated_at: FieldValue.serverTimestamp()
+        }, { merge: true })
+      res.json({ success: true })
+    } catch (error) {
+      console.error('Failed to mark worker announcement as read:', error.message)
+      res.status(500).json({ error: 'Unable to mark announcement as read.' })
+    }
+  })
+
+  app.delete('/api/worker/notifications', async (req, res) => {
+    const workerId = req.worker?.id
+    if (!workerId) {
+      return res.status(403).json({ error: 'Worker authentication is required.' })
+    }
+
+    const requestedIds = req.body?.notificationIds
+    if (
+      !Array.isArray(requestedIds) ||
+      requestedIds.length === 0 ||
+      requestedIds.length > 500 ||
+      requestedIds.some(id =>
+        typeof id !== 'string' || !id.trim() || id.length > 512 || id.includes('/')
+      )
+    ) {
+      return res.status(400).json({ error: 'Notification IDs must be a non-empty list of valid IDs.' })
+    }
+
+    const notificationIds = [...new Set(requestedIds.map(id => id.trim()))]
+    try {
+      const snapshots = await Promise.all(notificationIds.map(id =>
+        db.collection('notifications').doc(id).get()
+      ))
+      if (snapshots.some(snapshot =>
+        !snapshot.exists || !isWorkerNotification(snapshot.data(), workerId)
+      )) {
+        return res.status(404).json({ error: 'One or more announcements were not found.' })
+      }
+
+      for (let offset = 0; offset < notificationIds.length; offset += 400) {
+        const batch = db.batch()
+        notificationIds.slice(offset, offset + 400).forEach(notificationId => {
+          batch.set(
+            db.collection('worker_notification_dismissals')
+              .doc(workerNotificationReadStateId(workerId, notificationId)),
+            {
+              worker_id: workerId,
+              notification_id: notificationId,
+              dismissed: true,
+              updated_at: FieldValue.serverTimestamp()
+            },
+            { merge: true }
+          )
+        })
+        await batch.commit()
+      }
+      res.json({ success: true, deleted: notificationIds.length })
+    } catch (error) {
+      console.error('Failed to delete worker announcements:', error.message)
+      res.status(500).json({ error: 'Unable to delete announcements.' })
+    }
+  })
+
+  // ── ADMIN NOTIFICATIONS ENDPOINT ──
   app.get('/api/notifications', async (req, res) => {
     const alerts = []
     try {
@@ -1586,23 +1775,7 @@ async function startServer() {
         }
       }
 
-      // 3. Equipment in use alerts
-      const aSnap = await db.collection('assets').where('status', '==', 'In Use').get()
-      aSnap.docs.forEach(aDoc => {
-        const a = aDoc.data()
-        alerts.push({
-          id: `asset-${aDoc.id}`,
-          type: 'Tools',
-          title: 'Equipment Currently In Use',
-          message: `"${a.name}" is currently borrowed${a.assigned_to ? ` by ${a.assigned_to}` : ''}.`,
-          date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-          read: false,
-          severity: 'Medium',
-          timestamp: Date.now()
-        })
-      })
-
-      // 4. Large expenses
+      // 3. Large expenses
       const expSnap = await db.collection('expenses').get()
       const expenses = expSnap.docs.map(d => ({ id: d.id, ...d.data() }))
       if (expenses.length > 0) {
@@ -1626,7 +1799,7 @@ async function startServer() {
         })
       }
 
-      // 5. FETCH RECORDED WORKER & STAFF ACTION NOTIFICATIONS
+      // 4. FETCH RECORDED WORKER & STAFF ACTION NOTIFICATIONS
       const savedSnap = await db.collection('notifications').get()
       const savedList = savedSnap.docs.map(doc => {
         const d = doc.data()
@@ -1657,11 +1830,19 @@ async function startServer() {
           .map(state => [state.notification_id, true])
       )
 
-      const combined = [...alerts, ...savedList].map(notification => ({
+      const deletedStateSnap = await db.collection('notification_deletion_states').get()
+      const deletedNotificationIds = new Set(
+        deletedStateSnap.docs
+          .map(doc => doc.data().notification_id)
+          .filter(id => typeof id === 'string')
+      )
+      const combined = [...alerts, ...savedList]
+        .filter(notification => !deletedNotificationIds.has(String(notification.id)))
+        .map(notification => ({
         ...notification,
         read: notification.read === true ||
           readStateByNotificationId.get(String(notification.id)) === true
-      }))
+        }))
       combined.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
 
       res.json(combined)
@@ -1692,6 +1873,56 @@ async function startServer() {
       res.json({ success: true, notification: result })
     } else {
       res.status(500).json({ error: 'Failed to record notification.' })
+    }
+  })
+
+  app.delete('/api/notifications', async (req, res) => {
+    const requestedIds = req.body?.notificationIds
+    if (
+      !Array.isArray(requestedIds) ||
+      requestedIds.length === 0 ||
+      requestedIds.length > 500 ||
+      requestedIds.some(id =>
+        typeof id !== 'string' || !id.trim() || id.length > 512 || id.includes('/')
+      )
+    ) {
+      return res.status(400).json({ error: 'Notification IDs must be a non-empty list of valid IDs.' })
+    }
+
+    const notificationIds = [...new Set(requestedIds.map(id => id.trim()))]
+    try {
+      for (let offset = 0; offset < notificationIds.length; offset += 200) {
+        const batchIds = notificationIds.slice(offset, offset + 200)
+        const snapshots = await Promise.all(batchIds.map(id =>
+          db.collection('notifications').doc(id).get()
+        ))
+        const batch = db.batch()
+        batchIds.forEach((notificationId, index) => {
+          if (snapshots[index].exists) {
+            batch.delete(snapshots[index].ref)
+          } else {
+            batch.set(
+              db.collection('notification_deletion_states')
+                .doc(notificationReadStateId(notificationId)),
+              {
+                notification_id: notificationId,
+                deleted: true,
+                updated_at: FieldValue.serverTimestamp()
+              },
+              { merge: true }
+            )
+          }
+          batch.delete(
+            db.collection('notification_read_states')
+              .doc(notificationReadStateId(notificationId))
+          )
+        })
+        await batch.commit()
+      }
+      res.json({ success: true, deleted: notificationIds.length })
+    } catch (error) {
+      console.error('Failed to delete notifications:', error.message)
+      res.status(500).json({ error: 'Unable to delete notifications.' })
     }
   })
 
@@ -2170,6 +2401,21 @@ async function startServer() {
       const snapshot = await db.collection('workers').orderBy('created_at', 'desc').get()
       const results = snapshot.docs.map(doc => {
         const data = doc.data()
+        if (req.worker) {
+          return {
+            id: doc.id,
+            first_name: data.first_name,
+            middle_name: data.middle_name,
+            last_name: data.last_name,
+            full_name: data.full_name,
+            role: data.role,
+            position: data.position,
+            worker_code: data.worker_code,
+            project_id: data.project_id,
+            status: data.status,
+            daily_rate: data.daily_rate
+          }
+        }
         delete data.password
         delete data.profile_photo
         return { id: doc.id, ...data }
@@ -2269,6 +2515,19 @@ async function startServer() {
       : (typeof position === 'string' && position.trim().length > 0 ? position.trim() : (position === null ? null : undefined))
     
     try {
+      if (req.worker) {
+        const editableFields = new Set([
+          'first_name', 'firstName', 'middle_name', 'middleName',
+          'last_name', 'lastName', 'full_name', 'fullName', 'birthday',
+          'age', 'phone', 'email', 'email_verification_token',
+          'profile_photo', 'address', 'address_obj', 'role', 'position'
+        ])
+        const unsupportedField = Object.keys(req.body).find(key => !editableFields.has(key))
+        if (unsupportedField) {
+          return res.status(403).json({ error: `Workers cannot update the ${unsupportedField} field.` })
+        }
+      }
+
       if (has('username') || has('user_name')) {
         return res.status(400).json({ error: 'Worker usernames cannot be changed from profile editing.' })
       }
@@ -2308,7 +2567,7 @@ async function startServer() {
       // Position / Roles change
       const oldPos = (oldWorker.position || oldWorker.role || 'Worker').trim()
       const newPos = (cleanPosition || role || 'Worker').trim()
-      if (cleanPosition !== undefined && oldPos !== newPos) {
+      if (!req.worker && cleanPosition !== undefined && oldPos !== newPos) {
         changes.push(`Position: "${oldPos}" → "${newPos}"`)
       }
 
@@ -2375,6 +2634,11 @@ async function startServer() {
         if (result.error) {
           return res.status(400).json({ error: result.error })
         }
+        if (req.worker && result.email &&
+            result.email.toLowerCase() !== String(oldWorker.email || '').toLowerCase() &&
+            !consumeEmailVerificationToken(req.body.email_verification_token, 'email_change', result.email)) {
+          return res.status(400).json({ error: 'Email verification is invalid or expired.' })
+        }
         updateData.email = result.email
         if ((result.email || '') !== (oldWorker.email || '')) {
           updateData.email_verified = false
@@ -2388,12 +2652,12 @@ async function startServer() {
         updateData.profile_photo = result.photo
       }
       if (has('address')) updateData.address = address || null
-      if (has('role')) updateData.role = role || 'Worker'
+      if (has('role') && !req.worker) updateData.role = role || 'Worker'
       if (has('daily_rate')) updateData.daily_rate = daily_rate || 600
       if (has('approval_status')) updateData.approval_status = approval_status || 'Approved'
       if (has('status')) updateData.status = status || 'Active'
       if (has('project_id')) updateData.project_id = project_id || null
-      if (has('position')) updateData.position = cleanPosition
+      if (has('position') && !req.worker) updateData.position = cleanPosition
       if (has('address_obj')) updateData.address_obj = address_obj ?? null
       if (rfid_uid !== undefined) {
         updateData.rfid_uid = cleanRfid || null
@@ -2411,7 +2675,9 @@ async function startServer() {
 
       // 5. Generate descriptive notification message
       const changesText = changes.length > 0 ? changes.join(' • ') : 'Updated profile details'
-      const effectiveRole = cleanPosition || role || oldWorker.position || oldWorker.role || 'Worker'
+      const effectiveRole = req.worker
+        ? oldWorker.position || oldWorker.role || 'Worker'
+        : cleanPosition || role || oldWorker.position || oldWorker.role || 'Worker'
       const notificationMessage = `${changesText} for ${computedFullName} (${effectiveRole}).`
 
       recordNotification({
@@ -2433,11 +2699,22 @@ async function startServer() {
         description: `Updated worker record for "${computedFullName}": ${changes.length > 0 ? changes.join(', ') : 'Profile details updated'}.`,
         target_id: req.params.id,
         target_name: computedFullName,
-        details: { role, position: cleanPosition, status, approval_status, daily_rate, changes },
+        details: {
+          role: req.worker ? oldWorker.role : role,
+          position: req.worker ? oldWorker.position : cleanPosition,
+          status: req.worker ? oldWorker.status : status,
+          approval_status: req.worker ? oldWorker.approval_status : approval_status,
+          daily_rate: req.worker ? oldWorker.daily_rate : daily_rate,
+          changes
+        },
         req
       }).catch(() => {})
 
-      res.json({ success: true, position: cleanPosition ?? oldWorker.position, changes })
+      res.json({
+        success: true,
+        position: req.worker ? oldWorker.position : (cleanPosition ?? oldWorker.position),
+        changes
+      })
     } catch (err) {
       res.status(500).json({ error: err.message })
     }
@@ -2487,6 +2764,10 @@ async function startServer() {
     if (platform !== 'web' && platform !== 'mobile') {
       res.status(403).json({ error: 'Attendance settings can only be changed by an Admin.' })
       return false
+    }
+
+    if (req.worker?.attendance) {
+      return true
     }
 
     const authorization = String(req.get('authorization') || '')
@@ -2797,10 +3078,15 @@ async function startServer() {
   })
 
   // ── WORKER ATTENDANCE SCHEDULES ──
-  app.get('/api/attendance-schedules', async (_req, res) => {
+  app.get('/api/attendance-schedules', async (req, res) => {
     try {
       const snapshot = await db.collection('attendance_schedules').get()
-      const schedules = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+      let schedules = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+      if (req.worker && !req.worker.attendance) {
+        schedules = schedules.filter(schedule =>
+          !schedule.worker_id || String(schedule.worker_id) === req.worker.id
+        )
+      }
       schedules.sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')))
       res.json(schedules)
     } catch (err) {
@@ -2925,8 +3211,11 @@ async function startServer() {
     try {
       const snapshot = await db.collection('early_out_requests').get()
       let requests = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
-      if (req.query.worker_id) {
-        requests = requests.filter(r => String(r.worker_id || '') === String(req.query.worker_id))
+      const workerId = req.worker && !req.worker.attendance
+        ? req.worker.id
+        : req.query.worker_id
+      if (workerId) {
+        requests = requests.filter(r => String(r.worker_id || '') === String(workerId))
       }
       requests.sort((a, b) => {
         const aTime = a.created_at?._seconds || 0
@@ -2940,7 +3229,9 @@ async function startServer() {
   })
 
   app.post('/api/early-out-requests', async (req, res) => {
-    const { worker_id, worker_name, date, requested_out_time, reason, details } = req.body
+    const { worker_id: requestedWorkerId, worker_name: requestedWorkerName, date, requested_out_time, reason, details } = req.body
+    const worker_id = req.worker ? req.worker.id : requestedWorkerId
+    const worker_name = req.worker ? req.worker.name : requestedWorkerName
     if (!worker_id || !worker_name || !/^\d{4}-\d{2}-\d{2}$/.test(String(date || '')) ||
         !/^\d{2}:\d{2}$/.test(String(requested_out_time || '')) || !reason) {
       return res.status(400).json({ error: 'Worker, date, requested time, and reason are required.' })
@@ -3048,6 +3339,19 @@ async function startServer() {
         rejection_reason: rejection.reason,
         applied_to_attendance: status === 'Approved'
       })
+      await recordNotification({
+        type: 'Attendance',
+        title: `Early-Out Request ${status}`,
+        message: status === 'Approved'
+          ? `${request.worker_name}'s early-out request for ${request.date} was approved.`
+          : `${request.worker_name}'s early-out request for ${request.date} was rejected. Reason: ${rejection.reason}`,
+        severity: status === 'Approved' ? 'Low' : 'Medium',
+        actor_name: req.worker?.name || reviewed_by || req.get('x-actor-name') || 'Attendance Administrator',
+        actor_role: req.worker?.role || 'Administrator',
+        action: `EARLY_OUT_${status.toUpperCase()}`,
+        worker_id: request.worker_id,
+        target_id: req.params.id
+      })
       res.json({ success: true, status, attendance_updated: status === 'Approved' })
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -3059,9 +3363,12 @@ async function startServer() {
     try {
       const snapshot = await db.collection('attendance_correction_requests').get()
       let requests = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
-      if (req.query.worker_id) {
+      const workerId = req.worker && !req.worker.attendance
+        ? req.worker.id
+        : req.query.worker_id
+      if (workerId) {
         requests = requests.filter(request =>
-          String(request.worker_id || '') === String(req.query.worker_id)
+          String(request.worker_id || '') === String(workerId)
         )
       }
       requests.sort((a, b) => (b.created_at?._seconds || 0) - (a.created_at?._seconds || 0))
@@ -3072,7 +3379,17 @@ async function startServer() {
   })
 
   app.post('/api/attendance-correction-requests', async (req, res) => {
-    const { worker_id, worker_name, date, field, requested_time, original_time, reason } = req.body
+    const {
+      worker_id: requestedWorkerId,
+      worker_name: requestedWorkerName,
+      date,
+      field,
+      requested_time,
+      original_time,
+      reason
+    } = req.body
+    const worker_id = req.worker ? req.worker.id : requestedWorkerId
+    const worker_name = req.worker ? req.worker.name : requestedWorkerName
     if (!worker_id || !worker_name || !/^\d{4}-\d{2}-\d{2}$/.test(String(date || '')) ||
         !['time_in', 'time_out'].includes(field) ||
         !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(String(requested_time || '')) ||
@@ -3191,6 +3508,19 @@ async function startServer() {
         rejection_reason: rejection.reason,
         applied_to_attendance: status === 'Approved'
       })
+      await recordNotification({
+        type: 'Attendance',
+        title: `Attendance Correction ${status}`,
+        message: status === 'Approved'
+          ? `${request.worker_name}'s attendance correction for ${request.date} was approved.`
+          : `${request.worker_name}'s attendance correction for ${request.date} was rejected. Reason: ${rejection.reason}`,
+        severity: status === 'Approved' ? 'Low' : 'Medium',
+        actor_name: req.worker?.name || reviewed_by || req.get('x-actor-name') || 'Attendance Administrator',
+        actor_role: req.worker?.role || 'Administrator',
+        action: `CORRECTION_${status.toUpperCase()}`,
+        worker_id: request.worker_id,
+        target_id: req.params.id
+      })
       res.json({ success: true, status, attendance_updated: status === 'Approved' })
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -3248,8 +3578,11 @@ async function startServer() {
           created_at: r.created_at
         }
       })
-      results.sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.created_at?._seconds || 0) - (a.created_at?._seconds || 0))
-      res.json(results)
+      const workerResults = req.worker && !req.worker.attendance
+        ? results.filter(record => String(record.worker_id || '') === req.worker.id)
+        : results
+      workerResults.sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.created_at?._seconds || 0) - (a.created_at?._seconds || 0))
+      res.json(workerResults)
     } catch (err) {
       res.status(500).json({ error: err.message })
     }
@@ -3979,7 +4312,12 @@ async function startServer() {
         query = query.where('project_id', '==', pid)
       }
       const snapshot = await query.get()
-      const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+      let results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+      if (req.worker && !req.worker.tools) {
+        results = results.filter(record =>
+          String(record.worker_id || '') === req.worker.id
+        )
+      }
       results.sort((a, b) => (b.created_at?._seconds || 0) - (a.created_at?._seconds || 0))
       res.json(results)
     } catch (err) {
@@ -3989,11 +4327,30 @@ async function startServer() {
 
   const handleCreateBorrowHistory = async (req, res) => {
     const rawPid = req.params.project_id || req.body.project_id
-    const { tool_name, borrower_name, quantity, action, condition_status, date_time } = req.body
+    const {
+      tool_name,
+      borrower_name: requestedBorrowerName,
+      worker_id: requestedWorkerId,
+      quantity,
+      action,
+      condition_status,
+      date_time
+    } = req.body
+    const workerId = req.worker && !req.worker.tools
+      ? req.worker.id
+      : requestedWorkerId || null
+    const borrowerName = req.worker && !req.worker.tools
+      ? req.worker.name
+      : requestedBorrowerName
     try {
       const pid = await resolveProjectId(rawPid)
       const newHistory = {
-        project_id: pid || rawPid || null, tool_name, borrower_name, quantity: quantity || 1, action, 
+        project_id: pid || rawPid || null,
+        worker_id: workerId,
+        tool_name,
+        borrower_name: borrowerName,
+        quantity: quantity || 1,
+        action,
         condition_status: condition_status || 'Good', date_time: date_time || new Date(),
         created_at: FieldValue.serverTimestamp()
       }
@@ -4003,24 +4360,30 @@ async function startServer() {
         type: 'Tools',
         project_id: pid || rawPid || null,
         link: pid || rawPid ? `/assets/${pid || rawPid}` : '/assets',
-        title: `Tool ${action || 'Transaction'}: ${borrower_name}`,
-        message: `${borrower_name} ${actionVerb} ${quantity || 1} "${tool_name}" (Condition: ${condition_status || 'Good'}).`,
+        title: `Tool ${action || 'Transaction'}: ${borrowerName}`,
+        message: `${borrowerName} ${actionVerb} ${quantity || 1} "${tool_name}" (Condition: ${condition_status || 'Good'}).`,
         severity: 'Medium',
-        actor_name: borrower_name,
+        actor_name: borrowerName,
         action: 'tool_borrow_return'
       }).catch(() => {})
       recordAuditLog({
         action: action === 'Returned' ? 'TOOL_RETURNED' : 'TOOL_BORROWED',
         module: 'Tools',
-        description: `${borrower_name} ${actionVerb} ${quantity || 1} "${tool_name}" (Condition: ${condition_status || 'Good'}).`,
-        actor_name: borrower_name,
-        actor_role: 'Worker',
+        description: `${borrowerName} ${actionVerb} ${quantity || 1} "${tool_name}" (Condition: ${condition_status || 'Good'}).`,
+        actor_name: req.worker?.name || borrowerName,
+        actor_role: req.worker?.role || 'Worker',
         target_id: docRef.id,
         target_name: tool_name,
         details: { quantity, action, condition_status },
         req
       }).catch(() => {})
-      res.json({ id: docRef.id, ...req.body, project_id: pid || rawPid || null })
+      res.json({
+        id: docRef.id,
+        ...req.body,
+        worker_id: workerId,
+        borrower_name: borrowerName,
+        project_id: pid || rawPid || null
+      })
     } catch (err) {
       res.status(500).json({ error: err.message })
     }
@@ -4292,21 +4655,19 @@ async function startServer() {
               })
             }
 
-            const expenseLimit = getProjectExpenseLimit(project)
-            if (expenseLimit !== null) {
-              const expenses = await db.collection('expenses')
-                .where('project_id', '==', pid)
-                .get()
-              const spentWithoutAdvance = expenses.docs
-                .filter(doc => doc.data().cash_advance_id !== req.params.id)
-                .reduce((sum, doc) => sum + Number(doc.data().amount || 0), 0)
-              const remaining = expenseLimit - spentWithoutAdvance
-              const advanceAmount = Number(caData.amount || 0)
-              if (advanceAmount > remaining) {
-                return res.status(400).json({
-                  error: `Approving this cash advance exceeds the project's remaining expense limit of ₱${Math.max(remaining, 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}.`
-                })
-              }
+            const linkedExpenseSnapshot = await db.collection('expenses')
+              .where('cash_advance_id', '==', req.params.id)
+              .get()
+            const linkedExpenseId = caData.expense_id || linkedExpenseSnapshot.docs[0]?.id || null
+            const funding = await loadProjectFunding(db, project, pid, null, linkedExpenseId)
+            const advanceAmount = Number(caData.amount || 0)
+            if (!Number.isFinite(advanceAmount) || advanceAmount <= 0) {
+              return res.status(400).json({ error: 'Invalid cash advance amount.' })
+            }
+            if (advanceAmount > funding.remaining) {
+              return res.status(400).json({
+                error: `Approving this cash advance exceeds the remaining funded expense limit of ₱${Math.max(funding.remaining, 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}.`
+              })
             }
           }
         }
@@ -4367,7 +4728,18 @@ async function startServer() {
   })
 
   app.post('/api/cash-advances', async (req, res) => {
-    const { project_id, workerName, workerId, amount, date, reason, status } = req.body
+    const {
+      project_id: requestedProjectId,
+      workerName: requestedWorkerName,
+      workerId: requestedWorkerId,
+      amount,
+      date,
+      reason,
+      status
+    } = req.body
+    const project_id = req.worker ? req.worker.projectId : requestedProjectId
+    const workerId = req.worker?.id || requestedWorkerId
+    const workerName = req.worker ? req.worker.name : requestedWorkerName
     const cleanDate = date ? String(date).slice(0, 10) : new Date().toISOString().slice(0, 10)
     const numAmount = parseFloat(amount || 0)
 
@@ -4390,16 +4762,11 @@ async function startServer() {
             })
           }
 
-          const expenseLimit = getProjectExpenseLimit(pDoc.data())
-          if (expenseLimit !== null) {
-            const expSnap = await db.collection('expenses').where('project_id', '==', pid).get()
-            const currentSpent = expSnap.docs.reduce((s, d) => s + Number(d.data().amount || 0), 0)
-            const remainingBudget = expenseLimit - currentSpent
-            if (numAmount > remainingBudget) {
-              return res.status(400).json({
-                error: `Requested advance (₱${numAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}) exceeds the remaining project expense limit (₱${Math.max(remainingBudget, 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}).`
-              })
-            }
+          const funding = await loadProjectFunding(db, pDoc.data(), pid)
+          if (numAmount > funding.remaining) {
+            return res.status(400).json({
+              error: `Requested advance (₱${numAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}) exceeds the remaining funded expense limit (₱${Math.max(funding.remaining, 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}).`
+            })
           }
         }
       }
@@ -4430,7 +4797,7 @@ async function startServer() {
         }
       }
 
-      const finalStatus = status || 'Approved'
+      const finalStatus = req.worker ? 'Pending' : (status || 'Approved')
 
       const resolveAndInsert = async (name) => {
         try {
@@ -4882,8 +5249,22 @@ async function startServer() {
               error: `Bawal mag-release ng salary sa proyektong hindi Ongoing ("${pDoc.data().name}"). Ang status nito ay "${displayStatus}". Sa Ongoing projects lang puwede mag-release ng salary, at kung tapos na ang proyekto ay payroll history na lamang ang maaaring tignan.`
             })
           }
+          if (status === 'Paid') {
+            const payout = Number(summary?.totalNetPayout || 0)
+            if (!Number.isFinite(payout)) {
+              return res.status(400).json({ error: 'Invalid payroll payout amount.' })
+            }
+            const funding = await loadProjectFunding(db, pDoc.data(), pid)
+            if (payout > funding.remaining) {
+              return res.status(400).json({
+                error: `This payroll exceeds the remaining funded expense limit of ₱${Math.max(funding.remaining, 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}.`
+              })
+            }
+          }
+        } else if (status === 'Paid') {
+          return res.status(404).json({ error: 'Project not found.' })
         }
-      } else if ((project_id === 'ALL' || !project_id) && status === 'Paid') {
+      } else if (status === 'Paid') {
         return res.status(400).json({
           error: 'Bawal mag-release ng salary nang walang napiling Ongoing project. Mangyaring piliin ang Ongoing project sa filter bago mag-release.'
         })
@@ -4995,7 +5376,21 @@ async function startServer() {
                 error: `Bawal mag-release ng salary sa proyektong hindi Ongoing ("${pDoc.data().name}"). Ang status nito ay "${pDoc.data().status || pStatus}".`
               })
             }
+            const payout = Number(existingData.summary?.totalNetPayout || 0)
+            if (!Number.isFinite(payout)) {
+              return res.status(400).json({ error: 'Invalid payroll payout amount.' })
+            }
+            const funding = await loadProjectFunding(db, pDoc.data(), existingPid, req.params.id)
+            if (payout > funding.remaining) {
+              return res.status(400).json({
+                error: `This payroll exceeds the remaining funded expense limit of ₱${Math.max(funding.remaining, 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}.`
+              })
+            }
+          } else {
+            return res.status(404).json({ error: 'Project not found.' })
           }
+        } else {
+          return res.status(400).json({ error: 'Select a project before releasing payroll.' })
         }
       }
 
@@ -5513,6 +5908,10 @@ async function startServer() {
         return res.status(403).json({ error: 'rejected', message: 'Account was rejected' })
       }
 
+      if (['inactive', 'disabled'].includes(String(user.status || 'Active').toLowerCase())) {
+        return res.status(403).json({ error: 'This account is inactive.' })
+      }
+
       if (!user.password) {
         recordAuditLog({
           action: 'LOGIN_FAILED',
@@ -5563,9 +5962,16 @@ async function startServer() {
         req
       }).catch(() => {})
 
+      const token = jwt.sign(
+        { id: userDoc.id, type: 'worker' },
+        JWT_SECRET,
+        { expiresIn: '8h' }
+      )
+
       // Return user info (without password)
       res.json({
         success: true,
+        token,
         user: {
           id: userDoc.id,
           name: user.full_name,
@@ -5574,6 +5980,8 @@ async function startServer() {
           lastName: user.last_name,
           role: user.role,
           position: user.position,
+          roles: user.roles || [],
+          positions: user.positions || [],
           phone: user.phone,
           address: user.address,
           worker_code: workerCode,

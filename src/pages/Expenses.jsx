@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
+import CurrencyInput from '../components/CurrencyInput'
 import Tesseract from 'tesseract.js'
 import { api } from '../api'
 import { CONSTRUCTION_MATERIALS, getUnitsForMaterial, getDefaultUnitForMaterial, resolveStandardMaterial } from '../constants/materials'
 import Pagination from '../components/Pagination'
 import { usePagination } from '../components/usePagination'
+import { calculateProjectFunding } from '../utils/projectFinancials'
 
 function SearchableMaterialDropdown({ value, onChange, placeholder, category }) {
     const [isOpen, setIsOpen] = useState(false);
@@ -243,8 +245,12 @@ export default function Expenses() {
             setMockProjects(data.map(p => ({
                 id: String(p.id),
                 name: p.name,
-                allocated: Number(p.budget ?? p.contract_amount) || 0,
-                contractAmount: Number(p.contract_amount ?? p.budget) || 0,
+                allocated: p.budget == null || p.budget === ''
+                    ? (p.contract_amount == null || p.contract_amount === '' ? null : Number(p.contract_amount))
+                    : Number(p.budget),
+                contractAmount: p.contract_amount == null || p.contract_amount === ''
+                    ? (p.budget == null || p.budget === '' ? null : Number(p.budget))
+                    : Number(p.contract_amount),
                 actual: 0,
                 status: p.status || 'ONGOING'
             })));
@@ -255,23 +261,109 @@ export default function Expenses() {
     const currentProjectId = id || (activeProject?.id ?? (mockProjects[0]?.id ?? "1"));
     const currentProjectData = mockProjects.find(p => p.id === currentProjectId);
     const currentProjectName = currentProjectData?.name || '';
-    const expenseLimit = currentProjectData
-        ? Math.min(currentProjectData.allocated, currentProjectData.contractAmount)
-        : 0;
+    const projectLimits = [currentProjectData?.allocated, currentProjectData?.contractAmount]
+        .filter(value => value !== undefined && value !== null && value !== '')
+        .map(Number)
+        .filter(value => Number.isFinite(value) && value >= 0);
+    const configuredExpenseLimit = projectLimits.length ? Math.min(...projectLimits) : null;
     const isCurrentProjectOngoing = isOngoingStatus(currentProjectData?.status);
     const isCurrentProjectUpcoming = !isCurrentProjectOngoing;
 
     const [expensesList, setExpensesList] = useState([]);
+    const [expensesLoadResult, setExpensesLoadResult] = useState(null);
+    const [clientPaymentsResult, setClientPaymentsResult] = useState(null);
     const totalActualExpense = expensesList.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const currentExpensesLoadResult = expensesLoadResult?.projectId === currentProjectId
+        ? expensesLoadResult
+        : null;
+    const expensesLoading = Boolean(currentProjectData) && !currentExpensesLoadResult;
+    const expensesLoadError = currentExpensesLoadResult?.error || '';
+    const currentClientPaymentsResult = clientPaymentsResult?.projectId === currentProjectId
+        ? clientPaymentsResult
+        : null;
+    const clientPayments = currentClientPaymentsResult?.payments || [];
+    const payrolls = currentClientPaymentsResult?.payrolls || [];
+    const clientPaymentsLoading = Boolean(currentProjectData) && !currentClientPaymentsResult;
+    const clientPaymentsError = currentClientPaymentsResult?.error || '';
+    const projectFunding = calculateProjectFunding({
+        projectId: currentProjectId,
+        payments: clientPayments,
+        expenses: currentExpensesLoadResult ? expensesList : [],
+        payrolls,
+        configuredExpenseLimit
+    });
+    const expenseLimit = projectFunding.expenseLimit;
+    const totalPaidSalaries = projectFunding.totalPaidSalaries;
+    const totalProjectSpending = totalActualExpense + totalPaidSalaries;
+    const remainingFundedBudget = projectFunding.remaining;
+    const financialDataLoading = !currentProjectData || expensesLoading || clientPaymentsLoading;
+    const financialDataError = expensesLoadError || clientPaymentsError;
 
     useEffect(() => {
         if (!currentProjectId) return;
-        api.get(`/expenses/${currentProjectId}`).then(data => setExpensesList(data)).catch(console.error);
+        let cancelled = false;
+        api.get(`/expenses/${currentProjectId}`)
+            .then(data => {
+                if (!Array.isArray(data)) throw new Error('Invalid project expenses response.');
+                if (cancelled) return;
+                setExpensesList(data);
+                setExpensesLoadResult({ projectId: currentProjectId, error: '' });
+            })
+            .catch(error => {
+                if (cancelled) return;
+                console.error(error);
+                setExpensesLoadResult({
+                    projectId: currentProjectId,
+                    error: error.message || 'Unable to load project expenses.'
+                });
+            });
         queueMicrotask(() => {
+            if (cancelled) return;
             setFilterDate('');
             setFormData(prev => ({ ...prev, project: currentProjectName }));
         });
+        return () => {
+            cancelled = true;
+        };
     }, [currentProjectId, mockProjects, currentProjectName]);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        if (!currentProjectData) return undefined;
+
+        Promise.all([
+            api.get(`/projects/${currentProjectId}/client-payments`),
+            api.get('/payroll')
+        ])
+            .then(([payments, payrolls]) => {
+                if (!Array.isArray(payments) || !Array.isArray(payrolls)) {
+                    throw new Error('Invalid payment or payroll response.');
+                }
+                if (!cancelled) {
+                    setClientPaymentsResult({
+                        projectId: currentProjectId,
+                        payments,
+                        payrolls,
+                        error: ''
+                    });
+                }
+            })
+            .catch(error => {
+                if (cancelled) return;
+                console.error(error);
+                setClientPaymentsResult({
+                    projectId: currentProjectId,
+                    payments: [],
+                    payrolls: [],
+                    error: error.message || 'Unable to load client payments or payroll.'
+                });
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [currentProjectId, currentProjectData]);
 
     const MAX_AMOUNT = 999999999999;
     const MAX_INTEGER_DIGITS = String(MAX_AMOUNT).length;
@@ -446,8 +538,8 @@ export default function Expenses() {
             setAmountError('Total amount cannot exceed ₱999,999,999,999.');
             return;
         }
-        if (totalActualExpense + amt > expenseLimit) {
-            const remaining = Math.max(expenseLimit - totalActualExpense, 0);
+        if (totalProjectSpending + amt > expenseLimit) {
+            const remaining = Math.max(expenseLimit - totalProjectSpending, 0);
             setAmountError(`This expense exceeds the remaining project expense limit of ₱${remaining.toLocaleString()}.`);
             return;
         }
@@ -486,8 +578,8 @@ export default function Expenses() {
             return;
         }
         const expenseAmount = Number(formData.amount || computedTotal);
-        if (totalActualExpense + expenseAmount > expenseLimit) {
-            const remaining = Math.max(expenseLimit - totalActualExpense, 0);
+        if (totalProjectSpending + expenseAmount > expenseLimit) {
+            const remaining = Math.max(expenseLimit - totalProjectSpending, 0);
             alert(`This expense exceeds the remaining project expense limit of ₱${remaining.toLocaleString()}.`);
             return;
         }
@@ -534,8 +626,8 @@ export default function Expenses() {
             setAmountError('Amount cannot exceed ₱999,999,999,999.');
             return;
         }
-        if (totalActualExpense + amt > expenseLimit) {
-            const remaining = Math.max(expenseLimit - totalActualExpense, 0);
+        if (totalProjectSpending + amt > expenseLimit) {
+            const remaining = Math.max(expenseLimit - totalProjectSpending, 0);
             setAmountError(`This expense exceeds the remaining project expense limit of ₱${remaining.toLocaleString()}.`);
             return;
         }
@@ -695,7 +787,7 @@ export default function Expenses() {
             return;
         }
         const existingAmount = Number(expensesList.find(exp => exp.id === editFormData.id)?.amount || 0);
-        const spentWithoutCurrent = totalActualExpense - existingAmount;
+        const spentWithoutCurrent = totalProjectSpending - existingAmount;
         if (spentWithoutCurrent + amt > expenseLimit) {
             const remaining = Math.max(expenseLimit - spentWithoutCurrent, 0);
             alert(`This update exceeds the remaining project expense limit of ₱${remaining.toLocaleString()}.`);
@@ -875,10 +967,10 @@ export default function Expenses() {
     const deletedReceiptPagination = usePagination(sortedDeletedReceipts, gallerySort);
     const allocatedBudget = currentProjectData?.allocated || 0;
     const contractAmount = currentProjectData?.contractAmount || 0;
-    const remainingBudget = expenseLimit - totalActualExpense;
-    const overallProgress = expenseLimit > 0 ? Math.min((totalActualExpense / expenseLimit) * 100, 100) : 0;
-    const exceedsExpenseLimit = totalActualExpense + computedTotal > expenseLimit;
-    const isExpenseLimitReached = remainingBudget <= 0;
+    const remainingBudget = expenseLimit - totalProjectSpending;
+    const overallProgress = expenseLimit > 0 ? Math.min((totalProjectSpending / expenseLimit) * 100, 100) : 0;
+    const exceedsExpenseLimit = totalProjectSpending + computedTotal > expenseLimit;
+    const isExpenseLimitReached = remainingBudget <= 0 || financialDataLoading || Boolean(financialDataError);
 
     const tableTotal = displayedExpenses.reduce((sum, item) => sum + Number(item.amount || 0), 0);
     const matTotal = expensesList.filter(e => e.category === 'Materials').reduce((sum, e) => sum + Number(e.amount || 0), 0);
@@ -923,7 +1015,11 @@ export default function Expenses() {
                                 title={!isCurrentProjectOngoing
                                     ? `Cannot add expenses: This project is ${currentProjectData?.status || 'not Ongoing'}.`
                                     : isExpenseLimitReached
-                                        ? 'This project has reached its expense limit.'
+                                        ? financialDataLoading
+                                            ? 'Loading the project funding balance.'
+                                            : financialDataError
+                                                ? 'Unable to verify the project funding balance.'
+                                                : 'This project has reached its expense limit.'
                                         : 'Add Expense'}
                                 className={isCurrentProjectUpcoming || isExpenseLimitReached
                                     ? "bg-gray-100 text-gray-400 border border-gray-200 px-3 py-1.5 rounded-lg font-bold text-[10px] shadow-sm cursor-not-allowed opacity-75 flex items-center justify-center gap-1 flex-1 md:flex-none"
@@ -952,7 +1048,11 @@ export default function Expenses() {
 
                     {isExpenseLimitReached && isCurrentProjectOngoing && (
                         <div className="bg-red-50 border border-red-200 text-red-800 px-3.5 py-2.5 rounded-xl text-[11px] font-semibold mb-3">
-                            This project has reached its expense limit. New expenses and cash advances cannot be recorded until the limit increases or existing expenses are removed.
+                            {financialDataLoading
+                                ? "Loading this project's funding balance before enabling new expenses."
+                                : financialDataError
+                                    ? `Unable to verify the funding balance: ${financialDataError}`
+                                    : 'This project has reached its expense limit. New expenses and cash advances cannot be recorded until the limit increases or existing expenses are removed.'}
                         </div>
                     )}
 
@@ -963,9 +1063,20 @@ export default function Expenses() {
                         </div>
                         <div className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-center">
                             <span className="text-[11px] font-bold text-gray-400 tracking-wider uppercase mb-0.5">REMAINING EXPENSE LIMIT</span>
-                            <h2 className={`text-xl font-extrabold ${remainingBudget < 0 ? 'text-[#A63228]' : 'text-[#2e7d32]'}`}>
-                                {remainingBudget < 0 ? `-₱${Math.abs(remainingBudget).toLocaleString()}` : `₱${remainingBudget.toLocaleString()}`}
+                            <h2 className={`text-xl font-extrabold ${remainingFundedBudget < 0 ? 'text-[#A63228]' : 'text-[#2e7d32]'}`}>
+                                {financialDataLoading
+                                    ? 'Loading…'
+                                    : financialDataError
+                                        ? 'Unavailable'
+                                        : remainingFundedBudget < 0
+                                            ? `-₱${Math.abs(remainingFundedBudget).toLocaleString()}`
+                                            : `₱${remainingFundedBudget.toLocaleString()}`}
                             </h2>
+                            <p className="text-[9px] text-gray-400 mt-0.5">
+                                {financialDataError
+                                    ? `Unable to calculate remaining budget: ${financialDataError}`
+                                    : 'Lower of client payments and the project/contract limit, less expenses and paid salaries'}
+                            </p>
                         </div>
                         <div className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-center">
                             <span className="text-[11px] font-bold text-gray-400 tracking-wider uppercase mb-0.5">EXPENSE BUDGET</span>
@@ -1417,14 +1528,12 @@ export default function Expenses() {
                                             <label className="block text-[11px] font-bold text-gray-700 uppercase">AMOUNT (₱)</label>
                                             <span className="text-[10px] text-gray-400 font-semibold">Max: ₱999,999,999,999</span>
                                         </div>
-                                        <input
-                                            type="number"
-                                            step="0.01"
-                                            min="0.01"
-                                            max="999999999999"
+                                        <CurrencyInput
                                             name="amount"
                                             value={editFormData.amount}
-                                            onChange={(e) => handleInputChange(e, true)}
+                                            onValueChange={(value) => handleInputChange({
+                                                target: { name: 'amount', value }
+                                            }, true)}
                                             className={`w-full bg-[#f4f1ee] rounded-md px-2 py-1.5 text-[11px] font-medium focus:border-[#A63228] outline-none border transition-colors ${amountError ? 'border-red-500 text-red-600' : 'border-transparent'}`}
                                         />
                                         {amountError && (
@@ -1438,7 +1547,7 @@ export default function Expenses() {
                             </div>
                             <div className="p-3 border-t border-gray-100 bg-gray-50 flex gap-2">
                                 <button onClick={() => setReceiptModalState('VIEW')} className="flex-1 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg text-[10px] font-bold hover:bg-gray-100">Cancel</button>
-                                <button onClick={confirmEditSave} disabled={Boolean(amountError) || parseFloat(editFormData.amount || 0) > MAX_AMOUNT || (totalActualExpense - Number(expensesList.find(exp => exp.id === editFormData.id)?.amount || 0) + Number(editFormData.amount || 0) > expenseLimit)} className="flex-1 py-1.5 bg-[#8B1A10] text-white rounded-lg text-[10px] font-bold hover:bg-[#72150d] disabled:opacity-50 disabled:cursor-not-allowed">Save Changes</button>
+                                <button onClick={confirmEditSave} disabled={Boolean(amountError) || financialDataLoading || Boolean(financialDataError) || parseFloat(editFormData.amount || 0) > MAX_AMOUNT || (totalProjectSpending - Number(expensesList.find(exp => exp.id === editFormData.id)?.amount || 0) + Number(editFormData.amount || 0) > expenseLimit)} className="flex-1 py-1.5 bg-[#8B1A10] text-white rounded-lg text-[10px] font-bold hover:bg-[#72150d] disabled:opacity-50 disabled:cursor-not-allowed">Save Changes</button>
                             </div>
                         </div>
                     )}
@@ -1693,19 +1802,13 @@ export default function Expenses() {
                                                             <span className="text-[10px] font-semibold text-gray-400">/{item.unit}</span>
                                                         )}
                                                     </div>
-                                                    <div className="relative flex items-center">
-                                                        <span className="absolute left-2 text-xs font-bold text-gray-400">₱</span>
-                                                        <input
-                                                            type="number"
-                                                            min="0"
-                                                            step="any"
-                                                            value={item.price}
-                                                            onChange={(e) => handleItemChange(idx, 'price', e.target.value)}
-                                                            required
-                                                            placeholder="0.00"
-                                                            className="w-full bg-white border border-gray-200 rounded-lg pl-5 pr-2 py-1.5 text-xs font-extrabold text-[#A63228] focus:border-[#A63228] outline-none shadow-2xs"
-                                                        />
-                                                    </div>
+                                                    <CurrencyInput
+                                                        value={item.price}
+                                                        onValueChange={(value) => handleItemChange(idx, 'price', value)}
+                                                        required
+                                                        placeholder="0.00"
+                                                        className="w-full bg-white border border-gray-200 rounded-lg pl-5 pr-2 py-1.5 text-xs font-extrabold text-[#A63228] focus:border-[#A63228] outline-none shadow-2xs"
+                                                    />
                                                 </div>
 
                                                 {/* Subtotal - Single clean line, NO formula/computation text */}
@@ -1930,21 +2033,21 @@ export default function Expenses() {
                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-2">
                                     <div>
                                         <div className="flex justify-between items-center mb-1.5">
-                                            <label className="block text-[11px] font-extrabold text-[#2e7d32] uppercase">TOTAL AMOUNT</label>
+                                            <label className="block text-[11px] font-extrabold text-[#2e7d32] uppercase">TOTAL AMOUNT (₱)</label>
                                             <span className="text-[10px] text-gray-400 font-semibold">Max: ₱999B</span>
                                         </div>
-                                        <input type="number" step="0.01" min="0.01" max="999999999999" name="amount" value={formData.amount} onChange={handleInputChange} required className={`w-full bg-[#e6f4ea] border rounded-lg px-3 py-2.5 text-sm font-extrabold text-[#2e7d32] outline-none transition-colors ${amountError ? 'border-red-500 !text-red-600' : 'border-[#2e7d32]'}`} placeholder="₱ 0.00" />
+                                        <CurrencyInput name="amount" value={formData.amount} onValueChange={(value) => handleInputChange({ target: { name: 'amount', value } })} required className={`w-full bg-[#e6f4ea] border rounded-lg px-3 py-2.5 text-sm font-extrabold text-[#2e7d32] outline-none transition-colors ${amountError ? 'border-red-500 !text-red-600' : 'border-[#2e7d32]'}`} placeholder="0.00" />
                                     </div>
                                     <div>
                                         <div className="flex justify-between items-center mb-1.5">
-                                            <label className="block text-[11px] font-bold text-gray-700 uppercase">CASH PAID</label>
+                                            <label className="block text-[11px] font-bold text-gray-700 uppercase">CASH PAID (₱)</label>
                                             <span className="text-[10px] text-gray-400 font-semibold">Max: ₱999B</span>
                                         </div>
-                                        <input type="number" step="0.01" min="0" max="999999999999" name="cashTendered" value={formData.cashTendered} onChange={handleInputChange} className={`w-full bg-[#f4f1ee] border rounded-lg px-3 py-2.5 text-xs font-medium focus:border-[#A63228] outline-none transition-colors ${amountError ? 'border-red-400' : 'border-transparent'}`} placeholder="₱ 0.00" />
+                                        <CurrencyInput name="cashTendered" value={formData.cashTendered} onValueChange={(value) => handleInputChange({ target: { name: 'cashTendered', value } })} className={`w-full bg-[#f4f1ee] border rounded-lg px-3 py-2.5 text-xs font-medium focus:border-[#A63228] outline-none transition-colors ${amountError ? 'border-red-400' : 'border-transparent'}`} placeholder="0.00" />
                                     </div>
                                     <div>
-                                        <label className="block text-[11px] font-bold text-gray-700 mb-1.5 uppercase">CHANGE</label>
-                                        <input type="number" step="0.01" min="0" max="999999999999" name="change" value={formData.change} onChange={handleInputChange} className="w-full bg-[#f4f1ee] border border-transparent rounded-lg px-3 py-2.5 text-xs font-medium focus:border-[#A63228] outline-none" placeholder="₱ 0.00" />
+                                        <label className="block text-[11px] font-bold text-gray-700 mb-1.5 uppercase">CHANGE (₱)</label>
+                                        <CurrencyInput name="change" value={formData.change} onValueChange={(value) => handleInputChange({ target: { name: 'change', value } })} className="w-full bg-[#f4f1ee] border border-transparent rounded-lg px-3 py-2.5 text-xs font-medium focus:border-[#A63228] outline-none" placeholder="0.00" />
                                     </div>
                                 </div>
                                 {amountError && (

@@ -10,13 +10,16 @@ export function NotificationProvider({ children }) {
         const requestSequence = ++fetchSequence.current
         api.get('/notifications').then(data => {
             if (Array.isArray(data) && requestSequence === fetchSequence.current) {
+                const visibleNotifications = data.filter(notification =>
+                    String(notification.title || '').trim().toLowerCase() !== 'equipment currently in use'
+                )
                 setNotifications(previous => {
                     const previouslyRead = new Set(
                         previous
                             .filter(notification => notification.read)
                             .map(notification => String(notification.id))
                     )
-                    return data.map(notification => previouslyRead.has(String(notification.id))
+                    return visibleNotifications.map(notification => previouslyRead.has(String(notification.id))
                         ? { ...notification, read: true }
                         : notification)
                 })
@@ -47,10 +50,18 @@ export function NotificationProvider({ children }) {
         setNotifications(prev => prev.map(n => ({ ...n, read: true })))
     }
 
+    const deleteNotifications = async (ids) => {
+        const uniqueIds = [...new Set(ids.map(id => String(id)))]
+        await api.delete('/notifications', { notificationIds: uniqueIds })
+        fetchSequence.current += 1
+        const deletedIds = new Set(uniqueIds)
+        setNotifications(prev => prev.filter(n => !deletedIds.has(String(n.id))))
+    }
+
     const unreadCount = notifications.filter(n => !n.read).length
 
     return (
-        <NotificationContext.Provider value={{ notifications, setNotifications, markAsRead, markAllAsRead, unreadCount, refreshNotifications: fetchNotifications }}>
+        <NotificationContext.Provider value={{ notifications, setNotifications, markAsRead, markAllAsRead, deleteNotifications, unreadCount, refreshNotifications: fetchNotifications }}>
             {children}
         </NotificationContext.Provider>
     )

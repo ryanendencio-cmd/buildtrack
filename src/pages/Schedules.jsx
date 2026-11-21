@@ -1,8 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import AdminLayout from '../components/AdminLayout'
+import CurrencyInput from '../components/CurrencyInput'
 import { api } from '../api'
 import Pagination from '../components/Pagination'
 import { usePagination } from '../components/usePagination'
+
+const MAX_NOTE_LENGTH = 250
 
 const blank = (dateStr) => ({
   project_id: '',
@@ -430,12 +433,11 @@ export default function Schedules() {
                   </div>
                   <div>
                     <label className="text-[11px] font-bold text-amber-900 block mb-0.5">AMOUNT (PHP)</label>
-                    <input
-                      type="number"
+                    <CurrencyInput
                       name="amount"
                       placeholder="25000"
                       value={form.amount || ''}
-                      onChange={change}
+                      onValueChange={value => change({ target: { name: 'amount', value } })}
                       className="w-full bg-white border border-amber-200 rounded p-1.5 text-[10px]"
                     />
                   </div>
@@ -508,11 +510,19 @@ export default function Schedules() {
 
               {/* Notes */}
               <div>
-                <label className="text-[11px] font-bold text-gray-700 block mb-1">NOTES (OPTIONAL)</label>
+                <div className="mb-1 flex items-center justify-between gap-3">
+                  <label className="text-[11px] font-bold text-gray-700 block">NOTES (OPTIONAL)</label>
+                  <span className={String(form.notes || '').length === MAX_NOTE_LENGTH
+                    ? 'text-[10px] font-semibold text-red-600'
+                    : 'text-[10px] text-gray-500'}>
+                    {String(form.notes || '').length}/{MAX_NOTE_LENGTH}
+                  </span>
+                </div>
                 <textarea
                   name="notes"
                   placeholder="Additional instructions or notes..."
                   value={form.notes || ''}
+                  maxLength={MAX_NOTE_LENGTH}
                   onChange={change}
                   className="w-full bg-[#f4f1ee] border border-gray-200 rounded-lg p-2 text-xs"
                   rows="2"

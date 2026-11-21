@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
+import CurrencyInput from '../components/CurrencyInput'
 import PhilippineAddressSelector from '../components/PhilippineAddressSelector'
 import { parseLocationToAddress } from '../services/psgc'
 import { api } from '../api'
@@ -901,13 +902,13 @@ export default function Workers() {
                                         </div>
                                         <div>
                                             <label className="block text-[11px] font-bold text-gray-700 mb-0.5 uppercase">Daily Salary Rate (₱) <span className="text-[#A63228]">*</span></label>
-                                            <input
-                                                type="number"
+                                            <CurrencyInput
                                                 name="daily_rate"
                                                 value={formData.daily_rate || ''}
-                                                onChange={handleInputChange}
+                                                onValueChange={(value) => handleInputChange({
+                                                    target: { name: 'daily_rate', value }
+                                                })}
                                                 required
-                                                min="0"
                                                 className="w-full bg-[#f4f1ee] border border-transparent rounded-md px-2 py-1.5 text-[11px] font-bold text-[#A63228] focus:border-[#A63228] outline-none"
                                                 placeholder="600"
                                             />

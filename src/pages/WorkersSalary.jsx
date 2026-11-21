@@ -471,11 +471,11 @@ export default function WorkersSalary() {
           )}
 
           {/* ── KPI METRIC CARDS ── */}
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-2.5 mb-3 print:hidden">
+          <div className="salary-kpi-grid grid gap-2.5 mb-3 print:hidden">
             {/* Total Gross Pay */}
             <div className="bg-white rounded-xl border border-gray-100 p-2.5 shadow-xs">
               <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block mb-0.5">GROSS EARNED WAGES</span>
-              <div className="text-base font-extrabold text-gray-900 tracking-tight">
+              <div className="salary-kpi-value text-base font-extrabold text-gray-900 tracking-tight">
                 ₱{Number(payrollData.summary.totalGrossPay || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
               <span className="text-[11px] text-gray-500 font-medium">Gross pay before deductions</span>
@@ -484,7 +484,7 @@ export default function WorkersSalary() {
             {/* Total Late Penalties */}
             <div className="bg-white rounded-xl border border-gray-100 p-2.5 shadow-xs">
               <span className="text-[11px] font-bold text-amber-600 uppercase tracking-wider block mb-0.5">LATE DEDUCTIONS</span>
-              <div className="text-base font-extrabold text-amber-700 tracking-tight">
+              <div className="salary-kpi-value text-base font-extrabold text-amber-700 tracking-tight">
                 -₱{Number(payrollData.summary.totalLateDeductions || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
               <span className="text-[11px] text-gray-500 font-medium">Late & Double Late deductions</span>
@@ -492,7 +492,7 @@ export default function WorkersSalary() {
 
             <div className="bg-white rounded-xl border border-gray-100 p-2.5 shadow-xs">
               <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider block mb-0.5">OVERTIME PAY</span>
-              <div className="text-base font-extrabold text-emerald-700 tracking-tight">
+              <div className="salary-kpi-value text-base font-extrabold text-emerald-700 tracking-tight">
                 +₱{Number(payrollData.summary.totalOvertimePay || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
               <span className="text-[11px] text-gray-500 font-medium">Approved complete intervals only</span>
@@ -501,7 +501,7 @@ export default function WorkersSalary() {
             {/* Total Cash Advances */}
             <div className="bg-white rounded-xl border border-gray-100 p-2.5 shadow-xs">
               <span className="text-[11px] font-bold text-rose-600 uppercase tracking-wider block mb-0.5">CASH ADVANCES</span>
-              <div className="text-base font-extrabold text-rose-700 tracking-tight">
+              <div className="salary-kpi-value text-base font-extrabold text-rose-700 tracking-tight">
                 -₱{Number(payrollData.summary.totalCashAdvances || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
               <span className="text-[11px] text-gray-500 font-medium">Deducted cash advances</span>
@@ -510,7 +510,7 @@ export default function WorkersSalary() {
             {/* Total Net Payout */}
             <div className="bg-white rounded-xl border-2 border-[#A63228]/20 p-2.5 shadow-xs bg-[#A63228]/2">
               <span className="text-[11px] font-bold text-[#A63228] uppercase tracking-wider block mb-0.5">TOTAL NET PAYOUT</span>
-              <div className="text-lg font-black text-[#A63228] tracking-tight">
+              <div className="salary-kpi-value text-lg font-black text-[#A63228] tracking-tight">
                 ₱{Number(payrollData.summary.totalNetPayout || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
               <span className="text-[11px] text-[#A63228]/80 font-bold">Total net payout to workers</span>
@@ -519,7 +519,7 @@ export default function WorkersSalary() {
             {/* Total Workforce & Hours */}
             <div className="bg-white rounded-xl border border-gray-100 p-2.5 shadow-xs">
               <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block mb-0.5">MANPOWER & HOURS</span>
-              <div className="text-base font-extrabold text-gray-800 tracking-tight flex items-center gap-1.5">
+              <div className="text-base font-extrabold text-gray-800 tracking-tight flex flex-wrap items-center gap-1.5">
                 <span>{payrollData.summary.totalWorkers || 0} Workers</span>
                 <span className="text-[11px] text-gray-400 font-bold">•</span>
                 <span className="text-blue-600">{payrollData.summary.totalHours || 0} hrs</span>

@@ -1,7 +1,10 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { api } from '../api'
+import CurrencyInput from './CurrencyInput'
+import { calculateProjectFunding } from '../utils/projectFinancials'
 
 const MAX_AMOUNT = 999999999999
+const MAX_NOTE_LENGTH = 250
 
 const money = (value) => `₱${Number(value || 0).toLocaleString()}`
 
@@ -19,10 +22,68 @@ export default function AddBudgetModal({ project, onClose, onSaved }) {
     const [error, setError] = useState('')
     const [saving, setSaving] = useState(false)
     const [saved, setSaved] = useState(null)
+    const [financialResult, setFinancialResult] = useState(null)
 
     const current = Number(project?.budget || 0)
+    const projectLimits = [project?.budget, project?.contract_amount]
+        .filter(value => value !== undefined && value !== null && value !== '')
+        .map(Number)
+        .filter(value => Number.isFinite(value) && value >= 0)
+    const configuredExpenseLimit = projectLimits.length ? Math.min(...projectLimits) : null
     const addNum = parseFloat(amount)
     const nextTotal = Math.round((current + (Number.isFinite(addNum) ? addNum : 0)) * 100) / 100
+    const projectId = String(project?.id || '')
+    const currentFinancialResult = financialResult?.projectId === projectId ? financialResult : null
+    const financialError = currentFinancialResult?.error || ''
+    const financialLoading = !currentFinancialResult
+    const remainingExpenseLimit = currentFinancialResult?.remaining
+    const remainingExpenseLimitText = financialError
+        ? 'Unavailable'
+        : financialLoading
+            ? 'Calculating...'
+            : money(remainingExpenseLimit)
+
+    useEffect(() => {
+        if (!projectId) return undefined
+
+        let cancelled = false
+        Promise.all([
+            api.get(`/projects/${projectId}/client-payments`),
+            api.get(`/expenses/${projectId}`),
+            api.get('/payroll')
+        ]).then(([payments, expenses, payrolls]) => {
+            if (![payments, expenses, payrolls].every(Array.isArray)) {
+                throw new Error('Unable to calculate the remaining client-funded budget.')
+            }
+
+            if (!cancelled) {
+                const funding = calculateProjectFunding({
+                    projectId,
+                    payments,
+                    expenses,
+                    payrolls,
+                    configuredExpenseLimit
+                })
+                setFinancialResult({
+                    projectId,
+                    ...funding,
+                    error: ''
+                })
+            }
+        }).catch((financialLoadError) => {
+            if (cancelled) return
+            console.error(financialLoadError)
+            setFinancialResult({
+                projectId,
+                remaining: null,
+                error: financialLoadError.message || 'Unable to load project financial data.'
+            })
+        })
+
+        return () => {
+            cancelled = true
+        }
+    }, [projectId, configuredExpenseLimit])
 
     const validate = () => {
         if (!Number.isFinite(addNum) || addNum <= 0) {
@@ -67,7 +128,10 @@ export default function AddBudgetModal({ project, onClose, onSaved }) {
                     <p className="text-[11px] text-gray-500 mb-4 font-medium">This amount will be added to the current project expense budget.</p>
                     <div className="bg-[#f4f1ee] rounded-lg p-3 text-left mb-5 border border-[#e5dfd8]">
                         <p className="text-[10px] font-extrabold text-gray-900 mb-2 leading-snug">{project.name}</p>
-                        <p className="text-[11px] text-gray-600 mb-1">Current expense budget: <span className="font-bold text-gray-900">{money(current)}</span></p>
+                        <p className="text-[11px] text-gray-600 mb-1">Remaining expense limit: <span className="font-bold text-gray-900">{remainingExpenseLimitText}</span></p>
+                        <p className="text-[10px] text-gray-500 mb-1">Limited by client payments or the project/contract limit, less expenses and paid salaries.</p>
+                        {financialError && <p role="alert" className="text-[10px] text-red-600 mb-1">{financialError}</p>}
+                        <p className="text-[11px] text-gray-600 mb-1">Configured project budget: <span className="font-bold text-gray-900">{money(current)}</span></p>
                         <p className="text-[11px] text-gray-600 mb-1">Amount to add: <span className="font-bold text-[#A63228]">{money(addNum)}</span></p>
                         <p className="text-[11px] text-gray-600 mb-1">Date: <span className="font-bold text-gray-900">{date}</span></p>
                         {note.trim() && <p className="text-[11px] text-gray-600 mb-2">Note: <span className="font-bold text-gray-900">{note.trim()}</span></p>}
@@ -118,18 +182,17 @@ export default function AddBudgetModal({ project, onClose, onSaved }) {
                         <div className="bg-[#f9fafb] border border-gray-200 rounded-lg px-3 py-2">
                             <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Project</p>
                             <p className="text-[10px] font-extrabold text-gray-900 leading-snug">{project.name}</p>
-                            <p className="text-[11px] text-gray-500 mt-1">Current expense budget: <span className="font-extrabold text-[#A63228]">{money(current)}</span></p>
+                            <p className="text-[11px] text-gray-500 mt-1">Remaining expense limit: <span className="font-extrabold text-[#A63228]">{remainingExpenseLimitText}</span></p>
+                            <p className="text-[10px] text-gray-500 mt-0.5">Limited by client payments and project budget, less expenses and paid salaries.</p>
+                            {financialError && <p role="alert" className="text-[10px] text-red-600 mt-1">{financialError}</p>}
+                            <p className="text-[11px] text-gray-500 mt-1">Configured project budget: <span className="font-extrabold text-gray-900">{money(current)}</span></p>
                         </div>
                         <div>
                             <label className="block text-[11px] font-bold text-gray-700 mb-1 uppercase">Amount to Add (₱) <span className="text-[#A63228]">*</span></label>
-                            <input
-                                type="number"
-                                step="0.01"
-                                min="0.01"
-                                max="999999999999"
+                            <CurrencyInput
                                 value={amount}
-                                onChange={(e) => {
-                                    setAmount(e.target.value)
+                                onValueChange={(value) => {
+                                    setAmount(value)
                                     setError('')
                                 }}
                                 required
@@ -155,12 +218,12 @@ export default function AddBudgetModal({ project, onClose, onSaved }) {
                         <div>
                             <div className="flex justify-between items-center mb-1">
                                 <label className="block text-[11px] font-bold text-gray-700 uppercase">Note</label>
-                                <span className="text-[10px] text-gray-400 font-semibold">Optional</span>
+                                <span className="text-[10px] text-gray-400 font-semibold">{note.length}/{MAX_NOTE_LENGTH}</span>
                             </div>
                             <input
                                 type="text"
                                 value={note}
-                                maxLength={255}
+                                maxLength={MAX_NOTE_LENGTH}
                                 onChange={(e) => setNote(e.target.value)}
                                 className="w-full bg-[#f4f1ee] rounded-md px-2.5 py-1.5 text-[10px] font-medium outline-none border border-transparent focus:border-[#A63228]"
                                 placeholder="e.g. Change order, extra materials"

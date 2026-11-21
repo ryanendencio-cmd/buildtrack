@@ -724,9 +724,11 @@ export default function Dashboard() {
 
         // Project Breakdown for BY_PROJECT view mode
         const projectsWithSpent = projectSummaries
-          .filter(p => Number(p.spent || 0) > 0)
+          .filter(p => Number(p.spent || 0) > 0 && (
+            pieChartProjectId === 'ALL' || String(p.id) === String(pieChartProjectId)
+          ))
           .sort((a, b) => Number(b.spent || 0) - Number(a.spent || 0));
-        const totalAllSpent = projectSummaries.reduce((s, p) => s + Number(p.spent || 0), 0);
+        const totalAllSpent = projectsWithSpent.reduce((s, p) => s + Number(p.spent || 0), 0);
         const PROJECT_PIE_COLORS = ['#8B1A10', '#2563EB', '#059669', '#D97706', '#7C3AED', '#0891B2', '#EA580C'];
 
         let cumulativeProjDash = 0;
@@ -872,7 +874,9 @@ export default function Dashboard() {
                       ? (activePieProject.id === 'ALL'
                           ? 'Total budget utilization across all projects.'
                           : `Budget utilization for "${activePieProject.name}".`)
-                      : 'Distribution of actual costs across projects.'}
+                      : (pieChartProjectId === 'ALL'
+                          ? 'Distribution of actual costs across projects.'
+                          : `Actual cost for "${activePieProject.name}".`)}
                   </p>
                 </div>
 
@@ -903,20 +907,19 @@ export default function Dashboard() {
                     </button>
                   </div>
 
-                  {/* Project Selector (UTILIZATION mode) */}
-                  {pieChartViewMode === 'UTILIZATION' && (
-                    <select
-                      value={pieChartProjectId}
-                      onChange={(e) => setPieChartProjectId(e.target.value)}
-                      className="text-[11px] font-bold bg-gray-50 border border-gray-200 text-gray-700 rounded-md px-1.5 py-0.5 hover:border-gray-300 focus:outline-none focus:border-[#8B1A10] max-w-[125px] truncate cursor-pointer"
-                      title="Filter Budget vs Cost for a specific project"
-                    >
-                      <option value="ALL">All Projects</option>
-                      {projects.map(p => (
-                        <option key={p.id} value={p.id}>{p.name || p.title}</option>
-                      ))}
-                    </select>
-                  )}
+                  <select
+                    value={pieChartProjectId}
+                    onChange={(e) => setPieChartProjectId(e.target.value)}
+                    className="text-[11px] font-bold bg-gray-50 border border-gray-200 text-gray-700 rounded-md px-1.5 py-0.5 hover:border-gray-300 focus:outline-none focus:border-[#8B1A10] max-w-[125px] truncate cursor-pointer"
+                    title={pieChartViewMode === 'UTILIZATION'
+                      ? 'Filter Budget vs Cost for a specific project'
+                      : 'Filter project cost distribution'}
+                  >
+                    <option value="ALL">All Projects</option>
+                    {projects.map(p => (
+                      <option key={p.id} value={p.id}>{p.name || p.title}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
@@ -1125,7 +1128,9 @@ export default function Dashboard() {
                   {/* Right: Projects List & Share */}
                   <div className="flex-1 min-w-0 flex flex-col justify-center gap-1 pl-1">
                     <div className="flex items-center justify-between text-[11px] pb-1 border-b border-gray-100">
-                      <span className="text-gray-400 font-bold uppercase tracking-wider">Top Projects by Cost</span>
+                      <span className="text-gray-400 font-bold uppercase tracking-wider">
+                        {pieChartProjectId === 'ALL' ? 'Top Projects by Cost' : 'Selected Project Cost'}
+                      </span>
                       <span className="text-gray-900 font-extrabold">₱{fmtFull(totalAllSpent)}</span>
                     </div>
                     <div className="flex flex-col gap-1 max-h-20 overflow-y-auto pr-0.5">
@@ -1141,7 +1146,11 @@ export default function Dashboard() {
                         </div>
                       ))}
                       {projectSlices.length === 0 && (
-                        <div className="text-[11px] text-gray-400 py-1">No project expenses logged.</div>
+                        <div className="text-[11px] text-gray-400 py-1">
+                          {pieChartProjectId === 'ALL'
+                            ? 'No project expenses logged.'
+                            : 'No expenses logged for this project.'}
+                        </div>
                       )}
                     </div>
                   </div>

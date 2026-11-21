@@ -19,6 +19,6 @@ test('trims and accepts reasons up to the configured maximum', () => {
 test('rejects reasons longer than the configured maximum', () => {
   assert.match(
     validateRejectionReason('x'.repeat(MAX_REJECTION_REASON_LENGTH + 1)).error,
-    /100 characters or fewer/
+    /250 characters or fewer/
   );
 });

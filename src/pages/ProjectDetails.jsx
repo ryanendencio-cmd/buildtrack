@@ -5,6 +5,11 @@ import { api } from '../api'
 import AddBudgetModal from '../components/AddBudgetModal'
 import Pagination from '../components/Pagination'
 import { usePagination } from '../components/usePagination'
+import {
+    formatCurrencyDisplay,
+    formatCurrencyEditing,
+    normalizeCurrencyInput
+} from '../utils/currencyFormatting'
 
 const getTodayISO = () => {
     const date = new Date()
@@ -16,23 +21,6 @@ const getTodayISO = () => {
 
 const MAX_CLIENT_PAYMENT_AMOUNT = 999999999999
 const MAX_CLIENT_PAYMENT_NOTE_LENGTH = 250
-
-const formatPaymentAmount = (value) => {
-    if (String(value ?? '').trim() === '') return ''
-    const amount = Number(value)
-    return Number.isFinite(amount)
-        ? amount.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-        : String(value)
-}
-
-const formatEditingPaymentAmount = (value) => {
-    if (String(value ?? '').trim() === '') return ''
-    const [integerPart, ...fractionParts] = String(value).split('.')
-    const integer = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',') || '0'
-    return fractionParts.length
-        ? `${integer}.${fractionParts.join('')}`
-        : integer
-}
 
 export default function ProjectDetails() {
     const { id } = useParams()
@@ -50,6 +38,7 @@ export default function ProjectDetails() {
     const [successModal, setSuccessModal] = useState(false)
     const [showAddBudget, setShowAddBudget] = useState(false)
     const [showAddPayment, setShowAddPayment] = useState(false)
+    const [showPaymentConfirmation, setShowPaymentConfirmation] = useState(false)
     const [paymentSaving, setPaymentSaving] = useState(false)
     const [paymentError, setPaymentError] = useState('')
     const [paymentAmountFocused, setPaymentAmountFocused] = useState(false)
@@ -59,7 +48,6 @@ export default function ProjectDetails() {
         date: getTodayISO(),
         paymentType: 'Downpayment',
         paymentMethod: 'Cash',
-        reference: '',
         note: ''
     })
     const [receiptImage, setReceiptImage] = useState(null)
@@ -71,19 +59,12 @@ export default function ProjectDetails() {
         const charactersBeforeCursor = input.value
             .slice(0, input.selectionStart ?? input.value.length)
             .replace(/[^\d.]/g, '').length
-        let value = input.value.replace(/[^\d.]/g, '')
-        const decimalIndex = value.indexOf('.')
-        if (decimalIndex !== -1) {
-            value = `${value.slice(0, decimalIndex + 1)}${value
-                .slice(decimalIndex + 1)
-                .replace(/\./g, '')
-                .slice(0, 2)}`
-        }
+        let value = normalizeCurrencyInput(input.value)
         const [integerPart, ...fractionParts] = value.split('.')
         value = `${integerPart.slice(0, String(MAX_CLIENT_PAYMENT_AMOUNT).length)}${fractionParts.length ? `.${fractionParts[0]}` : ''}`
         setPaymentForm(prev => ({ ...prev, amount: value }))
 
-        const formatted = formatEditingPaymentAmount(value)
+        const formatted = formatCurrencyEditing(value)
         requestAnimationFrame(() => {
             const field = paymentAmountInputRef.current
             if (!field) return
@@ -205,12 +186,12 @@ export default function ProjectDetails() {
 
     const openAddPayment = () => {
         setPaymentError('')
+        setShowPaymentConfirmation(false)
         setPaymentForm({
             amount: '',
             date: getTodayISO(),
             paymentType: downPaymentReceived < downPaymentTarget ? 'Downpayment' : 'Progress Payment',
             paymentMethod: 'Cash',
-            reference: '',
             note: ''
         })
         setPaymentAmountFocused(false)
@@ -256,7 +237,7 @@ export default function ProjectDetails() {
         reader.readAsDataURL(file)
     }
 
-    const handleAddClientPayment = async (e) => {
+    const handleAddClientPayment = (e) => {
         e.preventDefault()
         const amount = Number(paymentForm.amount)
         if (!Number.isFinite(amount) || amount <= 0 || amount > MAX_CLIENT_PAYMENT_AMOUNT) {
@@ -276,6 +257,12 @@ export default function ProjectDetails() {
             return
         }
 
+        setPaymentError('')
+        setShowPaymentConfirmation(true)
+    }
+
+    const handleConfirmAddClientPayment = async () => {
+        const amount = Number(paymentForm.amount)
         setPaymentSaving(true)
         setPaymentError('')
         try {
@@ -284,7 +271,6 @@ export default function ProjectDetails() {
                 date: paymentForm.date,
                 payment_type: paymentForm.paymentType,
                 payment_method: paymentForm.paymentMethod,
-                reference: paymentForm.reference.trim(),
                 note: paymentForm.note.trim(),
                 receipt_image: receiptImage
             })
@@ -292,8 +278,10 @@ export default function ProjectDetails() {
             setReceiptImage(null)
             setReceiptFileName('')
             setPaymentAmountFocused(false)
+            setShowPaymentConfirmation(false)
             setShowAddPayment(false)
         } catch (err) {
+            setShowPaymentConfirmation(false)
             setPaymentError(err.message || 'Failed to record client payment.')
         } finally {
             setPaymentSaving(false)
@@ -651,8 +639,8 @@ export default function ProjectDetails() {
                                         type="text"
                                         inputMode="decimal"
                                         value={paymentAmountFocused
-                                            ? formatEditingPaymentAmount(paymentForm.amount)
-                                            : formatPaymentAmount(paymentForm.amount)}
+                                            ? formatCurrencyEditing(paymentForm.amount)
+                                            : formatCurrencyDisplay(paymentForm.amount)}
                                         onFocus={() => setPaymentAmountFocused(true)}
                                         onBlur={() => setPaymentAmountFocused(false)}
                                         onChange={handlePaymentAmountChange}
@@ -719,17 +707,6 @@ export default function ProjectDetails() {
                                     />
                                 </div>
                                 <div className="col-span-2">
-                                    <label className="block text-[11px] font-bold text-gray-700 uppercase mb-1">Reference / Receipt No. <span className="font-normal text-gray-400">(Optional)</span></label>
-                                    <input
-                                        type="text"
-                                        maxLength={100}
-                                        value={paymentForm.reference}
-                                        onChange={e => setPaymentForm(prev => ({ ...prev, reference: e.target.value }))}
-                                        className="w-full bg-[#f4f1ee] rounded-md px-2.5 py-2 text-[11px] outline-none"
-                                        placeholder="e.g. bank transaction or receipt number"
-                                    />
-                                </div>
-                                <div className="col-span-2">
                                     <div className="mb-1 flex items-center justify-between gap-3">
                                         <label className="text-[11px] font-bold text-gray-700 uppercase">Note <span className="font-normal text-gray-400">(Optional)</span></label>
                                         <span className={paymentForm.note.length === MAX_CLIENT_PAYMENT_NOTE_LENGTH
@@ -756,6 +733,75 @@ export default function ProjectDetails() {
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {showAddPayment && showPaymentConfirmation && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+                    <div
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="confirm-client-payment-title"
+                        className="bg-white rounded-2xl p-5 w-full max-w-[360px] shadow-2xl"
+                    >
+                        <h3 id="confirm-client-payment-title" className="text-sm font-extrabold text-gray-900">
+                            Confirm Client Payment
+                        </h3>
+                        <p className="text-[11px] text-gray-500 mt-1 mb-4">
+                            Review the details before saving this payment.
+                        </p>
+                        <dl className="rounded-xl bg-gray-50 border border-gray-100 p-3 space-y-2 text-[11px]">
+                            <div className="flex justify-between gap-3">
+                                <dt className="text-gray-500">Project</dt>
+                                <dd className="font-bold text-gray-900 text-right">{project.name}</dd>
+                            </div>
+                            <div className="flex justify-between gap-3">
+                                <dt className="text-gray-500">Amount</dt>
+                                <dd className="font-extrabold text-green-800 text-right">
+                                    ₱{Number(paymentForm.amount).toLocaleString(undefined, {
+                                        minimumFractionDigits: 2,
+                                        maximumFractionDigits: 2
+                                    })}
+                                </dd>
+                            </div>
+                            <div className="flex justify-between gap-3">
+                                <dt className="text-gray-500">Payment type</dt>
+                                <dd className="font-bold text-gray-900 text-right">{paymentForm.paymentType}</dd>
+                            </div>
+                            <div className="flex justify-between gap-3">
+                                <dt className="text-gray-500">Payment method</dt>
+                                <dd className="font-bold text-gray-900 text-right">{paymentForm.paymentMethod}</dd>
+                            </div>
+                            <div className="flex justify-between gap-3">
+                                <dt className="text-gray-500">Date received</dt>
+                                <dd className="font-bold text-gray-900 text-right">{paymentForm.date}</dd>
+                            </div>
+                            {receiptFileName && (
+                                <div className="flex justify-between gap-3">
+                                    <dt className="text-gray-500">Receipt</dt>
+                                    <dd className="font-bold text-gray-900 text-right break-all">{receiptFileName}</dd>
+                                </div>
+                            )}
+                        </dl>
+                        <div className="flex gap-2 mt-4">
+                            <button
+                                type="button"
+                                onClick={() => setShowPaymentConfirmation(false)}
+                                disabled={paymentSaving}
+                                className="flex-1 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-[11px] font-bold disabled:opacity-60"
+                            >
+                                Back to Edit
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleConfirmAddClientPayment}
+                                disabled={paymentSaving}
+                                className="flex-1 py-2 bg-[#2e7d32] text-white rounded-lg text-[11px] font-bold disabled:opacity-60"
+                            >
+                                {paymentSaving ? 'Saving...' : 'Confirm & Save'}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

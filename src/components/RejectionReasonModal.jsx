@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 
-const MAX_REJECTION_REASON_LENGTH = 100
+const MAX_REJECTION_REASON_LENGTH = 250
 
 export default function RejectionReasonModal({ title, subject, onCancel, onSubmit }) {
     const [reason, setReason] = useState('')

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
+import CurrencyInput from '../components/CurrencyInput'
 import { api } from '../api'
 import Pagination from '../components/Pagination'
 import { usePagination } from '../components/usePagination'
@@ -290,8 +291,7 @@ export default function CashAdvance() {
         }));
     };
 
-    const handleAmountChange = (e) => {
-        const val = e.target.value;
+    const handleAmountChange = (val) => {
         setFormData(prev => ({ ...prev, amount: val }));
 
         const num = parseFloat(val);
@@ -944,19 +944,14 @@ export default function CashAdvance() {
                                     </span>
                                 </div>
 
-                                <div className="relative">
-                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-extrabold text-sm">₱</span>
-                                    <input
-                                        type="number"
-                                        step="0.01"
-                                        name="amount"
-                                        value={formData.amount}
-                                        onChange={handleAmountChange}
-                                        required
-                                        placeholder="0.00"
-                                        className={`w-full bg-white border ${formError ? 'border-[#A63228] focus:ring-[#A63228]' : 'border-gray-200 focus:border-[#A63228] focus:ring-[#A63228]'} rounded-lg pl-8 pr-3 py-2 text-sm font-extrabold text-gray-900 focus:outline-none focus:ring-1`}
-                                    />
-                                </div>
+                                <CurrencyInput
+                                    name="amount"
+                                    value={formData.amount}
+                                    onValueChange={handleAmountChange}
+                                    required
+                                    placeholder="0.00"
+                                    className={`w-full bg-white border ${formError ? 'border-[#A63228] focus:ring-[#A63228]' : 'border-gray-200 focus:border-[#A63228] focus:ring-[#A63228]'} rounded-lg pl-8 pr-3 py-2 text-sm font-extrabold text-gray-900 focus:outline-none focus:ring-1`}
+                                />
 
                                 {/* Quick Amount Chips */}
                                 <div className="flex items-center gap-1.5 mt-2 flex-wrap">

@@ -133,6 +133,12 @@ export default function Assets() {
         name: '', status: 'Available', condition: 'Good', user: '', quantity: 1, borrowQty: 1,
         expectedReturnDate: '', expectedReturnTime: ''
     });
+    const [toolEntries, setToolEntries] = useState([
+        { id: 0, name: '', quantity: '1', condition: 'Good' }
+    ]);
+    const [expandedToolEntryId, setExpandedToolEntryId] = useState(0);
+    const [nextToolEntryId, setNextToolEntryId] = useState(1);
+    const [isAddingTools, setIsAddingTools] = useState(false);
 
     const handleInputChange = (e) => {
         let val = e.target.value;
@@ -140,6 +146,42 @@ export default function Assets() {
             val = val.charAt(0).toUpperCase() + val.slice(1);
         }
         setFormData({ ...formData, [e.target.name]: val });
+    };
+    const handleToolEntryChange = (index, field, value) => {
+        const nextEntries = [...toolEntries];
+        const nextValue = field === 'name' && value.length > 0
+            ? value.charAt(0).toUpperCase() + value.slice(1)
+            : value;
+        nextEntries[index] = { ...nextEntries[index], [field]: nextValue };
+        setToolEntries(nextEntries);
+    };
+    const handleOpenAddModal = () => {
+        setToolEntries([{ id: 0, name: '', quantity: '1', condition: 'Good' }]);
+        setExpandedToolEntryId(0);
+        setNextToolEntryId(1);
+        setModalState('ADD');
+    };
+    const handleAddToolEntry = () => {
+        const newEntry = {
+            id: nextToolEntryId,
+            name: '',
+            quantity: '1',
+            condition: 'Good'
+        };
+        setToolEntries(prev => [
+            ...prev,
+            newEntry
+        ]);
+        setExpandedToolEntryId(newEntry.id);
+        setNextToolEntryId(id => id + 1);
+    };
+    const handleRemoveToolEntry = (entryId) => {
+        const remainingEntries = toolEntries.filter(entry => entry.id !== entryId);
+        if (remainingEntries.length === 0) return;
+        setToolEntries(remainingEntries);
+        if (expandedToolEntryId === entryId) {
+            setExpandedToolEntryId(remainingEntries[0].id);
+        }
     };
     const handleProjectChange = (e) => navigate(`/assets/${e.target.value}`);
 
@@ -381,34 +423,88 @@ export default function Assets() {
 
     const handleConfirmAdd = async (e) => {
         e.preventDefault();
-        const qty = parseInt(formData.quantity, 10) || 1;
+        if (isAddingTools) return;
         const targetProjId = currentProjectId || dropdownProjects[0]?.id || null;
+        const requests = [];
 
+        for (let entryIndex = 0; entryIndex < toolEntries.length; entryIndex++) {
+            const entry = toolEntries[entryIndex];
+            const name = entry.name.trim();
+            const quantity = Number(entry.quantity);
+            if (!name || !Number.isSafeInteger(quantity) || quantity < 1) {
+                alert('Enter a tool name and a whole-number quantity greater than zero for every entry.');
+                return;
+            }
 
+            const payload = {
+                project_id: targetProjId,
+                name,
+                status: 'Available',
+                assigned_to: null,
+                user: '—',
+                condition: entry.condition || 'Good'
+            };
+            for (let unit = 0; unit < quantity; unit++) {
+                requests.push({ entryIndex, payload });
+            }
+        }
 
-        const payload = {
-            project_id: targetProjId,
-            name: formData.name.trim(),
-            status: 'Available',
-            assigned_to: null,
-            user: '—',
-            condition: formData.condition || 'Good'
-        };
+        setIsAddingTools(true);
         try {
-            const promises = Array.from({ length: qty }).map(() => api.post('/assets', payload));
-            const newEquipments = await Promise.all(promises);
-            setEquipment(prev => [...prev, ...newEquipments]);
-            setSuccessMsg(`${qty} tool(s) added to inventory.`);
+            const results = await Promise.allSettled(
+                requests.map(({ payload }) => api.post('/assets', payload))
+            );
+            const createdAssets = [];
+            const remainingByEntry = new Map();
+            let firstError = null;
+
+            results.forEach((result, requestIndex) => {
+                const { entryIndex } = requests[requestIndex];
+                if (result.status === 'fulfilled') {
+                    createdAssets.push(result.value);
+                    return;
+                }
+                remainingByEntry.set(entryIndex, (remainingByEntry.get(entryIndex) || 0) + 1);
+                firstError ??= result.reason;
+            });
+
+            if (createdAssets.length > 0) {
+                setEquipment(prev => [...prev, ...createdAssets]);
+            }
+
+            if (remainingByEntry.size > 0) {
+                const remainingEntries = toolEntries
+                    .map((entry, index) => remainingByEntry.has(index)
+                        ? { ...entry, quantity: String(remainingByEntry.get(index)) }
+                        : null)
+                    .filter(Boolean);
+                setToolEntries(remainingEntries);
+                setExpandedToolEntryId(remainingEntries[0]?.id ?? null);
+                const failureMessage = firstError?.message || String(firstError || 'Server error');
+                alert(
+                    `Added ${createdAssets.length} tool unit(s), but some could not be saved. ` +
+                    `The form now shows only the remaining quantities. ${failureMessage}`
+                );
+                return;
+            }
+
+            setSuccessMsg(
+                `${toolEntries.length} tool type(s) (${createdAssets.length} unit(s)) added to inventory.`
+            );
             setModalState('SUCCESS');
         } catch (error) {
-            console.error('Error adding tool to inventory:', error);
-            alert('Failed to add tool: ' + (error.message || 'Server error'));
+            alert('Failed to add tools: ' + (error.message || 'Server error'));
+        } finally {
+            setIsAddingTools(false);
         }
     };
 
     const resetAndClose = () => {
         setModalState('NONE');
         setFormData({ name: '', status: 'Available', condition: 'Good', user: '', quantity: 1, borrowQty: 1 });
+        setToolEntries([{ id: 0, name: '', quantity: '1', condition: 'Good' }]);
+        setExpandedToolEntryId(0);
+        setNextToolEntryId(1);
         setSelectedEquipment(null);
     };
 
@@ -621,7 +717,7 @@ export default function Assets() {
         <AdminLayout>
             <datalist id="workers-list">
                 {workers
-                    .filter(w => !formData.user || w.name.toLowerCase().startsWith(formData.user.toLowerCase()))
+                    .filter(w => typeof w?.name === 'string' && w.name.toLowerCase().startsWith(String(formData.user || '').toLowerCase()))
                     .map(w => (
                         <option key={w.id} value={w.name} />
                     ))}
@@ -646,10 +742,7 @@ export default function Assets() {
                 <div className="flex items-center gap-2 w-full md:w-auto flex-wrap">
                     <button
                         type="button"
-                        onClick={() => {
-                            setFormData({ name: '', status: 'Available', condition: 'Good', user: '', quantity: 1, borrowQty: 1 });
-                            setModalState('ADD');
-                        }}
+                        onClick={handleOpenAddModal}
                         className="bg-[#E8C547] border border-[#E8C547] text-gray-900 min-w-[110px] h-8 px-3.5 rounded-lg font-bold text-[10px] shadow-xs hover:bg-[#d4b33d] transition-colors flex items-center justify-center gap-1 cursor-pointer"
                     >
                         <span>+</span> Add Tools
@@ -1324,36 +1417,121 @@ export default function Assets() {
 
             {modalState === 'ADD' && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 transition-all">
-                    <div className="bg-white rounded-2xl w-full max-w-[480px] shadow-2xl relative overflow-hidden">
-                        <div className="p-6 border-b border-gray-100 flex justify-between items-center">
+                    <div className="bg-white rounded-2xl w-full max-w-[600px] max-h-[90vh] shadow-2xl relative overflow-hidden flex flex-col">
+                        <div className="p-6 border-b border-gray-100 flex justify-between items-center shrink-0">
                             <div>
                                 <h3 className="text-xl font-extrabold text-[#1a1a1a]">Add Tools</h3>
-                                <p className="text-sm text-gray-500 font-medium mt-1">Register new tools to inventory.</p>
+                                <p className="text-sm text-gray-500 font-medium mt-1">Register one or more tool types to inventory.</p>
                             </div>
-                            <button onClick={resetAndClose} className="text-2xl font-bold text-gray-400 hover:text-gray-700">&times;</button>
+                            <button type="button" onClick={resetAndClose} disabled={isAddingTools} className="text-2xl font-bold text-gray-400 hover:text-gray-700 disabled:opacity-50">&times;</button>
                         </div>
-                        <form onSubmit={handleConfirmAdd} className="p-6 flex flex-col gap-5">
-                            <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-wider">Tool Name</label>
-                                <input type="text" name="name" value={formData.name} onChange={handleInputChange} required className="w-full bg-[#f4f1ee] border border-transparent rounded-xl px-4 py-3 text-sm font-medium focus:border-[#A63228] outline-none" placeholder="e.g. Circular Saw" />
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-wider">Quantity</label>
-                                    <input type="number" name="quantity" min="1" value={formData.quantity} onChange={handleInputChange} required className="w-full bg-[#f4f1ee] border border-transparent rounded-xl px-4 py-3 text-sm font-medium focus:border-[#A63228] outline-none" placeholder="1" />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-wider">Condition</label>
-                                    <select name="condition" value={formData.condition} onChange={handleInputChange} className="w-full bg-[#f4f1ee] border border-transparent rounded-xl pl-4 pr-8 py-3 text-sm font-medium focus:border-[#A63228] outline-none appearance-none" style={selectStyles}>
-                                        <option value="Good">Good</option>
-                                        <option value="Needs Repair">Needs Repair</option>
-                                        <option value="Broken">Broken</option>
-                                    </select>
-                                </div>
-                            </div>
+                        <form onSubmit={handleConfirmAdd} className="p-6 flex flex-col gap-5 overflow-y-auto">
+                            {toolEntries.map((entry, index) => {
+                                const isExpanded = expandedToolEntryId === entry.id;
+                                return (
+                                    <div key={entry.id} className="rounded-xl border border-gray-200 p-4">
+                                        {isExpanded ? (
+                                            <>
+                                                <div className="flex items-center justify-between mb-3">
+                                                    <span className="text-xs font-extrabold text-gray-500 uppercase tracking-wider">Tool {index + 1}</span>
+                                                    {toolEntries.length > 1 && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleRemoveToolEntry(entry.id)}
+                                                            disabled={isAddingTools}
+                                                            className="text-xs font-bold text-[#A63228] hover:underline disabled:opacity-50"
+                                                        >
+                                                            Remove
+                                                        </button>
+                                                    )}
+                                                </div>
+                                                <div className="mb-4">
+                                                    <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-wider">Tool Name</label>
+                                                    <input
+                                                        type="text"
+                                                        value={entry.name}
+                                                        onChange={e => handleToolEntryChange(index, 'name', e.target.value)}
+                                                        disabled={isAddingTools}
+                                                        required
+                                                        className="w-full bg-[#f4f1ee] border border-transparent rounded-xl px-4 py-3 text-sm font-medium focus:border-[#A63228] outline-none"
+                                                        placeholder="e.g. Circular Saw"
+                                                    />
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div>
+                                                        <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-wider">Quantity</label>
+                                                        <input
+                                                            type="number"
+                                                            min="1"
+                                                            step="1"
+                                                            value={entry.quantity}
+                                                            onChange={e => handleToolEntryChange(index, 'quantity', e.target.value)}
+                                                            disabled={isAddingTools}
+                                                            required
+                                                            className="w-full bg-[#f4f1ee] border border-transparent rounded-xl px-4 py-3 text-sm font-medium focus:border-[#A63228] outline-none"
+                                                            placeholder="1"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-wider">Condition</label>
+                                                        <select
+                                                            value={entry.condition}
+                                                            onChange={e => handleToolEntryChange(index, 'condition', e.target.value)}
+                                                            disabled={isAddingTools}
+                                                            className="w-full bg-[#f4f1ee] border border-transparent rounded-xl pl-4 pr-8 py-3 text-sm font-medium focus:border-[#A63228] outline-none appearance-none"
+                                                            style={selectStyles}
+                                                        >
+                                                            <option value="Good">Good</option>
+                                                            <option value="Needs Repair">Needs Repair</option>
+                                                            <option value="Broken">Broken</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <div className="flex items-center gap-3">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setExpandedToolEntryId(entry.id)}
+                                                    disabled={isAddingTools}
+                                                    aria-label={`Edit tool ${index + 1}: ${entry.name || 'unnamed tool'}`}
+                                                    className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left disabled:opacity-50"
+                                                >
+                                                    <span className="min-w-0">
+                                                        <span className="block text-[10px] font-extrabold text-gray-500 uppercase tracking-wider">Tool {index + 1}</span>
+                                                        <span className="block truncate text-sm font-bold text-gray-800">{entry.name.trim() || 'Enter tool name'}</span>
+                                                    </span>
+                                                    <span className="shrink-0 text-xs font-medium text-gray-500">
+                                                        Qty: {entry.quantity} · {entry.condition}
+                                                    </span>
+                                                    <span className="shrink-0 text-xs font-bold text-[#A63228]">Edit</span>
+                                                </button>
+                                                {toolEntries.length > 1 && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleRemoveToolEntry(entry.id)}
+                                                        disabled={isAddingTools}
+                                                        className="shrink-0 text-xs font-bold text-[#A63228] hover:underline disabled:opacity-50"
+                                                    >
+                                                        Remove
+                                                    </button>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                            <button
+                                type="button"
+                                onClick={handleAddToolEntry}
+                                disabled={isAddingTools}
+                                className="w-full py-3 rounded-xl border border-dashed border-[#A63228] text-[#A63228] text-sm font-extrabold hover:bg-red-50 transition-colors disabled:opacity-50"
+                            >
+                                + Add Another Tool
+                            </button>
                             <div className="flex gap-3 mt-2">
-                                <button type="button" onClick={resetAndClose} className="flex-1 py-3 bg-white border border-[#A63228] text-[#A63228] rounded-xl text-sm font-extrabold hover:bg-red-50 transition-colors uppercase tracking-wider">Cancel</button>
-                                <button type="submit" className="flex-1 py-3 bg-[#E8C547] text-gray-900 rounded-xl text-sm font-extrabold hover:bg-[#d4b33d] transition-colors shadow-sm uppercase tracking-wider">Add to Inventory</button>
+                                <button type="button" onClick={resetAndClose} disabled={isAddingTools} className="flex-1 py-3 bg-white border border-[#A63228] text-[#A63228] rounded-xl text-sm font-extrabold hover:bg-red-50 transition-colors uppercase tracking-wider disabled:opacity-50">Cancel</button>
+                                <button type="submit" disabled={isAddingTools} className="flex-1 py-3 bg-[#E8C547] text-gray-900 rounded-xl text-sm font-extrabold hover:bg-[#d4b33d] transition-colors shadow-sm uppercase tracking-wider disabled:opacity-50">{isAddingTools ? 'Adding...' : 'Add to Inventory'}</button>
                             </div>
                         </form>
                     </div>

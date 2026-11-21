@@ -154,9 +154,11 @@ export default function Notifications() {
     const [announcementMessage, setAnnouncementMessage] = useState('');
     const [announcementSeverity, setAnnouncementSeverity] = useState('Medium');
     const [isPostingAnnouncement, setIsPostingAnnouncement] = useState(false);
+    const [isDeletingNotifications, setIsDeletingNotifications] = useState(false);
+    const [selectedNotificationIds, setSelectedNotificationIds] = useState(() => new Set());
     const [announcementError, setAnnouncementError] = useState('');
     const [notificationActionError, setNotificationActionError] = useState('');
-    const { notifications, markAsRead, markAllAsRead, unreadCount, refreshNotifications } = useNotifications();
+    const { notifications, markAsRead, markAllAsRead, deleteNotifications, unreadCount, refreshNotifications } = useNotifications();
 
     const filteredNotifs = notifications.filter(n => {
         if (filter === 'Unread') return !n.read;
@@ -232,6 +234,23 @@ export default function Notifications() {
         navigate(dest.path);
     };
 
+    const handleDeleteSelected = async () => {
+        const ids = [...selectedNotificationIds];
+        if (ids.length === 0 || isDeletingNotifications) return;
+        if (!window.confirm(`Delete ${ids.length} selected notification${ids.length === 1 ? '' : 's'}?`)) return;
+
+        setIsDeletingNotifications(true);
+        setNotificationActionError('');
+        try {
+            await deleteNotifications(ids);
+            setSelectedNotificationIds(new Set());
+        } catch (error) {
+            setNotificationActionError(error.message || 'Unable to delete notifications.');
+        } finally {
+            setIsDeletingNotifications(false);
+        }
+    };
+
     return (
         <AdminLayout>
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-4 gap-2">
@@ -275,6 +294,16 @@ export default function Notifications() {
                     >
                         Mark All as Read
                     </button>
+                    {selectedNotificationIds.size > 0 && (
+                        <button
+                            type="button"
+                            onClick={handleDeleteSelected}
+                            disabled={isDeletingNotifications}
+                            className="px-4 py-2 rounded-lg font-bold text-[10px] shadow-xs transition-colors flex items-center justify-center gap-1.5 w-full md:w-auto bg-red-700 text-white hover:bg-red-800 disabled:opacity-50 cursor-pointer"
+                        >
+                            {isDeletingNotifications ? 'Deleting…' : `Delete Selected (${selectedNotificationIds.size})`}
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -300,14 +329,19 @@ export default function Notifications() {
                         </button>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-2">
-                        <input
-                            value={announcementTitle}
-                            onChange={(event) => setAnnouncementTitle(event.target.value)}
-                            maxLength={100}
-                            placeholder="Announcement title"
-                            className="w-full text-[10px] px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-[#A63228]"
-                            disabled={isPostingAnnouncement}
-                        />
+                        <div>
+                            <input
+                                value={announcementTitle}
+                                onChange={(event) => setAnnouncementTitle(event.target.value)}
+                                maxLength={100}
+                                placeholder="Announcement title"
+                                className="w-full text-[10px] px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-[#A63228]"
+                                disabled={isPostingAnnouncement}
+                            />
+                            <p className="mt-1 text-right text-[10px] text-gray-500">
+                                {announcementTitle.length} / 100 characters
+                            </p>
+                        </div>
                         <select
                             value={announcementSeverity}
                             onChange={(event) => setAnnouncementSeverity(event.target.value)}
@@ -319,15 +353,20 @@ export default function Notifications() {
                             <option value="High">Urgent</option>
                         </select>
                     </div>
-                    <textarea
-                        value={announcementMessage}
-                        onChange={(event) => setAnnouncementMessage(event.target.value)}
-                        maxLength={1000}
-                        rows={3}
-                        placeholder="Write the project update, safety reminder, or schedule notice..."
-                        className="w-full text-[10px] px-3 py-2 border border-gray-200 rounded-lg mt-2 focus:outline-none focus:border-[#A63228] resize-y"
-                        disabled={isPostingAnnouncement}
-                    />
+                    <div className="mt-2">
+                        <textarea
+                            value={announcementMessage}
+                            onChange={(event) => setAnnouncementMessage(event.target.value)}
+                            maxLength={500}
+                            rows={3}
+                            placeholder="Write the project update, safety reminder, or schedule notice..."
+                            className="w-full text-[10px] px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-[#A63228] resize-y"
+                            disabled={isPostingAnnouncement}
+                        />
+                        <p className="mt-1 text-right text-[10px] text-gray-500">
+                            {announcementMessage.length} / 500 characters
+                        </p>
+                    </div>
                     {announcementError && <p role="alert" className="text-[10px] text-red-700 mt-2">{announcementError}</p>}
                     <div className="flex justify-end mt-2">
                         <button
@@ -378,7 +417,7 @@ export default function Notifications() {
                                 <div
                                     key={notif.id}
                                     onClick={() => handleAcknowledgeAndNavigate(notif)}
-                                    className={`flex flex-col sm:flex-row items-start sm:items-center justify-between p-3.5 rounded-lg border-l-[4px] transition-all cursor-pointer group hover:shadow-xs ${notif.read
+                                    className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 p-3.5 rounded-lg border-l-[4px] transition-all cursor-pointer group hover:shadow-xs ${notif.read
                                         ? 'bg-white border-l-gray-300 border-y border-r border-gray-100 hover:bg-gray-50/70'
                                         : notif.severity === 'High'
                                             ? 'bg-red-50/40 border-l-[#A63228] border-y border-r border-red-100 hover:bg-red-50/70'
@@ -391,6 +430,27 @@ export default function Notifications() {
                                                         : 'bg-yellow-50/40 border-l-[#ca8a04] border-y border-r border-yellow-100 hover:bg-yellow-50/70'
                                         }`}
                                 >
+                                    <label
+                                        className="shrink-0 flex items-center self-start mt-1 cursor-pointer"
+                                        onClick={(event) => event.stopPropagation()}
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedNotificationIds.has(String(notif.id))}
+                                            disabled={isDeletingNotifications}
+                                            aria-label={`Select notification: ${notif.title || 'Untitled'}`}
+                                            className="h-4 w-4 accent-[#A63228] cursor-pointer disabled:cursor-not-allowed"
+                                            onChange={() => {
+                                                const id = String(notif.id);
+                                                setSelectedNotificationIds(previous => {
+                                                    const next = new Set(previous);
+                                                    if (next.has(id)) next.delete(id);
+                                                    else next.add(id);
+                                                    return next;
+                                                });
+                                            }}
+                                        />
+                                    </label>
                                     <div className="flex flex-col flex-1 pr-3 w-full">
                                         <div className="flex flex-wrap items-center gap-1.5 mb-1">
                                             <h4 className={`text-xs font-extrabold ${notif.read ? 'text-gray-700' : 'text-gray-900 group-hover:text-[#A63228] transition-colors'}`}>
