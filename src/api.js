@@ -12,7 +12,20 @@ function getHeaders(customHeaders = {}) {
     const session = JSON.parse(sessionStorage.getItem('adminSession') || localStorage.getItem('adminSession') || '{}')
     const profile = JSON.parse(sessionStorage.getItem('adminProfile') || localStorage.getItem('adminProfile') || '{}')
     const token = sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken')
-    const name = profile.fullName || session.fullName || profile.name || session.name || session.username || 'Administrator'
+    const profileParts = [profile.firstName, profile.middleName, profile.lastName].filter(Boolean).join(' ').trim()
+    const sessionParts = [session.firstName, session.middleName, session.lastName].filter(Boolean).join(' ').trim()
+    const name = profileParts
+      || sessionParts
+      || (profile.fullName && profile.fullName !== 'Admin User' ? profile.fullName : null)
+      || (session.fullName && session.fullName !== 'Admin User' ? session.fullName : null)
+      || (profile.name && profile.name !== 'Admin User' ? profile.name : null)
+      || (session.name && session.name !== 'Admin User' ? session.name : null)
+      || profile.fullName
+      || session.fullName
+      || profile.name
+      || session.name
+      || session.username
+      || 'Administrator'
     const role = session.role || 'Administrator'
     const id = session.id || sessionStorage.getItem('adminId') || localStorage.getItem('adminId') || ''
 

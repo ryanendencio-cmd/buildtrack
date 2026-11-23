@@ -6109,11 +6109,17 @@ async function startServer() {
 
       const token = jwt.sign({ id: adminDoc.id, type: 'admin' }, JWT_SECRET, { expiresIn: '8h' })
 
+      const computedFullName = [adminData.first_name, adminData.middle_name, adminData.last_name].filter(Boolean).join(' ').trim()
+      const resolvedFullName = computedFullName
+        || (adminData.full_name && adminData.full_name !== 'Admin User' ? adminData.full_name : '')
+        || adminData.full_name
+        || 'Administrator'
+
       recordAuditLog({
         action: 'LOGIN_SUCCESS',
         module: 'Authentication',
-        description: `Administrator "${adminData.full_name || username}" (${adminData.role || 'Administrator'}) successfully logged in.`,
-        actor_name: adminData.full_name || username,
+        description: `Administrator "${resolvedFullName}" (${adminData.role || 'Administrator'}) successfully logged in.`,
+        actor_name: resolvedFullName,
         actor_role: adminData.role || 'Administrator',
         actor_id: adminDoc.id,
         status: 'SUCCESS',
@@ -6127,7 +6133,7 @@ async function startServer() {
           id: adminDoc.id,
           username: adminData.username,
           email: adminData.email,
-          fullName: adminData.full_name,
+          fullName: resolvedFullName,
           firstName: adminData.first_name,
           middleName: adminData.middle_name,
           lastName: adminData.last_name,
@@ -6425,11 +6431,17 @@ async function startServer() {
         parsedAddressObj = {}
       }
 
+      const computedFullName = [adminData.first_name, adminData.middle_name, adminData.last_name].filter(Boolean).join(' ').trim()
+      const resolvedFullName = computedFullName
+        || (adminData.full_name && adminData.full_name !== 'Admin User' ? adminData.full_name : '')
+        || adminData.full_name
+        || 'Administrator'
+
       res.json({
         id: adminDoc.id,
         username: adminData.username,
         email: adminData.email,
-        fullName: adminData.full_name,
+        fullName: resolvedFullName,
         firstName: adminData.first_name,
         middleName: adminData.middle_name,
         lastName: adminData.last_name,

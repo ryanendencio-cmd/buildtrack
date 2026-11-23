@@ -215,12 +215,39 @@ export default function Dashboard() {
     try {
       const saved = JSON.parse(sessionStorage.getItem('adminProfile') || localStorage.getItem('adminProfile') || '{}');
       const session = JSON.parse(sessionStorage.getItem('adminSession') || localStorage.getItem('adminSession') || '{}');
-      const name = saved.fullName || saved.name || session.fullName || (saved.firstName ? `${saved.firstName} ${saved.lastName || ''}`.trim() : null) || session.username;
+      const savedCombined = [saved.firstName, saved.middleName, saved.lastName].filter(Boolean).join(' ').trim();
+      const sessionCombined = [session.firstName, session.middleName, session.lastName].filter(Boolean).join(' ').trim();
+      const name = savedCombined ||
+        (saved.fullName && saved.fullName !== 'Admin User' ? saved.fullName : null) ||
+        (saved.name && saved.name !== 'Admin User' ? saved.name : null) ||
+        sessionCombined ||
+        (session.fullName && session.fullName !== 'Admin User' ? session.fullName : null) ||
+        (session.username && session.username !== 'admin' ? session.username : null);
       return name ? String(name).trim() : 'Administrator';
     } catch {
       return 'Administrator';
     }
   });
+
+  useEffect(() => {
+    const refreshAdminName = () => {
+      try {
+        const saved = JSON.parse(sessionStorage.getItem('adminProfile') || localStorage.getItem('adminProfile') || '{}');
+        const session = JSON.parse(sessionStorage.getItem('adminSession') || localStorage.getItem('adminSession') || '{}');
+        const savedCombined = [saved.firstName, saved.middleName, saved.lastName].filter(Boolean).join(' ').trim();
+        const sessionCombined = [session.firstName, session.middleName, session.lastName].filter(Boolean).join(' ').trim();
+        const name = savedCombined ||
+          (saved.fullName && saved.fullName !== 'Admin User' ? saved.fullName : null) ||
+          (saved.name && saved.name !== 'Admin User' ? saved.name : null) ||
+          sessionCombined ||
+          (session.fullName && session.fullName !== 'Admin User' ? session.fullName : null) ||
+          (session.username && session.username !== 'admin' ? session.username : null);
+        if (name) setAdminName(String(name).trim());
+      } catch {}
+    };
+    window.addEventListener('admin-profile-updated', refreshAdminName);
+    return () => window.removeEventListener('admin-profile-updated', refreshAdminName);
+  }, []);
 
   const fetchDashboardData = () => {
     Promise.all([

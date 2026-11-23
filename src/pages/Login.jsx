@@ -198,8 +198,20 @@ export default function Login() {
         } else {
           localStorage.removeItem('rememberedEmail')
         }
-        sessionStorage.setItem('adminId', data.admin.id)
-        sessionStorage.setItem('adminSession', JSON.stringify(data.admin))
+        const adminUser = data.admin
+        const resolvedName = [adminUser.firstName, adminUser.middleName, adminUser.lastName].filter(Boolean).join(' ').trim()
+          || (adminUser.fullName && adminUser.fullName !== 'Admin User' ? adminUser.fullName : '')
+          || adminUser.username
+          || 'Administrator'
+        const initialProfile = {
+          ...adminUser,
+          name: resolvedName,
+          fullName: resolvedName
+        }
+
+        sessionStorage.setItem('adminId', adminUser.id)
+        sessionStorage.setItem('adminSession', JSON.stringify(adminUser))
+        sessionStorage.setItem('adminProfile', JSON.stringify(initialProfile))
         sessionStorage.setItem('adminToken', data.token)
         localStorage.removeItem('adminId')
         localStorage.removeItem('adminSession')

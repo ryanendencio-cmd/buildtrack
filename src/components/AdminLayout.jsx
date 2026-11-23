@@ -3,6 +3,29 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useNotifications } from '../context/useNotifications'
 import { api } from '../api'
 
+function resolveAdminDisplayName(profile = {}, session = {}) {
+  const profileParts = [profile.firstName, profile.middleName, profile.lastName].filter(Boolean).join(' ').trim();
+  if (profileParts) return profileParts;
+  if (profile.fullName && profile.fullName !== 'Admin User') return profile.fullName.trim();
+  if (profile.name && profile.name !== 'Admin User') return profile.name.trim();
+
+  const sessionParts = [session.firstName, session.middleName, session.lastName].filter(Boolean).join(' ').trim();
+  if (sessionParts) return sessionParts;
+  if (session.fullName && session.fullName !== 'Admin User') return session.fullName.trim();
+  if (session.name && session.name !== 'Admin User') return session.name.trim();
+  if (session.username && session.username !== 'admin') return session.username.trim();
+
+  return profile.fullName || profile.name || session.fullName || session.name || session.username || 'Administrator';
+}
+
+function getAdminInitials(name) {
+  if (!name || name === 'Administrator' || name === 'Admin User') return 'AD';
+  const parts = String(name).trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return 'AD';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
 export default function AdminLayout({ children }) {
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(true);
   const [showLogoutModal, setShowLogoutModal] = React.useState(false);
@@ -31,8 +54,10 @@ export default function AdminLayout({ children }) {
     try {
       const saved = JSON.parse(sessionStorage.getItem('adminProfile') || localStorage.getItem('adminProfile') || '{}');
       const session = JSON.parse(sessionStorage.getItem('adminSession') || localStorage.getItem('adminSession') || '{}');
+      const resolvedName = resolveAdminDisplayName(saved, session);
       return {
-        name: saved.fullName || saved.name || session.fullName || 'Administrator',
+        name: resolvedName,
+        fullName: resolvedName,
         role: saved.role || session.role || 'Administrator',
         ...saved
       };
@@ -53,13 +78,42 @@ export default function AdminLayout({ children }) {
   React.useEffect(() => {
     const refreshProfile = () => {
       try {
-        setAdminProfile(current => ({ ...current, ...JSON.parse(sessionStorage.getItem('adminProfile') || localStorage.getItem('adminProfile') || '{}') }));
+        const saved = JSON.parse(sessionStorage.getItem('adminProfile') || localStorage.getItem('adminProfile') || '{}');
+        const session = JSON.parse(sessionStorage.getItem('adminSession') || localStorage.getItem('adminSession') || '{}');
+        const resolvedName = resolveAdminDisplayName(saved, session);
+        setAdminProfile(current => ({
+          ...current,
+          ...saved,
+          name: resolvedName,
+          fullName: resolvedName
+        }));
       } catch {
         // Keep the last valid profile if browser storage is unavailable or malformed.
       }
     };
     window.addEventListener('admin-profile-updated', refreshProfile);
     return () => window.removeEventListener('admin-profile-updated', refreshProfile);
+  }, []);
+
+  React.useEffect(() => {
+    const adminId = sessionStorage.getItem('adminId') || localStorage.getItem('adminId');
+    if (!adminId) return;
+
+    api.get(`/admin/profile/${adminId}`)
+      .then(data => {
+        if (data && !data.error) {
+          const resolvedName = resolveAdminDisplayName(data, data);
+          const updated = {
+            ...data,
+            name: resolvedName,
+            fullName: resolvedName,
+            role: data.role || 'Administrator'
+          };
+          setAdminProfile(current => ({ ...current, ...updated }));
+          sessionStorage.setItem('adminProfile', JSON.stringify(updated));
+        }
+      })
+      .catch(() => {});
   }, []);
 
   const handleLogoutClick = () => {
@@ -294,7 +348,7 @@ export default function AdminLayout({ children }) {
             onClick={() => window.innerWidth < 768 && setIsSidebarOpen(false)}
           >
             <div className="w-8 h-8 rounded-full bg-[#EAD9D8] text-[#A63228] flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
-              {(adminProfile.name || 'Administrator').split(/\s+/).filter(Boolean).slice(-2).map(part => part[0]).join('').toUpperCase() || 'AD'}
+              {getAdminInitials(adminProfile.name)}
             </div>
             {isSidebarOpen && (
               <div className="min-w-0 flex-1">
