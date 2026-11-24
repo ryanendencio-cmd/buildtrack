@@ -557,6 +557,45 @@ export default function Attendance() {
     const [rfidState, setRfidState] = useState('NONE');
     const [scannedData, setScannedData] = useState(null);
 
+    // ── RFID TAPPING AUDIT HISTORY STATE ──
+    const [showTappingHistory, setShowTappingHistory] = useState(false);
+    const [tappingLogs, setTappingLogs] = useState([]);
+    const [tappingStats, setTappingStats] = useState({ total: 0, success: 0, blocked: 0, failed: 0 });
+    const [tappingLoading, setTappingLoading] = useState(false);
+    const [tappingSearch, setTappingSearch] = useState('');
+    const [tappingStatusFilter, setTappingStatusFilter] = useState('ALL');
+    const [tappingSelectedDate, setTappingSelectedDate] = useState(selectedDate);
+    const [tappingShowAllDates, setTappingShowAllDates] = useState(false);
+
+    const fetchTappingHistory = useCallback(async () => {
+        setTappingLoading(true);
+        try {
+            const dateParam = tappingShowAllDates ? 'ALL' : (tappingSelectedDate || selectedDate);
+            const params = new URLSearchParams();
+            if (dateParam !== 'ALL') params.append('date', dateParam);
+            if (tappingStatusFilter !== 'ALL') params.append('status', tappingStatusFilter);
+            if (tappingSearch.trim()) params.append('search', tappingSearch.trim());
+            params.append('limit', '250');
+
+            const res = await api.get(`/attendance/rfid-taps?${params.toString()}`);
+            if (res && res.success) {
+                setTappingLogs(res.taps || []);
+                if (res.stats) setTappingStats(res.stats);
+            }
+        } catch (err) {
+            console.error('Failed to load RFID tapping history:', err);
+        } finally {
+            setTappingLoading(false);
+        }
+    }, [selectedDate, tappingSelectedDate, tappingShowAllDates, tappingStatusFilter, tappingSearch]);
+
+    useEffect(() => {
+        if (!showTappingHistory) return;
+        fetchTappingHistory();
+        const timer = setInterval(fetchTappingHistory, 3500);
+        return () => clearInterval(timer);
+    }, [showTappingHistory, fetchTappingHistory]);
+
     const handleInputChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
     const handleProjectChange = (e) => {
@@ -1100,7 +1139,7 @@ export default function Attendance() {
                                 setModalState('NON_WORKING_DAY');
                             }}
                             className="bg-white border border-red-300 text-[#A63228] px-3 py-1.5 rounded-lg font-bold text-[10px] shadow-sm hover:bg-red-50 transition-colors flex items-center gap-1.5"
-                            title="I-set bilang Non-Working Day (Holiday / Rest Day / Suspension)"
+                            title="Set as Non-Working Day (Holiday / Rest Day / Suspension)"
                         >
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
                             Set Non-Working Day
@@ -1146,6 +1185,22 @@ export default function Attendance() {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
                         <span>Export CSV</span>
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setTappingSelectedDate(selectedDate);
+                            setTappingShowAllDates(false);
+                            setShowTappingHistory(true);
+                            fetchTappingHistory();
+                        }}
+                        title="View RFID card tapping history, logs, and anti-spam audit"
+                        className="flex-1 md:flex-none border border-blue-200 bg-white hover:bg-blue-50 text-blue-700 px-3.5 py-1.5 rounded-lg font-bold text-[11px] shadow-2xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                        <svg className="w-3.5 h-3.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span>Tapping History</span>
                     </button>
                     <button
                         onClick={() => {
@@ -2062,6 +2117,316 @@ export default function Attendance() {
                     onCancel={() => setRequestToReject(null)}
                     onSubmit={reason => reviewAttendanceRequest(requestToReject, 'Rejected', reason)}
                 />
+            )}
+
+            {/* ═════════ RFID TAPPING AUDIT HISTORY MODAL ═════════ */}
+            {showTappingHistory && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-3 md:p-6 transition-all">
+                    <div className="bg-white rounded-2xl w-full max-w-[1020px] shadow-2xl relative overflow-hidden flex flex-col max-h-[92vh] border border-gray-100">
+                        {/* Header */}
+                        <div className="flex justify-between items-center p-4 md:p-5 border-b border-gray-100 shrink-0 bg-gray-50/70">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-extrabold text-xs shadow-2xs">
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <h3 className="text-sm md:text-base font-extrabold text-gray-900">RFID Tapping History & Audit Logs</h3>
+                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-100 text-blue-800">
+                                            {tappingShowAllDates ? 'All Historical Dates' : `Date: ${tappingSelectedDate || selectedDate}`}
+                                        </span>
+                                        <span className="flex items-center gap-1 text-[10px] text-emerald-600 font-bold">
+                                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                            Auto-syncing
+                                        </span>
+                                    </div>
+                                    <p className="text-[11px] text-gray-500 font-medium mt-0.5">
+                                        Real-time audit trail of all RFID scans, kiosk taps, anti-spam protections, and security alerts.
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={fetchTappingHistory}
+                                    title="Refresh logs"
+                                    disabled={tappingLoading}
+                                    className="p-2 text-gray-500 hover:text-gray-900 hover:bg-gray-200/60 rounded-lg transition-colors cursor-pointer"
+                                >
+                                    <svg className={`w-4 h-4 ${tappingLoading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                    </svg>
+                                </button>
+                                <button
+                                    onClick={() => setShowTappingHistory(false)}
+                                    className="text-gray-400 hover:text-gray-700 bg-gray-100 p-2 rounded-full hover:bg-gray-200 transition-colors cursor-pointer"
+                                >
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Anti-Spam Notice Banner */}
+                        <div className="bg-amber-50/80 border-b border-amber-200/60 px-5 py-2.5 flex flex-col md:flex-row md:items-center justify-between text-[11px] text-amber-900 gap-1">
+                            <div className="flex items-center gap-2">
+                                <span className="font-extrabold text-amber-800">🛡️ Anti-Spam Protection Active:</span>
+                                <span>Rapid repeat tapping of RFID cards is prohibited. Consecutive rapid taps are automatically blocked and trigger a warning notification to the worker's mobile app.</span>
+                            </div>
+                            <span className="font-bold text-amber-800 bg-amber-100/90 px-2 py-0.5 rounded text-[10px] shrink-0 self-start md:self-auto">
+                                Cooldown: 20 seconds
+                            </span>
+                        </div>
+
+                        {/* Stats Metrics Cards */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-4 md:p-5 pb-3 shrink-0">
+                            <div className="bg-blue-50/60 border border-blue-100 rounded-xl p-3 flex flex-col justify-between">
+                                <span className="text-[10px] font-extrabold text-blue-700 uppercase tracking-wider">Total Taps</span>
+                                <div className="flex items-baseline gap-2 mt-1">
+                                    <span className="text-xl font-black text-blue-900">{tappingStats.total}</span>
+                                    <span className="text-[10px] text-blue-600 font-semibold">recorded</span>
+                                </div>
+                            </div>
+                            <div className="bg-emerald-50/60 border border-emerald-100 rounded-xl p-3 flex flex-col justify-between">
+                                <span className="text-[10px] font-extrabold text-emerald-700 uppercase tracking-wider">Successful Scans</span>
+                                <div className="flex items-baseline gap-2 mt-1">
+                                    <span className="text-xl font-black text-emerald-900">{tappingStats.success}</span>
+                                    <span className="text-[10px] text-emerald-600 font-semibold">approved</span>
+                                </div>
+                            </div>
+                            <div className="bg-amber-50/60 border border-amber-100 rounded-xl p-3 flex flex-col justify-between">
+                                <span className="text-[10px] font-extrabold text-amber-700 uppercase tracking-wider">Spam / Cooldown Blocked</span>
+                                <div className="flex items-baseline gap-2 mt-1">
+                                    <span className="text-xl font-black text-amber-900">{tappingStats.blocked}</span>
+                                    <span className="text-[10px] text-amber-600 font-semibold">throttled</span>
+                                </div>
+                            </div>
+                            <div className="bg-rose-50/60 border border-rose-100 rounded-xl p-3 flex flex-col justify-between">
+                                <span className="text-[10px] font-extrabold text-rose-700 uppercase tracking-wider">Failed / Rejected</span>
+                                <div className="flex items-baseline gap-2 mt-1">
+                                    <span className="text-xl font-black text-rose-900">{tappingStats.failed}</span>
+                                    <span className="text-[10px] text-rose-600 font-semibold">rejected</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Search and Filter Row */}
+                        <div className="px-4 md:px-5 pb-3 flex flex-col md:flex-row items-stretch md:items-center gap-2.5 shrink-0">
+                            <div className="relative flex-1">
+                                <input
+                                    type="text"
+                                    value={tappingSearch}
+                                    onChange={(e) => setTappingSearch(e.target.value)}
+                                    placeholder="Search by worker name, RFID UID, role, or terminal..."
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-lg pl-8 pr-3 py-1.5 text-xs text-gray-800 focus:bg-white focus:border-blue-500 outline-none transition-colors"
+                                />
+                                <svg className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                </svg>
+                                {tappingSearch && (
+                                    <button
+                                        onClick={() => setTappingSearch('')}
+                                        className="absolute right-2.5 top-2 text-gray-400 hover:text-gray-600 text-xs cursor-pointer"
+                                    >
+                                        ✕
+                                    </button>
+                                )}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2">
+                                {/* Calendar Date Picker */}
+                                <div className={`flex items-center gap-1.5 border rounded-lg px-2.5 py-1 text-xs font-bold transition-all ${
+                                    tappingShowAllDates
+                                        ? 'bg-gray-100 border-gray-200 text-gray-400 opacity-60'
+                                        : 'bg-white border-gray-200 hover:border-blue-500 text-gray-800 shadow-2xs'
+                                }`}>
+                                    <svg className="w-3.5 h-3.5 text-blue-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                    </svg>
+                                    <input
+                                        type="date"
+                                        value={tappingSelectedDate}
+                                        disabled={tappingShowAllDates}
+                                        onChange={(e) => {
+                                            if (e.target.value) {
+                                                setTappingSelectedDate(e.target.value);
+                                                setTappingShowAllDates(false);
+                                            }
+                                        }}
+                                        className="bg-transparent text-xs font-bold text-gray-800 outline-none cursor-pointer disabled:cursor-not-allowed"
+                                        title="Click to pick any date from calendar"
+                                    />
+                                </div>
+
+                                {/* Today Quick Button */}
+                                {tappingSelectedDate !== todayISO && !tappingShowAllDates && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setTappingSelectedDate(todayISO);
+                                            setTappingShowAllDates(false);
+                                        }}
+                                        className="px-2.5 py-1.5 text-xs font-bold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors cursor-pointer border border-blue-200 shadow-2xs"
+                                        title="Jump back to today"
+                                    >
+                                        Today
+                                    </button>
+                                )}
+
+                                {/* All Dates Toggle */}
+                                <button
+                                    type="button"
+                                    onClick={() => setTappingShowAllDates(!tappingShowAllDates)}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
+                                        tappingShowAllDates
+                                            ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+                                            : 'bg-white hover:bg-gray-50 text-gray-700 border-gray-200 shadow-2xs'
+                                    }`}
+                                    title={tappingShowAllDates ? "Switch back to calendar date" : "Show all historical RFID taps across all dates"}
+                                >
+                                    {tappingShowAllDates ? '✓ All Dates' : 'All Dates'}
+                                </button>
+
+                                {/* Status Filter */}
+                                <select
+                                    value={tappingStatusFilter}
+                                    onChange={(e) => setTappingStatusFilter(e.target.value)}
+                                    className="bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-gray-700 outline-none cursor-pointer focus:border-blue-500 shadow-2xs"
+                                >
+                                    <option value="ALL">All Statuses</option>
+                                    <option value="SUCCESS">Success Only</option>
+                                    <option value="BLOCKED">Spam Blocked Only</option>
+                                    <option value="FAILED">Failed / Rejected Only</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        {/* Audit Table */}
+                        <div className="overflow-y-auto overflow-x-auto flex-1 px-4 md:px-5 pb-4">
+                            <table className="w-full text-left border-collapse min-w-[780px]">
+                                <thead>
+                                    <tr className="border-b border-gray-200 bg-gray-50/80 sticky top-0 z-10 text-[10px] font-extrabold text-gray-500 uppercase tracking-wider">
+                                        <th className="py-2.5 px-3">Time & Date</th>
+                                        <th className="py-2.5 px-3">Worker Info</th>
+                                        <th className="py-2.5 px-3">RFID Card UID</th>
+                                        <th className="py-2.5 px-3">Event / Action</th>
+                                        <th className="py-2.5 px-3">Status</th>
+                                        <th className="py-2.5 px-3">Terminal</th>
+                                        <th className="py-2.5 px-3">Message / Audit Details</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100 text-xs">
+                                    {tappingLogs.length === 0 ? (
+                                        <tr>
+                                            <td colSpan="7" className="py-12 text-center text-gray-400">
+                                                <div className="flex flex-col items-center justify-center gap-2">
+                                                    <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 text-base">
+                                                        📇
+                                                    </div>
+                                                    <span className="font-bold text-xs text-gray-600">No RFID Tapping Logs Found</span>
+                                                    <span className="text-[11px] text-gray-400 max-w-sm">
+                                                        {tappingSearch || tappingStatusFilter !== 'ALL'
+                                                            ? 'No logs matched your current filters. Try resetting the filters.'
+                                                            : 'Logs will appear here in real-time as workers tap their RFID cards on terminals or kiosks.'}
+                                                    </span>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        tappingLogs.map((log) => {
+                                            const isSuccess = log.status === 'SUCCESS';
+                                            const isBlocked = log.status === 'BLOCKED';
+                                            const isFailed = log.status === 'FAILED' || log.status === 'WARNING';
+
+                                            return (
+                                                <tr key={log.id} className="hover:bg-gray-50/80 transition-colors">
+                                                    <td className="py-2.5 px-3 whitespace-nowrap">
+                                                        <div className="font-extrabold text-gray-900">{log.time || '—'}</div>
+                                                        <div className="text-[10px] text-gray-400">{log.date}</div>
+                                                    </td>
+                                                    <td className="py-2.5 px-3 whitespace-nowrap">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="w-7 h-7 rounded-full bg-gray-100 text-gray-700 flex items-center justify-center font-bold text-[10px] shrink-0">
+                                                                {(log.worker_name || 'U').charAt(0).toUpperCase()}
+                                                            </div>
+                                                            <div>
+                                                                <div className="font-bold text-gray-900 text-xs">{log.worker_name || 'Unknown Worker'}</div>
+                                                                <div className="text-[10px] text-gray-400">{log.role || 'Unassigned'}</div>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="py-2.5 px-3 whitespace-nowrap">
+                                                        {log.rfid_uid ? (
+                                                            <span className="inline-block px-2 py-0.5 rounded bg-gray-100 border border-gray-200 font-mono text-[11px] font-bold text-gray-700 tracking-wider">
+                                                                {log.rfid_uid}
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-gray-400 text-[10px] italic">No Card UID</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="py-2.5 px-3 whitespace-nowrap">
+                                                        <span className="font-bold text-xs text-gray-800">
+                                                            {log.action}
+                                                        </span>
+                                                    </td>
+                                                    <td className="py-2.5 px-3 whitespace-nowrap">
+                                                        {isSuccess && (
+                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
+                                                                SUCCESS
+                                                            </span>
+                                                        )}
+                                                        {isBlocked && (
+                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-800 border border-amber-200">
+                                                                <span className="w-1.5 h-1.5 rounded-full bg-amber-600"></span>
+                                                                SPAM BLOCKED
+                                                            </span>
+                                                        )}
+                                                        {isFailed && (
+                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-100 text-rose-800 border border-rose-200">
+                                                                <span className="w-1.5 h-1.5 rounded-full bg-rose-600"></span>
+                                                                FAILED
+                                                            </span>
+                                                        )}
+                                                    </td>
+                                                    <td className="py-2.5 px-3 whitespace-nowrap">
+                                                        <span className="text-[11px] text-gray-600 font-medium">
+                                                            {log.terminal_id || 'ESP32 Gate'}
+                                                        </span>
+                                                        <span className="block text-[9px] text-gray-400 uppercase">
+                                                            Source: {log.scan_source || 'RFID'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="py-2.5 px-3 text-gray-600 text-[11px] max-w-[280px]">
+                                                        <p className="truncate" title={log.message || ''}>
+                                                            {log.message || '—'}
+                                                        </p>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div className="flex justify-between items-center p-4 border-t border-gray-100 bg-gray-50/50 shrink-0">
+                            <span className="text-[11px] text-gray-500 font-medium">
+                                Showing <strong>{tappingLogs.length}</strong> events · Auto-refreshes every 3.5s
+                            </span>
+                            <button
+                                type="button"
+                                onClick={() => setShowTappingHistory(false)}
+                                className="px-5 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+                            >
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </AdminLayout>
     )

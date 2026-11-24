@@ -124,11 +124,19 @@ export default function Projects() {
     const [dateError, setDateError] = useState('');
     const [contractAmountError, setContractAmountError] = useState('');
     const [projectDetailsError, setProjectDetailsError] = useState('');
+    const [titleError, setTitleError] = useState('');
+    const [floorsError, setFloorsError] = useState('');
+    const [lotAreaError, setLotAreaError] = useState('');
+    const [floorAreaError, setFloorAreaError] = useState('');
     const [contractAmountFocused, setContractAmountFocused] = useState(false);
     const [budgetProject, setBudgetProject] = useState(null);
     const contractAmountInputRef = useRef(null);
 
     const MAX_AMOUNT = 999999999999;
+    const MAX_TITLE_LENGTH = 50;
+    const MAX_FLOORS = 1000;
+    const MAX_LOT_AREA = 100000000;
+    const MAX_FLOOR_AREA = 5000000;
 
     const getTodayISO = () => {
         const d = new Date();
@@ -145,7 +153,60 @@ export default function Projects() {
         if (name === 'projectTypeOther' || name === 'buildingTypeOther') {
             value = capitalizeFirstLetter(value);
         }
-        if (name === 'startDate') {
+        if (name === 'title') {
+            if (value.length > MAX_TITLE_LENGTH) {
+                value = value.slice(0, MAX_TITLE_LENGTH);
+            }
+            if (!value || !value.trim()) {
+                setTitleError('Project title is required and cannot be blank or spaces only.');
+            } else if (/\d/.test(value)) {
+                setTitleError('Numbers are not allowed in the project title. Use letters, spaces, and punctuation only.');
+            } else {
+                setTitleError('');
+            }
+        } else if (name === 'numberOfFloors') {
+            if (value.length > 4) {
+                value = value.slice(0, 4);
+            }
+            if (value !== '') {
+                const num = Number(value);
+                if (!Number.isInteger(num) || num < 1) {
+                    setFloorsError('Number of floors must be a whole number (at least 1).');
+                } else if (num > MAX_FLOORS) {
+                    setFloorsError('Number of floors cannot exceed 1,000.');
+                } else {
+                    setFloorsError('');
+                }
+            } else {
+                setFloorsError(modalState === 'ADD' ? 'Number of floors is required.' : '');
+            }
+        } else if (name === 'lotArea') {
+            if (value !== '') {
+                const num = Number(value);
+                if (!Number.isFinite(num) || num <= 0) {
+                    setLotAreaError('Lot Area must be greater than 0.');
+                } else if (num > MAX_LOT_AREA) {
+                    setLotAreaError('Lot Area cannot exceed 100,000,000 m².');
+                } else {
+                    setLotAreaError('');
+                }
+            } else {
+                setLotAreaError(modalState === 'ADD' ? 'Lot Area is required.' : '');
+            }
+        } else if (name === 'floorArea') {
+            if (value !== '') {
+                const num = Number(value);
+                if (!Number.isFinite(num) || num <= 0) {
+                    setFloorAreaError('Floor Area must be greater than 0.');
+                } else if (num > MAX_FLOOR_AREA) {
+                    setFloorAreaError('Floor Area cannot exceed 5,000,000 m².');
+                } else {
+                    setFloorAreaError('');
+                }
+            } else {
+                setFloorAreaError(modalState === 'ADD' ? 'Floor Area is required.' : '');
+            }
+        } else if (name === 'startDate') {
             if (value && formData.targetDate && value > formData.targetDate) {
                 setDateError('Start date cannot be after target date.');
             } else {
@@ -227,6 +288,10 @@ export default function Projects() {
         setDateError('');
         setContractAmountError('');
         setProjectDetailsError('');
+        setTitleError('');
+        setFloorsError('');
+        setLotAreaError('');
+        setFloorAreaError('');
         setContractAmountFocused(false);
         setModalState('ADD');
     };
@@ -277,6 +342,10 @@ export default function Projects() {
         setDateError('');
         setContractAmountError('');
         setProjectDetailsError('');
+        setTitleError('');
+        setFloorsError('');
+        setLotAreaError('');
+        setFloorAreaError('');
         setContractAmountFocused(false);
 
         // 1. If project already has stored address_obj, load it directly
@@ -312,22 +381,66 @@ export default function Projects() {
 
     const handleInitialSubmit = (e) => {
         e.preventDefault();
+
+        // 1. Validate Project Title (No numbers, max 50 chars, no blank/whitespace only)
+        const trimmedTitle = (formData.title || '').trim();
+        if (!trimmedTitle) {
+            setTitleError('Project title is required and cannot be blank or spaces only.');
+            return;
+        }
+        if (/\d/.test(formData.title)) {
+            setTitleError('Numbers are not allowed in the project title. Use letters, spaces, and punctuation only.');
+            return;
+        }
+        if (formData.title.length > MAX_TITLE_LENGTH) {
+            setTitleError('Project title cannot exceed 50 characters.');
+            return;
+        }
+
+        // 2. Validate Number of Floors (1 to 1,000)
+        const floorCount = formData.numberOfFloors === '' ? null : Number(formData.numberOfFloors);
+        if (modalState === 'ADD' || formData.numberOfFloors !== '') {
+            if (floorCount === null || !Number.isInteger(floorCount) || floorCount < 1) {
+                setFloorsError('Enter a valid number of floors (at least 1).');
+                return;
+            }
+            if (floorCount > MAX_FLOORS) {
+                setFloorsError('Number of floors cannot exceed 1,000.');
+                return;
+            }
+        }
+
+        // 3. Validate Lot Area (Max 100,000,000)
+        const lotArea = formData.lotArea === '' ? null : Number(formData.lotArea);
+        if (modalState === 'ADD' || formData.lotArea !== '') {
+            if (lotArea === null || !Number.isFinite(lotArea) || lotArea <= 0) {
+                setLotAreaError('Lot Area must be greater than 0.');
+                return;
+            }
+            if (lotArea > MAX_LOT_AREA) {
+                setLotAreaError('Lot Area cannot exceed 100,000,000 m².');
+                return;
+            }
+        }
+
+        // 4. Validate Floor Area (Max 5,000,000)
+        const floorArea = formData.floorArea === '' ? null : Number(formData.floorArea);
+        if (modalState === 'ADD' || formData.floorArea !== '') {
+            if (floorArea === null || !Number.isFinite(floorArea) || floorArea <= 0) {
+                setFloorAreaError('Floor Area must be greater than 0.');
+                return;
+            }
+            if (floorArea > MAX_FLOOR_AREA) {
+                setFloorAreaError('Floor Area cannot exceed 5,000,000 m².');
+                return;
+            }
+        }
+
         const projectType = resolveDropdownType(formData.projectType, formData.projectTypeOther);
         const buildingType = resolveDropdownType(formData.buildingType, formData.buildingTypeOther);
         if (modalState === 'ADD') {
-            const floorCount = Number(formData.numberOfFloors);
-            const lotArea = Number(formData.lotArea);
-            const floorArea = Number(formData.floorArea);
             if (!projectType || !buildingType) {
                 setProjectDetailsError('Project Type and Building Type are required.');
-                return;
-            }
-            if (!Number.isInteger(floorCount) || floorCount < 1) {
-                setProjectDetailsError('Enter a valid number of floors (at least 1).');
-                return;
-            }
-            if (!Number.isFinite(lotArea) || lotArea <= 0 || !Number.isFinite(floorArea) || floorArea <= 0) {
-                setProjectDetailsError('Lot Area and Floor Area must be greater than 0.');
                 return;
             }
         }
@@ -346,6 +459,11 @@ export default function Projects() {
         }
         setDateError('');
         setContractAmountError('');
+        setProjectDetailsError('');
+        setTitleError('');
+        setFloorsError('');
+        setLotAreaError('');
+        setFloorAreaError('');
         setModalState('CONFIRM');
     };
 
@@ -618,8 +736,33 @@ export default function Projects() {
                         <div className="p-4 overflow-y-auto">
                             <form onSubmit={handleInitialSubmit} className="flex flex-col gap-3">
                                 <div>
-                                    <label className="block text-[11px] font-bold text-gray-700 mb-1 uppercase">Project Title <span className="text-[#A63228]">*</span></label>
-                                    <input type="text" name="title" value={formData.title} onChange={handleInputChange} required className="w-full bg-[#f4f1ee] rounded-md px-2.5 py-1.5 text-[10px] font-medium focus:border-[#A63228] outline-none" placeholder="e.g. House Construction" />
+                                    <div className="flex justify-between items-center mb-1">
+                                        <label className="block text-[11px] font-bold text-gray-700 uppercase">
+                                            Project Title <span className="text-[#A63228]">*</span>
+                                        </label>
+                                        <span className={`text-[10px] font-semibold ${formData.title.length >= 50 ? 'text-red-600' : 'text-gray-400'}`}>
+                                            {formData.title.length}/50
+                                        </span>
+                                    </div>
+                                    <input
+                                        type="text"
+                                        name="title"
+                                        maxLength={50}
+                                        value={formData.title}
+                                        onChange={handleInputChange}
+                                        required
+                                        className={`w-full bg-[#f4f1ee] rounded-md px-2.5 py-1.5 text-[10px] font-medium outline-none transition-all ${
+                                            titleError
+                                                ? 'border-2 border-red-500 bg-red-50/50 text-red-900 focus:border-red-600'
+                                                : 'border border-transparent focus:border-[#A63228]'
+                                        }`}
+                                        placeholder="e.g. Modern Residence (Letters only, max 50 chars)"
+                                    />
+                                    {titleError && (
+                                        <p className="text-[10px] text-red-600 font-bold mt-1 flex items-center gap-1">
+                                            <span>⚠️</span> {titleError}
+                                        </p>
+                                    )}
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-2">
@@ -676,52 +819,91 @@ export default function Projects() {
                                         )}
                                     </div>
                                     <div>
-                                        <label className="block text-[11px] font-bold text-gray-700 mb-1 uppercase">
-                                            Number of Floors {modalState === 'ADD' && <span className="text-[#A63228]">*</span>}
-                                        </label>
+                                        <div className="flex justify-between items-center mb-1">
+                                            <label className="block text-[11px] font-bold text-gray-700 uppercase">
+                                                Number of Floors {modalState === 'ADD' && <span className="text-[#A63228]">*</span>}
+                                            </label>
+                                            <span className="text-[9px] text-gray-400 font-medium">Max 1,000</span>
+                                        </div>
                                         <input
                                             type="number"
                                             name="numberOfFloors"
                                             min="1"
+                                            max="1000"
                                             step="1"
                                             value={formData.numberOfFloors}
                                             onChange={handleInputChange}
                                             required={modalState === 'ADD'}
-                                            className="w-full bg-[#f4f1ee] rounded-md px-2.5 py-1.5 text-[10px] font-medium focus:border-[#A63228] outline-none"
-                                            placeholder="e.g. 2"
+                                            className={`w-full bg-[#f4f1ee] rounded-md px-2.5 py-1.5 text-[10px] font-medium outline-none transition-all ${
+                                                floorsError
+                                                    ? 'border-2 border-red-500 bg-red-50/50 text-red-900 focus:border-red-600'
+                                                    : 'border border-transparent focus:border-[#A63228]'
+                                            }`}
+                                            placeholder="e.g. 2 (1 - 1000)"
                                         />
+                                        {floorsError && (
+                                            <p className="text-[10px] text-red-600 font-bold mt-1 flex items-center gap-1">
+                                                <span>⚠️</span> {floorsError}
+                                            </p>
+                                        )}
                                     </div>
                                     <div>
-                                        <label className="block text-[11px] font-bold text-gray-700 mb-1 uppercase">
-                                            Lot Area (m²) {modalState === 'ADD' && <span className="text-[#A63228]">*</span>}
-                                        </label>
+                                        <div className="flex justify-between items-center mb-1">
+                                            <label className="block text-[11px] font-bold text-gray-700 uppercase">
+                                                Lot Area (m²) {modalState === 'ADD' && <span className="text-[#A63228]">*</span>}
+                                            </label>
+                                            <span className="text-[9px] text-gray-400 font-medium">Max 100M</span>
+                                        </div>
                                         <input
                                             type="number"
                                             name="lotArea"
                                             min="0.01"
+                                            max="100000000"
                                             step="any"
                                             value={formData.lotArea}
                                             onChange={handleInputChange}
                                             required={modalState === 'ADD'}
-                                            className="w-full bg-[#f4f1ee] rounded-md px-2.5 py-1.5 text-[10px] font-medium focus:border-[#A63228] outline-none"
-                                            placeholder="e.g. 100"
+                                            className={`w-full bg-[#f4f1ee] rounded-md px-2.5 py-1.5 text-[10px] font-medium outline-none transition-all ${
+                                                lotAreaError
+                                                    ? 'border-2 border-red-500 bg-red-50/50 text-red-900 focus:border-red-600'
+                                                    : 'border border-transparent focus:border-[#A63228]'
+                                            }`}
+                                            placeholder="e.g. 100 (Max 100M)"
                                         />
+                                        {lotAreaError && (
+                                            <p className="text-[10px] text-red-600 font-bold mt-1 flex items-center gap-1">
+                                                <span>⚠️</span> {lotAreaError}
+                                            </p>
+                                        )}
                                     </div>
                                     <div>
-                                        <label className="block text-[11px] font-bold text-gray-700 mb-1 uppercase">
-                                            Floor Area (m²) {modalState === 'ADD' && <span className="text-[#A63228]">*</span>}
-                                        </label>
+                                        <div className="flex justify-between items-center mb-1">
+                                            <label className="block text-[11px] font-bold text-gray-700 uppercase">
+                                                Floor Area (m²) {modalState === 'ADD' && <span className="text-[#A63228]">*</span>}
+                                            </label>
+                                            <span className="text-[9px] text-gray-400 font-medium">Max 5M</span>
+                                        </div>
                                         <input
                                             type="number"
                                             name="floorArea"
                                             min="0.01"
+                                            max="5000000"
                                             step="any"
                                             value={formData.floorArea}
                                             onChange={handleInputChange}
                                             required={modalState === 'ADD'}
-                                            className="w-full bg-[#f4f1ee] rounded-md px-2.5 py-1.5 text-[10px] font-medium focus:border-[#A63228] outline-none"
-                                            placeholder="e.g. 80"
+                                            className={`w-full bg-[#f4f1ee] rounded-md px-2.5 py-1.5 text-[10px] font-medium outline-none transition-all ${
+                                                floorAreaError
+                                                    ? 'border-2 border-red-500 bg-red-50/50 text-red-900 focus:border-red-600'
+                                                    : 'border border-transparent focus:border-[#A63228]'
+                                            }`}
+                                            placeholder="e.g. 80 (Max 5M)"
                                         />
+                                        {floorAreaError && (
+                                            <p className="text-[10px] text-red-600 font-bold mt-1 flex items-center gap-1">
+                                                <span>⚠️</span> {floorAreaError}
+                                            </p>
+                                        )}
                                     </div>
                                     <div className="col-span-2">
                                         <label className="block text-[11px] font-bold text-gray-700 mb-1 uppercase">
@@ -842,7 +1024,15 @@ export default function Projects() {
 
                                 <button
                                     type="submit"
-                                    disabled={Boolean(dateError) || Boolean(contractAmountError) || parseFloat(formData.contractAmount || 0) > MAX_AMOUNT}
+                                    disabled={
+                                        Boolean(titleError) ||
+                                        Boolean(floorsError) ||
+                                        Boolean(lotAreaError) ||
+                                        Boolean(floorAreaError) ||
+                                        Boolean(dateError) ||
+                                        Boolean(contractAmountError) ||
+                                        parseFloat(formData.contractAmount || 0) > MAX_AMOUNT
+                                    }
                                     className="w-full mt-2 py-2 bg-[#E8C547] text-gray-900 rounded-lg text-[10px] font-bold hover:bg-[#d4b33d] transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     Review & Save

@@ -279,7 +279,7 @@ export default function Workers() {
         if (cleanRfid) {
             const duplicate = workers.find(w => String(w.id) !== String(formData.id) && w.rfid_uid && String(w.rfid_uid).trim().replace(/[\s:]/g, '').toUpperCase() === cleanRfid);
             if (duplicate) {
-                alert(`Bawal mag-save: Ang RFID card (${cleanRfid}) ay kasalukuyang nakatalaga na kay ${duplicate.full_name || duplicate.name || 'ibang worker'} (${duplicate.role || 'Worker'}). Bawal ang parehong RFID sa magkaibang account.`);
+                alert(`Cannot save: RFID card (${cleanRfid}) is currently assigned to ${duplicate.full_name || duplicate.name || 'another worker'} (${duplicate.role || 'Worker'}). The same RFID card cannot be assigned to multiple accounts.`);
                 return;
             }
         }
@@ -998,13 +998,13 @@ export default function Workers() {
                                                                 <span className="text-xs">🚫</span>
                                                                 <div className="flex-1">
                                                                     <div className="text-[11px] font-extrabold text-red-900 uppercase">
-                                                                        Bawal ang Duplicate RFID Card!
+                                                                        Duplicate RFID Card Not Allowed!
                                                                     </div>
                                                                     <p className="text-[10px] text-red-800 mt-0.5 leading-snug">
-                                                                        Ang card na <code className="font-mono bg-white px-1 py-0.2 rounded border border-red-200 font-bold">{cleanCurrent}</code> ay kasalukuyang nakatalaga na kay <strong className="text-red-950 underline">{duplicateWorker.full_name || `${duplicateWorker.first_name} ${duplicateWorker.last_name}`}</strong> ({duplicateWorker.role || 'Worker'}).
+                                                                        Card <code className="font-mono bg-white px-1 py-0.2 rounded border border-red-200 font-bold">{cleanCurrent}</code> is currently assigned to <strong className="text-red-950 underline">{duplicateWorker.full_name || `${duplicateWorker.first_name} ${duplicateWorker.last_name}`}</strong> ({duplicateWorker.role || 'Worker'}).
                                                                     </p>
                                                                     <p className="text-[10px] text-red-700 mt-0.5 font-medium italic">
-                                                                        Bawal maglagay ng parehong RFID card sa magkaibang account. Mangyaring gumamit ng ibang card.
+                                                                        The same RFID card cannot be assigned to multiple accounts. Please use a different card.
                                                                     </p>
                                                                 </div>
                                                             </div>
@@ -1033,7 +1033,7 @@ export default function Workers() {
                                                         <button
                                                             type="button"
                                                             onClick={() => {
-                                                                if (window.confirm(`Sigurado ka bang nais mong tanggalin ang RFID card (${formData.rfid_uid}) para kay ${formData.firstName || 'worker'}? Hindi na gagana ang lumang card.`)) {
+                                                                if (window.confirm(`Are you sure you want to remove RFID card (${formData.rfid_uid}) for ${formData.firstName || 'worker'}? The old card will no longer work.`)) {
                                                                     setFormData(prev => ({ ...prev, rfid_uid: '' }));
                                                                     setTapAlert('RFID card unlinked. Click Save to apply.');
                                                                 }
