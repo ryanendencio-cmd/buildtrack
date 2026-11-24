@@ -29,7 +29,8 @@ const {
   validateClosedShiftTimeChanges,
   evaluateTwoSessions,
   calculateOvertimePay,
-  calculateDailyEarnings
+  calculateDailyEarnings,
+  validateEarlyOutEligibility
 } = require('./attendance-rules')
 
 const db = new MySQLFirestoreAdapter({
@@ -3237,6 +3238,19 @@ async function startServer() {
       return res.status(400).json({ error: 'Worker, date, requested time, and reason are required.' })
     }
     try {
+      const records = await db.collection('attendance').where('date', '==', date).get()
+      const attendanceRecord = records.docs.find(doc =>
+        String(doc.data().worker_id || '') === String(worker_id)
+      ) || records.docs.find(doc =>
+        String(doc.data().worker_name || doc.data().name || '').trim().toLowerCase() ===
+        String(worker_name || '').trim().toLowerCase()
+      )
+
+      const eligibility = validateEarlyOutEligibility(attendanceRecord ? attendanceRecord.data() : null)
+      if (!eligibility.allowed) {
+        return res.status(400).json({ error: eligibility.error })
+      }
+
       const requests = await db.collection('early_out_requests')
         .where('worker_id', '==', String(worker_id))
         .get()
@@ -3297,6 +3311,10 @@ async function startServer() {
           return res.status(404).json({ error: 'No attendance record exists for this worker and date; request remains pending.' })
         }
         const current = attendanceRecord.data()
+        const eligibility = validateEarlyOutEligibility(current)
+        if (!eligibility.allowed) {
+          return res.status(400).json({ error: eligibility.error })
+        }
         if (current.afternoon_out && current.afternoon_out !== '—') {
           return res.status(409).json({ error: 'The worker already has a recorded time out for this date.' })
         }

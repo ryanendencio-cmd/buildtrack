@@ -2378,6 +2378,62 @@ footer {
    without sidebars, navbars, headers, and buttons.
 ══════════════════════════════════════════════════════════ */
 @media print {
+  /* 0. FORCE LIGHT/WHITE THEME IN PRINT (Override Dark Mode overrides) */
+  html,
+  html.dark,
+  body,
+  html.dark body {
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #111827 !important;
+    color-scheme: light !important;
+  }
+
+  html.dark *,
+  html.dark .bg-white,
+  html.dark .bg-\[\#f3efea\],
+  html.dark div,
+  html.dark table,
+  html.dark thead,
+  html.dark tbody,
+  html.dark tr,
+  html.dark td,
+  html.dark th {
+    color: #111827 !important;
+    text-shadow: none !important;
+    box-shadow: none !important;
+  }
+
+  html.dark .bg-white,
+  html.dark .print-payslip-document {
+    background-color: #ffffff !important;
+    background: #ffffff !important;
+    color: #111827 !important;
+  }
+
+  html.dark .text-gray-900,
+  html.dark .text-gray-800,
+  html.dark .text-gray-700,
+  html.dark .text-gray-600 {
+    color: #111827 !important;
+  }
+
+  html.dark .text-gray-500,
+  html.dark .text-gray-400 {
+    color: #4b5563 !important;
+  }
+
+  html.dark .border-gray-200,
+  html.dark .border-gray-300,
+  html.dark .border-gray-400,
+  html.dark .border-gray-900 {
+    border-color: #d1d5db !important;
+  }
+
+  html.dark .border-gray-900 {
+    border-color: #111827 !important;
+  }
+
   /* 1. Hide navigation, sidebar, headers, and UI controls */
   aside,
   nav,

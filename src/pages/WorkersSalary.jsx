@@ -323,7 +323,8 @@ export default function WorkersSalary() {
         </div>
       </div>
 
-      {activeTab === 'worksheet' ? (
+      <div className={selectedWorkerModal ? "print:hidden" : ""}>
+        {activeTab === 'worksheet' ? (
         <>
           {/* ── CUTOFF FILTER CONTROLS ── */}
           <div className="bg-white rounded-xl border border-gray-100 p-3 shadow-xs mb-3 print:hidden">
@@ -918,9 +919,12 @@ export default function WorkersSalary() {
         </div>
       )}
 
-      {/* ── DETAILED WORKER PAYSLIP MODAL ── */}
+
+      </div>
+
+      {/* ── DETAILED WORKER PAYSLIP MODAL (SCREEN ONLY) ── */}
       {selectedWorkerModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 print:hidden">
           <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-gray-100 overflow-hidden">
             {/* Modal Header */}
             <div className="p-3.5 bg-gray-900 text-white flex items-center justify-between">
@@ -1102,6 +1106,183 @@ export default function WorkersSalary() {
           </div>
         </div>
       )}
+
+      {/* ── OFFICIAL PRINTABLE INDIVIDUAL WORKER PAYSLIP (PRINT ONLY) ── */}
+      {selectedWorkerModal && (
+        <div className="hidden print:block w-full bg-white text-gray-900 font-sans print-payslip-document">
+          {/* Official Company Header matching Summary */}
+          <div className="border-b-2 border-gray-900 pb-3 mb-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-[#A63228] text-white flex items-center justify-center font-black text-lg tracking-wider rounded">
+                  S-CON
+                </div>
+                <div>
+                  <h1 className="text-xl font-black uppercase tracking-tight text-gray-900">
+                    S-CON BUILDTRACK
+                  </h1>
+                  <p className="text-[10px] tracking-widest uppercase font-bold text-gray-500">
+                    Official Individual Employee Payslip
+                  </p>
+                </div>
+              </div>
+              <div className="text-right text-[10px] text-gray-500 font-medium">
+                <div>Printed: {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
+                <div className="font-bold text-gray-700">Project: {projects.find(p => String(p.id) === String(selectedProject))?.name || 'All Projects'}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Worker Info & Period Summary Cards */}
+          <div className="grid grid-cols-4 gap-3 mb-4 p-3 border border-gray-300 rounded bg-gray-50/50 text-[11px]">
+            <div>
+              <span className="text-[9px] uppercase font-bold text-gray-500 block">Employee Name</span>
+              <span className="font-black text-gray-900 text-xs block">{selectedWorkerModal.worker_name}</span>
+              <span className="text-[10px] text-gray-600 font-semibold">{selectedWorkerModal.role}</span>
+            </div>
+            <div>
+              <span className="text-[9px] uppercase font-bold text-gray-500 block">Cutoff Period</span>
+              <span className="font-bold text-gray-900 block">{startDate} to {endDate}</span>
+              <span className="text-[10px] text-gray-500">Rate: ₱{Number(selectedWorkerModal.daily_rate).toLocaleString()}/day (₱{selectedWorkerModal.hourly_rate}/hr)</span>
+            </div>
+            <div>
+              <span className="text-[9px] uppercase font-bold text-gray-500 block">Total Attendance</span>
+              <span className="font-bold text-gray-900 block">{selectedWorkerModal.worked_days} Days Worked</span>
+              <span className="text-[10px] text-gray-500">{selectedWorkerModal.total_hours} Recorded Hours</span>
+            </div>
+            <div className="bg-white border-2 border-gray-900 p-2 rounded text-right">
+              <span className="text-[9px] uppercase font-black text-gray-600 block">Net Take-Home Pay</span>
+              <span className="text-base font-black text-gray-900 block">
+                ₱{Number(selectedWorkerModal.net_pay).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            </div>
+          </div>
+
+          {/* Complete Attendance Breakdown Table (Unpaginated) */}
+          <div className="mb-4">
+            <h3 className="text-xs font-black uppercase tracking-wider text-gray-800 mb-2 border-b border-gray-300 pb-1 flex justify-between">
+              <span>Attendance & Daily Wage Breakdown</span>
+              <span className="text-[10px] font-normal text-gray-500">Full Period Log ({selectedWorkerModal.daily_logs?.length || 0} Days)</span>
+            </h3>
+            <table className="w-full text-left border-collapse border border-gray-300 text-[10px]">
+              <thead>
+                <tr className="bg-gray-100 border-b border-gray-300 text-gray-700 font-extrabold uppercase text-[9px]">
+                  <th className="py-1 px-2 border-r border-gray-300">Date</th>
+                  <th className="py-1 px-2 border-r border-gray-300 text-center">Morning Shift</th>
+                  <th className="py-1 px-2 border-r border-gray-300 text-center">Afternoon Shift</th>
+                  <th className="py-1 px-2 border-r border-gray-300 text-center">Status</th>
+                  <th className="py-1 px-2 border-r border-gray-300 text-center">Hours</th>
+                  <th className="py-1 px-2 border-r border-gray-300 text-right">OT Pay</th>
+                  <th className="py-1 px-2 text-right">Earned Wage</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {selectedWorkerModal.daily_logs?.map(log => (
+                  <tr key={log.date} className="border-b border-gray-200">
+                    <td className="py-1 px-2 font-bold text-gray-900 border-r border-gray-200">{log.date}</td>
+                    <td className="py-1 px-2 text-center text-gray-700 font-mono border-r border-gray-200">
+                      {log.morning_in !== '—' ? `${log.morning_in} → ${log.morning_out}` : '—'}
+                    </td>
+                    <td className="py-1 px-2 text-center text-gray-700 font-mono border-r border-gray-200">
+                      {log.afternoon_in !== '—' ? `${log.afternoon_in} → ${log.afternoon_out}` : '—'}
+                    </td>
+                    <td className="py-1 px-2 text-center border-r border-gray-200 font-bold uppercase text-[9px]">
+                      {log.status}
+                    </td>
+                    <td className="py-1 px-2 text-center font-bold text-gray-800 border-r border-gray-200">{log.hours}h</td>
+                    <td className="py-1 px-2 text-right font-medium border-r border-gray-200">
+                      {Number(log.overtime_pay || 0) > 0 ? `₱${Number(log.overtime_pay).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
+                    </td>
+                    <td className="py-1 px-2 text-right font-bold text-gray-900">
+                      ₱{Number(log.earned).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Cash Advances Deductions Table if any */}
+          {selectedWorkerModal.cash_advances?.length > 0 && (
+            <div className="mb-4">
+              <h3 className="text-xs font-black uppercase tracking-wider text-gray-800 mb-1 border-b border-gray-300 pb-1">
+                Cash Advance Deductions
+              </h3>
+              <table className="w-full text-left border-collapse border border-gray-300 text-[10px]">
+                <thead>
+                  <tr className="bg-gray-100 border-b border-gray-300 text-gray-700 font-extrabold uppercase text-[9px]">
+                    <th className="py-1 px-2 border-r border-gray-300">Date Issued</th>
+                    <th className="py-1 px-2 border-r border-gray-300">Purpose / Reason</th>
+                    <th className="py-1 px-2 text-right">Deducted Amount</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {selectedWorkerModal.cash_advances.map(ca => (
+                    <tr key={ca.id} className="border-b border-gray-200">
+                      <td className="py-1 px-2 border-r border-gray-200 font-bold">{ca.date}</td>
+                      <td className="py-1 px-2 border-r border-gray-200 text-gray-700">{ca.reason}</td>
+                      <td className="py-1 px-2 text-right font-bold text-red-700">
+                        -₱{Number(ca.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Earnings & Deductions Computation Box */}
+          <div className="grid grid-cols-2 gap-4 mb-6 text-[10px]">
+            <div className="border border-gray-300 rounded p-3 bg-gray-50 space-y-1.5">
+              <span className="text-[9px] font-black uppercase text-gray-600 block border-b border-gray-200 pb-1">Gross Earnings Breakdown</span>
+              <div className="flex justify-between">
+                <span>Regular Wages Earned:</span>
+                <span className="font-bold">₱{Number(selectedWorkerModal.regular_earnings).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Overtime Pay (OT):</span>
+                <span className="font-bold">+₱{Number(selectedWorkerModal.overtime_pay || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              </div>
+              <div className="flex justify-between pt-1 border-t border-gray-200 font-bold text-gray-900">
+                <span>Total Gross Wages:</span>
+                <span>₱{Number(selectedWorkerModal.gross_pay).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              </div>
+            </div>
+
+            <div className="border border-gray-300 rounded p-3 bg-gray-50 space-y-1.5">
+              <span className="text-[9px] font-black uppercase text-gray-600 block border-b border-gray-200 pb-1">Deductions & Net Pay</span>
+              <div className="flex justify-between text-red-700">
+                <span>Late & Attendance Deductions:</span>
+                <span className="font-bold">-₱{Number(selectedWorkerModal.late_deductions || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              </div>
+              <div className="flex justify-between text-red-700">
+                <span>Cash Advance Deductions:</span>
+                <span className="font-bold">-₱{Number(selectedWorkerModal.cash_advance_deductions || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              </div>
+              <div className="flex justify-between pt-1 border-t-2 border-gray-900 font-black text-xs text-gray-900">
+                <span className="uppercase">NET TAKE-HOME PAY:</span>
+                <span>₱{Number(selectedWorkerModal.net_pay).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Official Signatures matching Print Summary */}
+          <div className="grid grid-cols-2 gap-12 mt-8 pt-4 border-t border-gray-300 text-center text-[10px]">
+            <div>
+              <div className="border-b border-gray-400 w-48 mx-auto mb-1"></div>
+              <p className="font-bold text-gray-800">{selectedWorkerModal.worker_name}</p>
+              <p className="text-gray-500 text-[9px] uppercase tracking-wider">Received by Employee (Signature over printed name)</p>
+            </div>
+            <div>
+              <div className="border-b border-gray-400 w-48 mx-auto mb-1"></div>
+              <p className="font-bold text-gray-800">Engr. Aldrich Sotalbo</p>
+              <p className="text-gray-500 text-[9px] uppercase tracking-wider">Approved by Project Engineer / Management</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+
     </AdminLayout>
   );
 }

@@ -247,6 +247,42 @@ function calculateDailyEarnings({
   }
 }
 
+function validateEarlyOutEligibility(attendanceRecord) {
+  if (!attendanceRecord) {
+    return {
+      allowed: false,
+      error: 'Cannot request an Early Out without an attendance record for this date.'
+    }
+  }
+
+  const hasTimeIn = Boolean(
+    (attendanceRecord.morning_in && attendanceRecord.morning_in !== '—' && attendanceRecord.morning_in !== '--:--') ||
+    (attendanceRecord.afternoon_in && attendanceRecord.afternoon_in !== '—' && attendanceRecord.afternoon_in !== '--:--') ||
+    (attendanceRecord.time_in && attendanceRecord.time_in !== '—' && attendanceRecord.time_in !== '--:--')
+  )
+
+  if (!hasTimeIn) {
+    return {
+      allowed: false,
+      error: 'Cannot request an Early Out without a recorded Time In for this date.'
+    }
+  }
+
+  const hasTimeOut = Boolean(
+    (attendanceRecord.afternoon_out && attendanceRecord.afternoon_out !== '—' && attendanceRecord.afternoon_out !== '--:--') ||
+    (attendanceRecord.time_out && attendanceRecord.time_out !== '—' && attendanceRecord.time_out !== '--:--')
+  )
+
+  if (hasTimeOut) {
+    return {
+      allowed: false,
+      error: 'Cannot request an Early Out because a Time Out has already been recorded for this date.'
+    }
+  }
+
+  return { allowed: true }
+}
+
 module.exports = {
   DEFAULT_ATTENDANCE_SETTINGS,
   normalizeAttendanceSettings,
@@ -257,5 +293,6 @@ module.exports = {
   validateClosedShiftTimeChanges,
   evaluateTwoSessions,
   calculateOvertimePay,
-  calculateDailyEarnings
+  calculateDailyEarnings,
+  validateEarlyOutEligibility
 }

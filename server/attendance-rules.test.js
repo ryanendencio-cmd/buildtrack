@@ -8,7 +8,8 @@ const {
   validateClosedShiftTimeChanges,
   evaluateTwoSessions,
   calculateOvertimePay,
-  calculateDailyEarnings
+  calculateDailyEarnings,
+  validateEarlyOutEligibility
 } = require('./attendance-rules')
 
 test('morning time-in boundaries classify all configured tiers', () => {
@@ -139,4 +140,39 @@ test('settings validation rejects unordered or malformed time windows', () => {
   assert.equal(typeof validateAttendanceSettings({ ...DEFAULT_ATTENDANCE_SETTINGS, morning_time_in_close: '08:05' }), 'string')
   assert.equal(typeof validateAttendanceSettings({ ...DEFAULT_ATTENDANCE_SETTINGS, afternoon_time_out_close: 'bad' }), 'string')
   assert.equal(typeof validateAttendanceSettings(DEFAULT_ATTENDANCE_SETTINGS), 'object')
+})
+
+test('workers without a recorded time in cannot request early out', () => {
+  assert.deepEqual(validateEarlyOutEligibility(null), {
+    allowed: false,
+    error: 'Cannot request an Early Out without an attendance record for this date.'
+  })
+  assert.deepEqual(validateEarlyOutEligibility({ morning_in: '—', afternoon_in: '—' }), {
+    allowed: false,
+    error: 'Cannot request an Early Out without a recorded Time In for this date.'
+  })
+  assert.deepEqual(validateEarlyOutEligibility({ morning_in: '--:--', time_in: '' }), {
+    allowed: false,
+    error: 'Cannot request an Early Out without a recorded Time In for this date.'
+  })
+})
+
+test('workers with a recorded time in can request early out unless time out is already recorded', () => {
+  assert.deepEqual(validateEarlyOutEligibility({ morning_in: '08:00 AM' }), {
+    allowed: true
+  })
+  assert.deepEqual(validateEarlyOutEligibility({ afternoon_in: '01:00 PM' }), {
+    allowed: true
+  })
+  assert.deepEqual(validateEarlyOutEligibility({ time_in: '08:00 AM' }), {
+    allowed: true
+  })
+  assert.deepEqual(validateEarlyOutEligibility({ morning_in: '08:00 AM', afternoon_out: '05:00 PM' }), {
+    allowed: false,
+    error: 'Cannot request an Early Out because a Time Out has already been recorded for this date.'
+  })
+  assert.deepEqual(validateEarlyOutEligibility({ morning_in: '08:00 AM', time_out: '05:00 PM' }), {
+    allowed: false,
+    error: 'Cannot request an Early Out because a Time Out has already been recorded for this date.'
+  })
 })
