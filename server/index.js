@@ -32,6 +32,11 @@ const {
   calculateDailyEarnings,
   validateEarlyOutEligibility
 } = require('./attendance-rules')
+const {
+  isExpoPushToken,
+  sendExpoPushNotification,
+  sendPushNotificationToTokens
+} = require('./push-notification')
 
 const db = new MySQLFirestoreAdapter({
   type: getDatabaseType(),
@@ -1527,6 +1532,43 @@ async function startServer() {
       }
 
       const docRef = await db.collection('notifications').add(notifData)
+
+      // ── DISPATCH REAL MOBILE OS PUSH NOTIFICATION ──
+      const targetWorkerId = worker_id || target_id
+      if (targetWorkerId) {
+        const idStr = String(targetWorkerId)
+        const queries = [
+          db.collection('worker_device_tokens').where('worker_id', '==', idStr).get()
+        ]
+        const numVal = Number(targetWorkerId)
+        if (!isNaN(numVal) && String(numVal) === idStr) {
+          queries.push(db.collection('worker_device_tokens').where('worker_id', '==', numVal).get())
+        }
+        Promise.all(queries).then(snaps => {
+          const tokenSet = new Set()
+          for (const snap of snaps) {
+            for (const doc of snap.docs) {
+              const t = doc.data()?.token
+              if (t) tokenSet.add(t)
+            }
+          }
+          const tokens = Array.from(tokenSet)
+          if (tokens.length > 0) {
+            sendPushNotificationToTokens(tokens, {
+              title: title || 'BuildTrack Notification',
+              message: message || '',
+              data: {
+                type,
+                action,
+                severity,
+                worker_id: idStr,
+                notification_id: docRef.id
+              }
+            }).catch(pushErr => console.error('Push dispatch error:', pushErr.message))
+          }
+        }).catch(tokenErr => console.error('Failed to load device tokens:', tokenErr.message))
+      }
+
       return { id: docRef.id, ...notifData }
     } catch (err) {
       console.error('Failed to record notification:', err.message)
@@ -1694,6 +1736,68 @@ async function startServer() {
     } catch (error) {
       console.error('Failed to delete worker announcements:', error.message)
       res.status(500).json({ error: 'Unable to delete announcements.' })
+    }
+  })
+
+  // ── REGISTER MOBILE DEVICE PUSH TOKEN ──
+  app.post('/api/worker/device-token', async (req, res) => {
+    const workerId = req.worker?.id
+    if (!workerId) {
+      return res.status(403).json({ error: 'Worker authentication is required.' })
+    }
+
+    const { token, platform, device_name } = req.body
+    if (!token || typeof token !== 'string' || token.trim().length === 0) {
+      return res.status(400).json({ error: 'A valid device push token is required.' })
+    }
+
+    const cleanToken = token.trim()
+    try {
+      const tokenId = crypto.createHash('sha256').update(`${workerId}:${cleanToken}`).digest('hex')
+      await db.collection('worker_device_tokens').doc(tokenId).set({
+        worker_id: String(workerId),
+        token: cleanToken,
+        platform: platform || 'mobile',
+        device_name: device_name || null,
+        updated_at: FieldValue.serverTimestamp()
+      }, { merge: true })
+
+      res.json({ success: true, message: 'Device push token registered successfully.' })
+    } catch (err) {
+      console.error('Failed to register device push token:', err.message)
+      res.status(500).json({ error: 'Failed to register device token.' })
+    }
+  })
+
+  // ── FLUTTER MOBILE APP COMPATIBILITY ENDPOINT: POST /api/device-token ──
+  app.post('/api/device-token', async (req, res) => {
+    const rawToken = req.body?.fcm_token || req.body?.token
+    const rawUserId = req.body?.user_id || req.worker?.id
+    const rawRole = req.body?.role || req.worker?.role || 'worker'
+
+    if (!rawToken || typeof rawToken !== 'string' || rawToken.trim().length === 0) {
+      return res.status(400).json({ error: 'A valid device push token is required.' })
+    }
+
+    const cleanToken = rawToken.trim()
+    const targetUserId = rawUserId ? String(rawUserId) : (req.worker?.id ? String(req.worker.id) : null)
+
+    try {
+      if (targetUserId) {
+        const tokenId = crypto.createHash('sha256').update(`${targetUserId}:${cleanToken}`).digest('hex')
+        await db.collection('worker_device_tokens').doc(tokenId).set({
+          worker_id: targetUserId,
+          token: cleanToken,
+          role: rawRole,
+          platform: 'flutter_mobile',
+          updated_at: FieldValue.serverTimestamp()
+        }, { merge: true })
+      }
+
+      res.json({ success: true, message: 'Device token registered successfully.' })
+    } catch (err) {
+      console.error('Failed to register flutter device token:', err.message)
+      res.status(500).json({ error: 'Failed to register device token.' })
     }
   })
 
@@ -2851,10 +2955,10 @@ async function startServer() {
 
   const validateAttendanceTimeWindow = (date, morningIn, morningOut, afternoonIn, afternoonOut, settings, previous = {}) => {
     if (hasRecordedTime(morningOut) && !hasRecordedTime(morningIn)) {
-      return 'Morning Time Out requires a recorded Morning Time In.'
+      return '1st Shift Time Out requires a recorded 1st Shift Time In.'
     }
     if (hasRecordedTime(afternoonOut) && !hasRecordedTime(afternoonIn)) {
-      return 'Afternoon Time Out requires a recorded Afternoon Time In.'
+      return '2nd Shift Time Out requires a recorded 2nd Shift Time In.'
     }
     if (!isTodayInManila(date)) return null
     const closedShiftError = validateClosedShiftTimeChanges(
@@ -2868,10 +2972,10 @@ async function startServer() {
     if (closedShiftError) return closedShiftError
     const rules = normalizeAttendanceSettings(settings)
     if (hasRecordedTime(morningIn) && classifyTimeIn(morningIn, 'morning', rules).status === 'Absent') {
-      return `Morning Time In is only open from ${rules.morning_time_in_start} to ${rules.morning_time_in_close}.`
+      return `1st Shift Time In is only open from ${rules.morning_time_in_start} to ${rules.morning_time_in_close}.`
     }
     if (hasRecordedTime(afternoonIn) && classifyTimeIn(afternoonIn, 'afternoon', rules).status === 'Absent') {
-      return `Afternoon Time In is only open from ${rules.afternoon_time_in_start} to ${rules.afternoon_time_in_close}.`
+      return `2nd Shift Time In is only open from ${rules.afternoon_time_in_start} to ${rules.afternoon_time_in_close}.`
     }
     const validateTimeOut = (value, startKey, closeKey, label) => {
       if (!hasRecordedTime(value)) return null
@@ -2882,8 +2986,8 @@ async function startServer() {
         ? null
         : `${label} is only open from ${rules[startKey]} to ${rules[closeKey]}.`
     }
-    return validateTimeOut(morningOut, 'morning_time_out_start', 'morning_time_out_close', 'Morning Time Out') ||
-      validateTimeOut(afternoonOut, 'afternoon_time_out_start', 'afternoon_time_out_close', 'Afternoon Time Out')
+    return validateTimeOut(morningOut, 'morning_time_out_start', 'morning_time_out_close', '1st Shift Time Out') ||
+      validateTimeOut(afternoonOut, 'afternoon_time_out_start', 'afternoon_time_out_close', '2nd Shift Time Out')
   }
 
   app.get('/api/attendance-settings', async (req, res) => {
@@ -3313,6 +3417,20 @@ async function startServer() {
         reviewed_at: null
       }
       const doc = await db.collection('early_out_requests').add(data)
+
+      recordNotification({
+        type: 'Attendance',
+        title: `Early-Out Requested: ${worker_name}`,
+        message: `${worker_name} submitted an Early-Out request for ${date} at ${requested_out_time} (Reason: ${reason}).`,
+        severity: 'Medium',
+        actor_name: worker_name,
+        actor_role: 'Worker',
+        action: 'EARLY_OUT_REQUESTED',
+        worker_id: String(worker_id),
+        target_id: doc.id,
+        link: `/attendance?tab=requests&id=${doc.id}`
+      }).catch(() => {})
+
       res.status(201).json({ id: doc.id, ...data })
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -3585,9 +3703,72 @@ async function startServer() {
     }
   })
 
+
+
+  // ── RFID TAPPING AUDIT TRAIL ──
+  app.get('/api/attendance/rfid-taps', async (req, res) => {
+    try {
+      const { date, status, search, limit = 100 } = req.query
+      const snapshot = await db.collection('rfid_tap_history').get()
+      let taps = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+
+      if (date && date !== 'ALL') {
+        taps = taps.filter(t => t.date === date)
+      }
+
+      if (status && status !== 'ALL') {
+        taps = taps.filter(t => (t.status || '').toUpperCase() === status.toUpperCase())
+      }
+
+      if (search && search.trim()) {
+        const q = search.trim().toLowerCase()
+        taps = taps.filter(t =>
+          (t.worker_name && t.worker_name.toLowerCase().includes(q)) ||
+          (t.rfid_uid && t.rfid_uid.toLowerCase().includes(q)) ||
+          (t.worker_code && t.worker_code.toLowerCase().includes(q)) ||
+          (t.action && t.action.toLowerCase().includes(q)) ||
+          (t.terminal_id && t.terminal_id.toLowerCase().includes(q)) ||
+          (t.role && t.role.toLowerCase().includes(q))
+        )
+      }
+
+      taps.sort((a, b) => (Number(b.timestamp) || 0) - (Number(a.timestamp) || 0))
+
+      const total = taps.length
+      const success = taps.filter(t => t.status === 'SUCCESS').length
+      const blocked = taps.filter(t => t.status === 'BLOCKED').length
+      const failed = taps.filter(t => t.status === 'FAILED' || t.status === 'WARNING').length
+
+      const maxLimit = Math.min(Number(limit) || 100, 500)
+      const paginatedTaps = taps.slice(0, maxLimit)
+
+      res.json({
+        success: true,
+        taps: paginatedTaps,
+        stats: { total, success, blocked, failed }
+      })
+    } catch (err) {
+      console.error('Error fetching RFID tap history:', err)
+      res.status(500).json({ success: false, error: err.message })
+    }
+  })
+
+  app.delete('/api/attendance/rfid-taps/clear', async (req, res) => {
+    try {
+      const snapshot = await db.collection('rfid_tap_history').get()
+      const batch = db.batch()
+      snapshot.docs.forEach(doc => batch.delete(doc.ref))
+      await batch.commit()
+      res.json({ success: true, message: `Cleared ${snapshot.docs.length} RFID tap logs.` })
+    } catch (err) {
+      res.status(500).json({ success: false, error: err.message })
+    }
+  })
+
   // ── ATTENDANCE ──
-  app.get('/api/attendance/:project_id', async (req, res) => {
+  app.get('/api/attendance/:project_id', async (req, res, next) => {
     const { project_id } = req.params
+    if (project_id === 'rfid-taps') return next()
     try {
       const pid = await resolveProjectId(project_id)
       let query = db.collection('attendance')
@@ -3819,65 +4000,7 @@ async function startServer() {
     res.json(latestRfidScan)
   })
 
-  // ── RFID TAPPING AUDIT TRAIL ──
-  app.get('/api/attendance/rfid-taps', async (req, res) => {
-    try {
-      const { date, status, search, limit = 100 } = req.query
-      const snapshot = await db.collection('rfid_tap_history').get()
-      let taps = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
 
-      if (date && date !== 'ALL') {
-        taps = taps.filter(t => t.date === date)
-      }
-
-      if (status && status !== 'ALL') {
-        taps = taps.filter(t => (t.status || '').toUpperCase() === status.toUpperCase())
-      }
-
-      if (search && search.trim()) {
-        const q = search.trim().toLowerCase()
-        taps = taps.filter(t =>
-          (t.worker_name && t.worker_name.toLowerCase().includes(q)) ||
-          (t.rfid_uid && t.rfid_uid.toLowerCase().includes(q)) ||
-          (t.worker_code && t.worker_code.toLowerCase().includes(q)) ||
-          (t.action && t.action.toLowerCase().includes(q)) ||
-          (t.terminal_id && t.terminal_id.toLowerCase().includes(q)) ||
-          (t.role && t.role.toLowerCase().includes(q))
-        )
-      }
-
-      taps.sort((a, b) => (Number(b.timestamp) || 0) - (Number(a.timestamp) || 0))
-
-      const total = taps.length
-      const success = taps.filter(t => t.status === 'SUCCESS').length
-      const blocked = taps.filter(t => t.status === 'BLOCKED').length
-      const failed = taps.filter(t => t.status === 'FAILED' || t.status === 'WARNING').length
-
-      const maxLimit = Math.min(Number(limit) || 100, 500)
-      const paginatedTaps = taps.slice(0, maxLimit)
-
-      res.json({
-        success: true,
-        taps: paginatedTaps,
-        stats: { total, success, blocked, failed }
-      })
-    } catch (err) {
-      console.error('Error fetching RFID tap history:', err)
-      res.status(500).json({ success: false, error: err.message })
-    }
-  })
-
-  app.delete('/api/attendance/rfid-taps/clear', async (req, res) => {
-    try {
-      const snapshot = await db.collection('rfid_tap_history').get()
-      const batch = db.batch()
-      snapshot.docs.forEach(doc => batch.delete(doc.ref))
-      await batch.commit()
-      res.json({ success: true, message: `Cleared ${snapshot.docs.length} RFID tap logs.` })
-    } catch (err) {
-      res.status(500).json({ success: false, error: err.message })
-    }
-  })
 
   app.post('/api/attendance/scan', async (req, res) => {
     const { rfid_uid, worker_code, worker_id, terminal_id, scan_source } = req.body
@@ -4119,14 +4242,18 @@ async function startServer() {
         }
         if (sData.auto_schedule && sData.manual_override !== 'OPEN') {
           const scanRules = normalizeAttendanceSettings(sData)
-          const openM = Math.min(
+          const allStarts = [
             parseTimeToMinutes(scanRules.morning_time_in_start),
             parseTimeToMinutes(scanRules.afternoon_time_in_start)
-          )
-          const closeM = Math.max(
+          ].filter(m => m !== null)
+          const allCloses = [
+            parseTimeToMinutes(scanRules.morning_time_in_close),
             parseTimeToMinutes(scanRules.morning_time_out_close),
+            parseTimeToMinutes(scanRules.afternoon_time_in_close),
             parseTimeToMinutes(scanRules.afternoon_time_out_close)
-          )
+          ].filter(m => m !== null)
+          const openM = allStarts.length > 0 ? Math.min(...allStarts) : 7 * 60
+          const closeM = allCloses.length > 0 ? Math.max(...allCloses) : 23 * 60 + 59
           if (minutes < openM) {
             await recordRfidTap({
               rfid_uid: cleanUid,
@@ -4155,11 +4282,11 @@ async function startServer() {
               status: 'FAILED',
               terminal_id: terminalId,
               scan_source: scanSource,
-              message: `Shift cutoff reached (${scanRules.afternoon_time_out_close}).`
+              message: `Shift cutoff reached. Today's attendance windows closed at ${scanRules.afternoon_time_out_close}.`
             })
             return res.status(400).json({
               success: false,
-              error: `Shift cutoff reached (${scanRules.afternoon_time_out_close}). Terminal is closed.`,
+              error: `Shift cutoff reached. Today's attendance windows closed at ${scanRules.afternoon_time_out_close}.`,
               worker_name: workerName
             })
           }
@@ -4239,13 +4366,18 @@ async function startServer() {
         let mOut = existing.morning_out || '—'
         let aIn = existing.afternoon_in || '—'
         let aOut = existing.afternoon_out || '—'
-        if (action === 'MORNING TIME IN') mIn = timeString
-        else if (action === 'MORNING TIME OUT (12 PM)') mOut = timeString
-        else if (action === 'AFTERNOON TIME IN (1 PM)') aIn = timeString
-        else if (action === 'AFTERNOON TIME OUT (5 PM)') aOut = timeString
+        const isFirstShiftIn = action.includes('1ST SHIFT TIME IN') || action === 'MORNING TIME IN'
+        const isFirstShiftOut = action.includes('1ST SHIFT TIME OUT') || action.includes('MORNING TIME OUT')
+        const isSecondShiftIn = action.includes('2ND SHIFT TIME IN') || action.includes('AFTERNOON TIME IN')
+        const isSecondShiftOut = action.includes('2ND SHIFT TIME OUT') || action.includes('AFTERNOON TIME OUT')
+
+        if (isFirstShiftIn) mIn = timeString
+        else if (isFirstShiftOut) mOut = timeString
+        else if (isSecondShiftIn) aIn = timeString
+        else if (isSecondShiftOut) aOut = timeString
 
         if (action.includes('TIME OUT')) {
-          const matchingTimeIn = action.startsWith('MORNING') ? mIn : aIn
+          const matchingTimeIn = (isFirstShiftOut || action.startsWith('MORNING')) ? mIn : aIn
           const timeInMinutes = parseTimeToMinutes(matchingTimeIn)
           if (timeInMinutes !== null && Math.abs(minutes - timeInMinutes) < 3) {
             await recordRfidTap({
@@ -4401,8 +4533,10 @@ async function startServer() {
         action = resolvedAction.action
         let mIn = '—'
         let aIn = '—'
-        if (action === 'MORNING TIME IN') mIn = timeString
-        if (action === 'AFTERNOON TIME IN (1 PM)') aIn = timeString
+        const isFirstShiftIn = action.includes('1ST SHIFT TIME IN') || action === 'MORNING TIME IN'
+        const isSecondShiftIn = action.includes('2ND SHIFT TIME IN') || action.includes('AFTERNOON TIME IN')
+        if (isFirstShiftIn) mIn = timeString
+        if (isSecondShiftIn) aIn = timeString
         const timeWindowError = validateAttendanceTimeWindow(todayISO, mIn, '—', aIn, '—', rules)
         if (timeWindowError) {
           await recordRfidTap({
@@ -4570,9 +4704,9 @@ async function startServer() {
       const wName = existing.worker_name || 'Worker'
       const wRole = existing.role || 'Worker'
       let actionDetail = ''
-      if (mOut && mOut !== '—' && existing.morning_out === '—') actionDetail = `Morning Time Out (${mOut})`
-      else if (aIn && aIn !== '—' && existing.afternoon_in === '—') actionDetail = `Afternoon Time In (${aIn})`
-      else if (aOut && aOut !== '—' && existing.afternoon_out === '—') actionDetail = `Afternoon Time Out (${aOut})`
+      if (mOut && mOut !== '—' && existing.morning_out === '—') actionDetail = `1st Shift Time Out (${mOut})`
+      else if (aIn && aIn !== '—' && existing.afternoon_in === '—') actionDetail = `2nd Shift Time In (${aIn})`
+      else if (aOut && aOut !== '—' && existing.afternoon_out === '—') actionDetail = `2nd Shift Time Out (${aOut})`
       else actionDetail = `Attendance update (${finalStatus})`
 
       recordNotification({
@@ -5145,6 +5279,25 @@ async function startServer() {
       // Deduct from or restore project budget in expenses
       await syncCashAdvanceExpense(req.params.id, { ...caData, status }, status === 'Approved')
 
+      // Record notification for worker and dispatch mobile push
+      const targetWorkerId = caData.worker_id || caData.workerId
+      if (targetWorkerId) {
+        await recordNotification({
+          type: 'Staff & Workers',
+          title: `Cash Advance ${status}: ₱${Number(caData.amount || 0).toLocaleString()}`,
+          message: status === 'Approved'
+            ? `Your cash advance request of ₱${Number(caData.amount || 0).toLocaleString()} was approved.`
+            : `Your cash advance request of ₱${Number(caData.amount || 0).toLocaleString()} was rejected. Reason: ${rejection.reason}`,
+          severity: status === 'Approved' ? 'Low' : 'Medium',
+          actor_name: req.get('x-actor-name') || 'Administrator',
+          actor_role: 'Administrator',
+          action: `CASH_ADVANCE_${status.toUpperCase()}`,
+          worker_id: String(targetWorkerId),
+          target_id: String(targetWorkerId),
+          link: `/cash-advances?id=${req.params.id}`
+        }).catch(() => {})
+      }
+
       res.json({ success: true, status })
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -5282,15 +5435,58 @@ async function startServer() {
             await syncCashAdvanceExpense(docRef.id, newAdvance, true)
           }
 
-          recordNotification({
-            type: 'Staff & Workers',
-            title: `Cash Advance: ${name}`,
-            message: `Recorded Cash Advance of ₱${numAmount.toLocaleString()}${reason ? ` (Reason: "${reason}")` : ''} for ${name}. Deducted from project budget.`,
-            severity: 'Medium',
-            actor_name: name,
-            actor_role: 'Worker',
-            action: 'cash_advance_logged'
-          }).catch(() => {})
+          if (finalStatus === 'Pending') {
+            if (workerId) {
+              recordNotification({
+                type: 'Staff & Workers',
+                title: `Cash Advance Requested: ₱${numAmount.toLocaleString()}`,
+                message: `Your cash advance request of ₱${numAmount.toLocaleString()}${reason ? ` (Reason: "${reason}")` : ''} has been submitted and is pending administrator review.`,
+                severity: 'Medium',
+                actor_name: name,
+                actor_role: 'Worker',
+                action: 'CASH_ADVANCE_REQUESTED',
+                worker_id: String(workerId),
+                target_id: String(workerId),
+                link: `/cash-advances?id=${docRef.id}`
+              }).catch(() => {})
+            }
+
+            recordNotification({
+              type: 'Staff & Workers',
+              title: `New Cash Advance Request: ${name}`,
+              message: `${name} requested a cash advance of ₱${numAmount.toLocaleString()}${reason ? ` (Reason: "${reason}")` : ''}.`,
+              severity: 'Medium',
+              actor_name: name,
+              actor_role: 'Worker',
+              action: 'CASH_ADVANCE_REQUESTED',
+              link: `/cash-advances?id=${docRef.id}`
+            }).catch(() => {})
+          } else {
+            if (workerId) {
+              recordNotification({
+                type: 'Staff & Workers',
+                title: `Cash Advance Approved: ₱${numAmount.toLocaleString()}`,
+                message: `Your cash advance of ₱${numAmount.toLocaleString()}${reason ? ` (Reason: "${reason}")` : ''} was recorded and approved.`,
+                severity: 'Low',
+                actor_name: name,
+                actor_role: 'Worker',
+                action: 'CASH_ADVANCE_APPROVED',
+                worker_id: String(workerId),
+                target_id: String(workerId),
+                link: `/cash-advances?id=${docRef.id}`
+              }).catch(() => {})
+            }
+
+            recordNotification({
+              type: 'Staff & Workers',
+              title: `Cash Advance: ${name}`,
+              message: `Recorded Cash Advance of ₱${numAmount.toLocaleString()}${reason ? ` (Reason: "${reason}")` : ''} for ${name}. Deducted from project budget.`,
+              severity: 'Medium',
+              actor_name: name,
+              actor_role: 'Worker',
+              action: 'cash_advance_logged'
+            }).catch(() => {})
+          }
 
           res.json({ id: docRef.id, ...newAdvance, date: cleanDate })
         } catch (err) {
@@ -6522,6 +6718,22 @@ async function startServer() {
       const wDoc = await db.collection('workers').doc(req.params.id).get()
       const wName = wDoc.exists ? (wDoc.data().full_name || `Worker #${req.params.id}`) : `Worker #${req.params.id}`
       await db.collection('workers').doc(req.params.id).update(updateData)
+
+      recordNotification({
+        type: 'Staff & Workers',
+        title: `Account Registration ${cleanStatus}`,
+        message: cleanStatus === 'Approved'
+          ? `Congratulations ${wName}! Your BuildTrack account registration has been approved. You may now access your mobile app.`
+          : `Your account registration was not approved. Reason: ${rejection.reason}`,
+        severity: cleanStatus === 'Approved' ? 'Low' : 'High',
+        actor_name: req.get('x-actor-name') || 'Administrator',
+        actor_role: 'Administrator',
+        action: `WORKER_${cleanStatus.toUpperCase()}`,
+        worker_id: req.params.id,
+        target_id: req.params.id,
+        link: `/workers?id=${req.params.id}`
+      }).catch(() => {})
+
       recordAuditLog({
         action: cleanStatus === 'Approved' ? 'WORKER_REGISTRATION_APPROVED' : 'WORKER_REGISTRATION_REJECTED',
         module: 'Workers',

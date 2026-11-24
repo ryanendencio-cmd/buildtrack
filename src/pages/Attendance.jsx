@@ -76,6 +76,13 @@ const getScheduleTimeErrors = form => {
             errors[closeKey] = `${label} closing time must be later than its opening time.`;
         }
     }
+
+    // 2nd Shift Time Out must not be earlier than 2nd Shift Time In
+    const afternoonInClose = toMinutes(form.afternoon_time_in_close);
+    const afternoonOutStart = toMinutes(form.afternoon_time_out_start);
+    if (afternoonInClose !== null && afternoonOutStart !== null && afternoonOutStart < afternoonInClose) {
+        errors.afternoon_time_out_start = '2nd Shift Time Out cannot open earlier than 2nd Shift Time In closing time.';
+    }
     return errors;
 };
 
@@ -636,37 +643,42 @@ export default function Attendance() {
         const afternoonStartsNow = minutes === parseTimeToMinutes(attendanceSettings.morning_time_out_close) &&
             within('afternoon_time_in_start', 'afternoon_time_in_close');
 
+        const time1stIn = format12Hour(attendanceSettings.morning_time_in_start);
+        const time1stOut = format12Hour(attendanceSettings.morning_time_out_start);
+        const time2ndIn = format12Hour(attendanceSettings.afternoon_time_in_start);
+        const time2ndOut = format12Hour(attendanceSettings.afternoon_time_out_start);
+
         if (morningOutWindow && !(firstShiftClosed && afternoonStartsNow)) {
             if (firstShiftClosed) {
                 return { error: '1st Shift is closed for today. Time In and Time Out are disabled.' };
             }
-            if (!hasTime(mIn) && !afternoonStartsNow) return { error: 'Cannot record morning Time Out without a morning Time In.' };
-            if (hasTime(mIn) && !hasTime(mOut)) return { action: 'MORNING TIME OUT (12 PM)' };
+            if (!hasTime(mIn) && !afternoonStartsNow) return { error: 'Cannot record 1st Shift Time Out without a 1st Shift Time In.' };
+            if (hasTime(mIn) && !hasTime(mOut)) return { action: `1ST SHIFT TIME OUT (${time1stOut})` };
         }
         if (within('morning_time_in_start', 'morning_time_in_close')) {
             if (firstShiftClosed) {
                 return { error: '1st Shift is closed for today. Time In and Time Out are disabled.' };
             }
             return hasTime(mIn)
-                ? { error: 'Morning Time In has already been recorded.' }
-                : { action: 'MORNING TIME IN' };
+                ? { error: '1st Shift Time In has already been recorded.' }
+                : { action: `1ST SHIFT TIME IN (${time1stIn})` };
         }
         if (within('afternoon_time_out_start', 'afternoon_time_out_close')) {
             if (secondShiftClosed) {
                 return { error: '2nd Shift is closed for today. Time In and Time Out are disabled.' };
             }
-            if (!hasTime(aIn)) return { error: 'Cannot record afternoon Time Out without an afternoon Time In.' };
+            if (!hasTime(aIn)) return { error: 'Cannot record 2nd Shift Time Out without a 2nd Shift Time In.' };
             return hasTime(aOut)
-                ? { error: 'Afternoon shift is already completed.' }
-                : { action: 'AFTERNOON TIME OUT (5 PM)' };
+                ? { error: '2nd Shift is already completed.' }
+                : { action: `2ND SHIFT TIME OUT (${time2ndOut})` };
         }
         if (within('afternoon_time_in_start', 'afternoon_time_in_close')) {
             if (secondShiftClosed) {
                 return { error: '2nd Shift is closed for today. Time In and Time Out are disabled.' };
             }
             return hasTime(aIn)
-                ? { error: 'Afternoon Time In has already been recorded.' }
-                : { action: 'AFTERNOON TIME IN (1 PM)' };
+                ? { error: '2nd Shift Time In has already been recorded.' }
+                : { action: `2ND SHIFT TIME IN (${time2ndIn})` };
         }
         return { error: 'Attendance is closed at this time.' };
     };
@@ -792,12 +804,18 @@ export default function Attendance() {
                     return;
                 }
                 const action = resolved.action;
-                if (action === 'MORNING TIME IN') mIn = timeString;
-                else if (action === 'MORNING TIME OUT (12 PM)') mOut = timeString;
-                else if (action === 'AFTERNOON TIME IN (1 PM)') aIn = timeString;
-                else if (action === 'AFTERNOON TIME OUT (5 PM)') aOut = timeString;
+                const isFirstShiftIn = action.includes('1ST SHIFT TIME IN') || action === 'MORNING TIME IN';
+                const isFirstShiftOut = action.includes('1ST SHIFT TIME OUT') || action.includes('MORNING TIME OUT');
+                const isSecondShiftIn = action.includes('2ND SHIFT TIME IN') || action.includes('AFTERNOON TIME IN');
+                const isSecondShiftOut = action.includes('2ND SHIFT TIME OUT') || action.includes('AFTERNOON TIME OUT');
+
+                if (isFirstShiftIn) mIn = timeString;
+                else if (isFirstShiftOut) mOut = timeString;
+                else if (isSecondShiftIn) aIn = timeString;
+                else if (isSecondShiftOut) aOut = timeString;
+
                 if (action.includes('TIME OUT')) {
-                    const timeIn = action.startsWith('MORNING') ? mIn : aIn;
+                    const timeIn = (isFirstShiftOut || action.startsWith('MORNING')) ? mIn : aIn;
                     const timeInMinutes = parseTimeToMinutes(timeIn);
                     if (timeInMinutes !== null && Math.abs(minutes - timeInMinutes) < 3) {
                         setScannedData({ name: workerName, message: 'Wait at least 3 minutes before recording Time Out.' });
@@ -848,8 +866,10 @@ export default function Attendance() {
                 let mIn = '—';
                 let aIn = '—';
                 const action = resolved.action;
-                if (action === 'MORNING TIME IN') mIn = timeString;
-                if (action === 'AFTERNOON TIME IN (1 PM)') aIn = timeString;
+                const isFirstShiftIn = (action || '').includes('1ST SHIFT TIME IN') || action === 'MORNING TIME IN';
+                const isSecondShiftIn = (action || '').includes('2ND SHIFT TIME IN') || action === 'AFTERNOON TIME IN (1 PM)';
+                if (isFirstShiftIn) mIn = timeString;
+                if (isSecondShiftIn) aIn = timeString;
 
                 const evaluated = evaluateTwoSessions(mIn, aIn, rate, attendanceSettings);
                 const payload = {
@@ -1316,11 +1336,11 @@ export default function Attendance() {
 
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-3 overflow-x-auto">
                 <div className="flex justify-between items-center mb-3">
-                    <h3 className="text-[11px] font-extrabold text-gray-900 tracking-wider uppercase">2-SESSION WORKER ATTENDANCE (MORNING & AFTERNOON)</h3>
+                    <h3 className="text-[11px] font-extrabold text-gray-900 tracking-wider uppercase">2-SESSION WORKER ATTENDANCE (1ST SHIFT & 2ND SHIFT)</h3>
                     <span className="text-[11px] text-gray-500 font-bold bg-gray-50 px-2 py-0.5 rounded border border-gray-200">
-                        AM: {attendanceSettings.morning_time_in_start}–{attendanceSettings.morning_time_in_close} Time In / {attendanceSettings.morning_time_out_start}–{attendanceSettings.morning_time_out_close} Time Out
+                        1st Shift: {attendanceSettings.morning_time_in_start}–{attendanceSettings.morning_time_in_close} Time In / {attendanceSettings.morning_time_out_start}–{attendanceSettings.morning_time_out_close} Time Out
                         {' • '}
-                        PM: {attendanceSettings.afternoon_time_in_start}–{attendanceSettings.afternoon_time_in_close} Time In / {attendanceSettings.afternoon_time_out_start}–{attendanceSettings.afternoon_time_out_close} Time Out
+                        2nd Shift: {attendanceSettings.afternoon_time_in_start}–{attendanceSettings.afternoon_time_in_close} Time In / {attendanceSettings.afternoon_time_out_start}–{attendanceSettings.afternoon_time_out_close} Time Out
                     </span>
                 </div>
                 <table className="w-full text-left border-collapse min-w-[900px]">
@@ -1329,8 +1349,8 @@ export default function Attendance() {
                             <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[20%] uppercase tracking-wider">WORKER NAME</th>
                             <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[14%] uppercase tracking-wider text-center">ROLE</th>
                             <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[16%] uppercase tracking-wider text-center">STATUS</th>
-                            <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[14%] uppercase tracking-wider text-center">MORNING (IN-OUT)</th>
-                            <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[14%] uppercase tracking-wider text-center">AFTERNOON (IN-OUT)</th>
+                            <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[14%] uppercase tracking-wider text-center">1ST SHIFT (IN-OUT)</th>
+                            <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[14%] uppercase tracking-wider text-center">2ND SHIFT (IN-OUT)</th>
                             <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[11%] uppercase tracking-wider text-right pr-3">EARNED WAGE</th>
                             <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[13%] uppercase tracking-wider text-center">OVERTIME</th>
                             <th className="text-[11px] font-bold text-gray-400 border-b border-gray-100 pb-2 w-[11%] uppercase tracking-wider text-right pr-4">ADVANCE</th>
@@ -1644,28 +1664,28 @@ export default function Attendance() {
                                 {formData.status !== 'Absent' && (
                                     <div className="space-y-2.5">
                                         <div className="p-2.5 bg-gray-50 rounded-lg border border-gray-100">
-                                            <span className="block text-[11px] font-extrabold text-[#A63228] uppercase tracking-wider mb-1.5">Morning Session (8:00 AM - 12:00 PM)</span>
+                                            <span className="block text-[11px] font-extrabold text-[#A63228] uppercase tracking-wider mb-1.5">1st Shift Session (8:00 AM - 12:00 PM)</span>
                                             <div className="grid grid-cols-2 gap-2">
                                                 <div>
-                                                    <label className="block text-[11px] font-bold text-gray-600 mb-0.5 uppercase">Morning Time In</label>
+                                                    <label className="block text-[11px] font-bold text-gray-600 mb-0.5 uppercase">1st Shift Time In</label>
                                                     <input type="text" name="morningIn" value={formData.morningIn || ''} onChange={handleInputChange} className="w-full bg-white border border-gray-200 rounded px-2 py-1.5 text-xs font-medium focus:border-[#A63228] outline-none" placeholder="07:45 AM" />
                                                 </div>
                                                 <div>
-                                                    <label className="block text-[11px] font-bold text-gray-600 mb-0.5 uppercase">Morning Time Out</label>
+                                                    <label className="block text-[11px] font-bold text-gray-600 mb-0.5 uppercase">1st Shift Time Out</label>
                                                     <input type="text" name="morningOut" value={formData.morningOut || ''} onChange={handleInputChange} className="w-full bg-white border border-gray-200 rounded px-2 py-1.5 text-xs font-medium focus:border-[#A63228] outline-none" placeholder="12:00 PM" />
                                                 </div>
                                             </div>
                                         </div>
 
                                         <div className="p-2.5 bg-gray-50 rounded-lg border border-gray-100">
-                                            <span className="block text-[11px] font-extrabold text-[#A63228] uppercase tracking-wider mb-1.5">Afternoon Session (1:00 PM - 5:00 PM)</span>
+                                            <span className="block text-[11px] font-extrabold text-[#A63228] uppercase tracking-wider mb-1.5">2nd Shift Session (1:00 PM - 5:00 PM)</span>
                                             <div className="grid grid-cols-2 gap-2">
                                                 <div>
-                                                    <label className="block text-[11px] font-bold text-gray-600 mb-0.5 uppercase">Afternoon Time In</label>
+                                                    <label className="block text-[11px] font-bold text-gray-600 mb-0.5 uppercase">2nd Shift Time In</label>
                                                     <input type="text" name="afternoonIn" value={formData.afternoonIn || ''} onChange={handleInputChange} className="w-full bg-white border border-gray-200 rounded px-2 py-1.5 text-xs font-medium focus:border-[#A63228] outline-none" placeholder="01:00 PM" />
                                                 </div>
                                                 <div>
-                                                    <label className="block text-[11px] font-bold text-gray-600 mb-0.5 uppercase">Afternoon Time Out</label>
+                                                    <label className="block text-[11px] font-bold text-gray-600 mb-0.5 uppercase">2nd Shift Time Out</label>
                                                     <input type="text" name="afternoonOut" value={formData.afternoonOut || ''} onChange={handleInputChange} className="w-full bg-white border border-gray-200 rounded px-2 py-1.5 text-xs font-medium focus:border-[#A63228] outline-none" placeholder="05:00 PM" />
                                                 </div>
                                             </div>

@@ -35,6 +35,18 @@ function parseTimeToMinutes(timeStr) {
   return hours * 60 + minutes
 }
 
+function formatSettingTime12(timeStr) {
+  if (!timeStr) return ''
+  const minutes = parseTimeToMinutes(timeStr)
+  if (minutes === null) return String(timeStr).trim()
+  let hours = Math.floor(minutes / 60)
+  const mins = minutes % 60
+  const meridian = hours >= 12 ? 'PM' : 'AM'
+  if (hours > 12) hours -= 12
+  if (hours === 0) hours = 12
+  return `${hours}:${String(mins).padStart(2, '0')} ${meridian}`
+}
+
 function normalizeAttendanceSettings(settings = {}) {
   return { ...DEFAULT_ATTENDANCE_SETTINGS, ...settings }
 }
@@ -63,6 +75,12 @@ function validateAttendanceSettings(settings) {
   if (minuteValues.morning_time_out_close <= minuteValues.morning_time_out_start ||
       minuteValues.afternoon_time_out_close <= minuteValues.afternoon_time_out_start) {
     return 'Time-out closing times must be later than their start times.'
+  }
+  // 2nd Shift (afternoon) times must be in 24-hour format (>= 12:00 / 720 minutes)
+  for (const key of ['afternoon_time_in_start', 'afternoon_time_in_close', 'afternoon_time_out_start', 'afternoon_time_out_close']) {
+    if (minuteValues[key] !== null && minuteValues[key] < 12 * 60) {
+      return `2nd Shift (${key}) must be in 24-hour afternoon format (12:00 or later, e.g. 13:00 for 1:00 PM or 17:00 for 5:00 PM).`
+    }
   }
 
   for (const key of ['late_tier_1_deduction', 'late_tier_2_deduction', 'overtime_rate_per_interval']) {
@@ -120,37 +138,54 @@ function resolveRfidAttendanceAction(minutes, record, settings = {}) {
   const afternoonStartsNow = minutes === parseTimeToMinutes(normalized.morning_time_out_close) &&
     within('afternoon_time_in_start', 'afternoon_time_in_close')
 
+  const time1stIn = formatSettingTime12(normalized.morning_time_in_start)
+  const time1stOut = formatSettingTime12(normalized.morning_time_out_start)
+  const time2ndIn = formatSettingTime12(normalized.afternoon_time_in_start)
+  const time2ndOut = formatSettingTime12(normalized.afternoon_time_out_start)
+
   if (within('morning_time_out_start', 'morning_time_out_close') &&
       !(firstShiftClosed && afternoonStartsNow)) {
     if (firstShiftClosed) return closedShiftError('1st')
     if (!hasMorningIn && !afternoonStartsNow) {
-      return { error: 'Cannot record morning Time Out without a morning Time In.', action: 'NO_TIME_IN' }
+      return { error: 'Cannot record 1st Shift Time Out without a 1st Shift Time In.', action: 'NO_TIME_IN' }
     }
-    if (hasMorningIn && !hasMorningOut) return { action: 'MORNING TIME OUT (12 PM)' }
+    if (hasMorningIn && !hasMorningOut) return { action: `1ST SHIFT TIME OUT (${time1stOut})` }
   }
 
   if (within('morning_time_in_start', 'morning_time_in_close')) {
     if (firstShiftClosed) return closedShiftError('1st')
     return hasMorningIn
-      ? { error: 'Morning Time In has already been recorded.', action: 'ALREADY_COMPLETED' }
-      : { action: 'MORNING TIME IN' }
+      ? { error: '1st Shift Time In has already been recorded.', action: 'ALREADY_COMPLETED' }
+      : { action: `1ST SHIFT TIME IN (${time1stIn})` }
   }
   if (within('afternoon_time_out_start', 'afternoon_time_out_close')) {
     if (secondShiftClosed) return closedShiftError('2nd')
     if (!hasAfternoonIn) {
-      return { error: 'Cannot record afternoon Time Out without an afternoon Time In.', action: 'NO_TIME_IN' }
+      return { error: 'Cannot record 2nd Shift Time Out without a 2nd Shift Time In.', action: 'NO_TIME_IN' }
     }
     return hasAfternoonOut
-      ? { error: 'Afternoon shift is already completed.', action: 'ALREADY_COMPLETED' }
-      : { action: 'AFTERNOON TIME OUT (5 PM)' }
+      ? { error: '2nd Shift is already completed.', action: 'ALREADY_COMPLETED' }
+      : { action: `2ND SHIFT TIME OUT (${time2ndOut})` }
   }
   if (within('afternoon_time_in_start', 'afternoon_time_in_close')) {
     if (secondShiftClosed) return closedShiftError('2nd')
     return hasAfternoonIn
-      ? { error: 'Afternoon Time In has already been recorded.', action: 'ALREADY_COMPLETED' }
-      : { action: 'AFTERNOON TIME IN (1 PM)' }
+      ? { error: '2nd Shift Time In has already been recorded.', action: 'ALREADY_COMPLETED' }
+      : { action: `2ND SHIFT TIME IN (${time2ndIn})` }
   }
-  return { error: 'Attendance is closed at this time.', action: 'ATTENDANCE_WINDOW_CLOSED' }
+
+  // If outside all allowed intervals, construct an informative error showing the active schedule windows
+  const scheduleWindows = [
+    `1st Shift In: ${time1stIn} - ${formatSettingTime12(normalized.morning_time_in_close)}`,
+    `1st Shift Out: ${time1stOut} - ${formatSettingTime12(normalized.morning_time_out_close)}`,
+    `2nd Shift In: ${time2ndIn} - ${formatSettingTime12(normalized.afternoon_time_in_close)}`,
+    `2nd Shift Out: ${time2ndOut} - ${formatSettingTime12(normalized.afternoon_time_out_close)}`
+  ].join(' | ')
+
+  return {
+    error: `Attendance is closed at this time. Allowed intervals: ${scheduleWindows}`,
+    action: 'ATTENDANCE_WINDOW_CLOSED'
+  }
 }
 
 function validateClosedShiftTimeChanges(morningIn, morningOut, afternoonIn, afternoonOut, settings = {}, previous = {}) {
@@ -287,6 +322,7 @@ module.exports = {
   DEFAULT_ATTENDANCE_SETTINGS,
   normalizeAttendanceSettings,
   parseTimeToMinutes,
+  formatSettingTime12,
   validateAttendanceSettings,
   classifyTimeIn,
   resolveRfidAttendanceAction,

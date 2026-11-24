@@ -83,16 +83,27 @@ test('RFID actions enforce configured time-in and time-out windows', () => {
   const rules = DEFAULT_ATTENDANCE_SETTINGS
   assert.equal(resolveRfidAttendanceAction(8 * 60 + 21, null, rules).action, 'ATTENDANCE_WINDOW_CLOSED')
   assert.equal(resolveRfidAttendanceAction(12 * 60 + 29, null, rules).action, 'NO_TIME_IN')
-  assert.equal(resolveRfidAttendanceAction(12 * 60 + 30, null, rules).action, 'AFTERNOON TIME IN (1 PM)')
+  assert.equal(resolveRfidAttendanceAction(12 * 60 + 30, null, rules).action, '2ND SHIFT TIME IN (12:30 PM)')
   assert.equal(
     resolveRfidAttendanceAction(12 * 60, { morning_in: '08:00 AM' }, rules).action,
-    'MORNING TIME OUT (12 PM)'
+    '1ST SHIFT TIME OUT (12:00 PM)'
   )
   assert.equal(
     resolveRfidAttendanceAction(17 * 60, { afternoon_in: '01:00 PM' }, rules).action,
-    'AFTERNOON TIME OUT (5 PM)'
+    '2ND SHIFT TIME OUT (5:00 PM)'
   )
   assert.equal(resolveRfidAttendanceAction(17 * 60 + 31, { afternoon_in: '01:00 PM' }, rules).action, 'ATTENDANCE_WINDOW_CLOSED')
+
+  // Custom schedule settings (e.g. 2nd Shift at 6:00 PM / 18:00)
+  const eveningRules = {
+    ...DEFAULT_ATTENDANCE_SETTINGS,
+    afternoon_time_in_start: '18:00',
+    afternoon_time_in_close: '18:20'
+  }
+  assert.equal(
+    resolveRfidAttendanceAction(18 * 60 + 5, null, eveningRules).action,
+    '2ND SHIFT TIME IN (6:00 PM)'
+  )
 })
 
 test('closing a shift blocks only that shift and keeps the other shift available', () => {
@@ -105,7 +116,7 @@ test('closing a shift blocks only that shift and keeps the other shift available
   )
   assert.equal(
     resolveRfidAttendanceAction(12 * 60 + 30, null, firstShiftClosed).action,
-    'AFTERNOON TIME IN (1 PM)'
+    '2ND SHIFT TIME IN (12:30 PM)'
   )
   assert.equal(
     resolveRfidAttendanceAction(13 * 60, null, secondShiftClosed).error,
@@ -113,7 +124,7 @@ test('closing a shift blocks only that shift and keeps the other shift available
   )
   assert.equal(
     resolveRfidAttendanceAction(7 * 60 + 30, null, secondShiftClosed).action,
-    'MORNING TIME IN'
+    '1ST SHIFT TIME IN (7:00 AM)'
   )
 })
 

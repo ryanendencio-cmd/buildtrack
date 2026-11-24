@@ -32,7 +32,9 @@ const WORKER_WRITE_ROUTES = new Set([
   'POST /api/attendance-correction-requests',
   'POST /api/early-out-requests',
   'POST /api/cash-advances',
-  'POST /api/borrow-history'
+  'POST /api/borrow-history',
+  'POST /api/worker/device-token',
+  'POST /api/device-token'
 ])
 
 const ATTENDANCE_ROLE_ROUTES = new Set([

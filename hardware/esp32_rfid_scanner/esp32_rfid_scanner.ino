@@ -11,7 +11,7 @@ const char* WIFI_SSID     = "ayaw ko nga.";
 const char* WIFI_PASSWORD = "123456789";
 
 // Server API Endpoint (Laptop IP on Hotspot)
-const char* SERVER_URL    = "http://10.234.140.195:5000/api/attendance/scan";
+const char* SERVER_URL    = "http://192.168.100.75:5000/api/attendance/scan";
 
 // RFID API Key (Matches server/.env)
 const char* RFID_API_KEY  = "fd3f275475be3609826b4932bb1e3a3db5de796fbcf499e503f6e3de6dde829c";

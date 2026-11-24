@@ -982,8 +982,8 @@ export default function WorkersSalary() {
                     <thead className="bg-gray-100 text-[11px] font-extrabold text-gray-600 uppercase">
                       <tr>
                         <th className="py-1.5 px-2">DATE</th>
-                        <th className="py-1.5 px-2 text-center">MORNING SHIFT</th>
-                        <th className="py-1.5 px-2 text-center">AFTERNOON SHIFT</th>
+                        <th className="py-1.5 px-2 text-center">1ST SHIFT</th>
+                        <th className="py-1.5 px-2 text-center">2ND SHIFT</th>
                         <th className="py-1.5 px-2 text-center">STATUS</th>
                         <th className="py-1.5 px-2 text-center">HOURS</th>
                         <th className="py-1.5 px-2 text-right">OT PAY</th>
@@ -1168,8 +1168,8 @@ export default function WorkersSalary() {
               <thead>
                 <tr className="bg-gray-100 border-b border-gray-300 text-gray-700 font-extrabold uppercase text-[9px]">
                   <th className="py-1 px-2 border-r border-gray-300">Date</th>
-                  <th className="py-1 px-2 border-r border-gray-300 text-center">Morning Shift</th>
-                  <th className="py-1 px-2 border-r border-gray-300 text-center">Afternoon Shift</th>
+                  <th className="py-1 px-2 border-r border-gray-300 text-center">1st Shift</th>
+                  <th className="py-1 px-2 border-r border-gray-300 text-center">2nd Shift</th>
                   <th className="py-1 px-2 border-r border-gray-300 text-center">Status</th>
                   <th className="py-1 px-2 border-r border-gray-300 text-center">Hours</th>
                   <th className="py-1 px-2 border-r border-gray-300 text-right">OT Pay</th>
